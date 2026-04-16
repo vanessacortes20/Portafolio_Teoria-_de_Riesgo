@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyecto Integrador - Teoria del Riesgo - USTA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Montserrat', 'Helvetica Neue', 'Arial', 'sans-serif'] },
+                    colors: { primary: '#3D008D', secondary: '#ED1E79', navy: '#001A4D', gold: '#FDB913', bg: '#F8FAFC' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: #F8FAFC;
+            color: #1E293B;
+            scroll-behavior: smooth
+        }
+
+        .usta-gradient {
+            background: linear-gradient(140deg, #3D008D 0%, #ED1E79 100%)
+        }
+
+        .usta-header {
+            background: linear-gradient(180deg, #001A4D 0%, #002868 100%)
+        }
+
+        .usta-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            transition: all .3s ease
+        }
+
+        .usta-card:hover {
+            box-shadow: 0 12px 35px rgba(0, 0, 0, .12);
+            transform: translateY(-2px)
+        }
+
+        .tip-box {
+            background: linear-gradient(135deg, rgba(61, 0, 141, .08) 0%, rgba(237, 30, 121, .08) 100%);
+            border: 1px solid rgba(61, 0, 141, .2);
+            border-radius: 12px
+        }
+
+        .new-tag {
+            background: linear-gradient(135deg, rgba(34, 197, 94, .1) 0%, rgba(34, 197, 94, .05) 100%);
+            border: 1px solid rgba(34, 197, 94, .3);
+            border-radius: 12px
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #3D008D, #ED1E79);
+            border-radius: 4px
+        }
+
+        .fade-in {
+            animation: fadeIn .4s ease-out forwards
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        button:focus-visible {
+            outline: 2px solid #ED1E79;
+            outline-offset: 2px
+        }
+
+        .rtable th {
+            background: linear-gradient(140deg, #3D008D 0%, #ED1E79 100%);
+            color: #fff;
+            padding: 10px 14px;
+            font-size: 13px;
+            text-align: left
+        }
+
+        .rtable td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid #e2e8f0
+        }
+
+        .rtable tr:nth-child(even) td {
+            background: #f8fafc
+        }
+
+        .rtable {
+            border-collapse: collapse;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06)
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState } = React;
+
+        /* ---- Icons ---- */
+        const I = {
+            Book: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>),
+            Target: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>),
+            Globe: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>),
+            Chart: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>),
+            Trend: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>),
+            Bar: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" /></svg>),
+            Shield: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>),
+            Zap: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>),
+            Award: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7" /><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" /></svg>),
+            Cal: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>),
+            Gear: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>),
+            Left: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>),
+            Right: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>),
+            Clip: ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="15" y2="16" /></svg>),
+        };
+
+        const iconMap = { Book: I.Book, Target: I.Target, Globe: I.Globe, Chart: I.Chart, Trend: I.Trend, Bar: I.Bar, Shield: I.Shield, Zap: I.Zap, Award: I.Award, Cal: I.Cal, Gear: I.Gear, Clip: I.Clip };
+
+        const SH = ({ title, iconKey }) => {
+            const Ic = iconMap[iconKey]; return (
+                <div className="flex items-center gap-3 mb-5 border-b border-gray-200 pb-3">
+                    <div className="usta-gradient p-2.5 rounded-xl shadow-md text-white">{Ic && <Ic s={24} />}</div>
+                    <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+                </div>
+            );
+        };
+
+        /* ---- Grader Tool Component ---- */
+        const CRITERIA = [
+            { name: 'An\u00E1lisis t\u00E9cnico e indicadores', weight: 0.12 },
+            { name: 'Rendimientos y propiedades emp\u00EDricas', weight: 0.08 },
+            { name: 'Modelos ARCH/GARCH', weight: 0.12 },
+            { name: 'CAPM y riesgo sistem\u00E1tico', weight: 0.08 },
+            { name: 'Valor en Riesgo (VaR) y CVaR', weight: 0.12 },
+            { name: 'Optimizaci\u00F3n de portafolio (Markowitz)', weight: 0.12 },
+            { name: '\u2605 Se\u00F1ales y alertas (M\u00F3d. 7)', weight: 0.10 },
+            { name: '\u2605 Contexto macro y benchmark (M\u00F3d. 8)', weight: 0.08 },
+            { name: 'Calidad del tablero y uso de APIs', weight: 0.08 },
+            { name: 'Sustentaci\u00F3n oral', weight: 0.10 },
+        ];
+
+        const GraderTool = () => {
+            const [groupName, setGroupName] = useState('');
+            const [scores, setScores] = useState(CRITERIA.map(() => 0));
+            const [bonus, setBonus] = useState(0);
+            const [obs, setObs] = useState('');
+            const [history, setHistory] = useState([]);
+            const [showExport, setShowExport] = useState(false);
+
+            const setScore = (i, v) => { const ns = [...scores]; ns[i] = parseFloat(v); setScores(ns); };
+            const weighted = scores.map((s, i) => s * CRITERIA[i].weight);
+            const total = Math.min(5.0, weighted.reduce((a, b) => a + b, 0) + bonus);
+            const totalNoBonus = weighted.reduce((a, b) => a + b, 0);
+
+            const colorForScore = (s) => {
+                if (s >= 4.5) return '#16a34a';
+                if (s >= 4.0) return '#65a30d';
+                if (s >= 3.5) return '#ca8a04';
+                if (s >= 3.0) return '#ea580c';
+                return '#dc2626';
+            };
+
+            const labelForScore = (s) => {
+                if (s >= 4.5) return 'Excelente';
+                if (s >= 4.0) return 'Muy bueno';
+                if (s >= 3.5) return 'Bueno';
+                if (s >= 3.0) return 'Aceptable';
+                if (s > 0) return 'Insuficiente';
+                return '';
+            };
+
+            const saveGroup = () => {
+                if (!groupName.trim()) { alert('Ingresa el nombre del grupo.'); return; }
+                const entry = {
+                    name: groupName.trim(),
+                    scores: [...scores],
+                    bonus,
+                    obs,
+                    total: Math.round(total * 100) / 100,
+                    totalNoBonus: Math.round(totalNoBonus * 100) / 100,
+                    date: new Date().toLocaleString('es-CO')
+                };
+                setHistory(h => [...h, entry]);
+                setGroupName(''); setScores(CRITERIA.map(() => 0)); setBonus(0); setObs('');
+            };
+
+            const removeGroup = (i) => { setHistory(h => h.filter((_, j) => j !== i)); };
+
+            const exportCSV = () => {
+                const header = ['Grupo', 'Fecha', ...CRITERIA.map(c => c.name), 'Bonificaci\u00F3n', 'Nota sin bonif.', 'Nota final', 'Observaciones'];
+                const rows = history.map(g => [
+                    g.name, g.date,
+                    ...g.scores.map(s => s.toFixed(1)),
+                    g.bonus.toFixed(1), g.totalNoBonus.toFixed(2), g.total.toFixed(2),
+                    '"' + (g.obs || '').replace(/"/g, "'") + '"'
+                ]);
+                const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'calificaciones_proyecto_riesgo.csv'; a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const opts = [];
+            for (let v = 0; v <= 5.0; v = Math.round((v + 0.1) * 10) / 10) opts.push(v);
+
+            return (<div>
+                <div className="usta-card p-6 mb-6">
+                    <h3 className="font-bold text-lg text-primary mb-1"><i className="fas fa-calculator mr-2"></i>Calificador autom&#225;tico</h3>
+                    <p className="text-xs text-gray-500 mb-4">Selecciona la nota de cada criterio y el sistema calcula la nota ponderada en tiempo real.</p>
+
+                    <div className="mb-4">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre del grupo</label>
+                        <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)}
+                            className="w-full text-sm p-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-secondary focus:border-secondary outline-none"
+                            placeholder="Ej: Grupo 1 &#8212; P&#233;rez y G&#243;mez" />
+                    </div>
+
+                    <div className="space-y-3 mb-6">
+                        {CRITERIA.map((c, i) => (
+                            <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-gray-700 leading-tight">{c.name}</div>
+                                    <div className="text-[10px] text-gray-400 mt-0.5">Peso: {(c.weight * 100).toFixed(0)}% {scores[i] > 0 && <span className="ml-1" style={{ color: colorForScore(scores[i]) }}>&#8226; {labelForScore(scores[i])}</span>}</div>
+                                </div>
+                                <select value={scores[i]} onChange={e => setScore(i, e.target.value)}
+                                    className="w-20 text-sm p-1.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-secondary focus:border-secondary outline-none bg-white text-center font-mono font-bold"
+                                    style={{ color: scores[i] > 0 ? colorForScore(scores[i]) : '#9ca3af' }}>
+                                    {opts.map(v => (<option key={v} value={v}>{v.toFixed(1)}</option>))}
+                                </select>
+                                <div className="w-16 text-right">
+                                    <span className="text-xs font-mono text-gray-400">{weighted[i] > 0 ? weighted[i].toFixed(2) : '&#8212;'}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 mb-4">
+                        <div className="flex-1">
+                            <div className="text-xs font-semibold text-amber-800">Bonificaci&#243;n</div>
+                            <div className="text-[10px] text-amber-600">API REST, Kupiec, despliegue nube, etc. (m&#225;x +0.5)</div>
+                        </div>
+                        <select value={bonus} onChange={e => setBonus(parseFloat(e.target.value))}
+                            className="w-20 text-sm p-1.5 rounded-lg border border-amber-300 focus:ring-2 focus:ring-amber-400 outline-none bg-white text-center font-mono font-bold text-amber-700">
+                            {[0, 0.1, 0.2, 0.3, 0.4, 0.5].map(v => (<option key={v} value={v}>+{v.toFixed(1)}</option>))}
+                        </select>
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Observaciones (opcional)</label>
+                        <textarea value={obs} onChange={e => setObs(e.target.value)} rows={2}
+                            className="w-full text-sm p-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-secondary focus:border-secondary outline-none resize-none"
+                            placeholder="Comentarios sobre el grupo..." />
+                    </div>
+
+                    <div className="usta-card p-5 mb-4" style={{ background: 'linear-gradient(135deg,rgba(61,0,141,0.04) 0%,rgba(237,30,121,0.04) 100%)' }}>
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-bold text-gray-700">Nota sin bonificaci&#243;n</span>
+                            <span className="text-lg font-mono font-bold" style={{ color: colorForScore(totalNoBonus) }}>{totalNoBonus.toFixed(2)}</span>
+                        </div>
+                        {bonus > 0 && <div className="flex justify-between items-center mb-3 text-sm">
+                            <span className="text-gray-500">+ Bonificaci&#243;n</span>
+                            <span className="font-mono text-amber-600">+{bonus.toFixed(1)}</span>
+                        </div>}
+                        <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
+                            <span className="text-lg font-bold text-gray-900">NOTA FINAL</span>
+                            <span className="text-3xl font-mono font-bold" style={{ color: colorForScore(total) }}>{total.toFixed(2)}</span>
+                        </div>
+                        <div className="mt-2 w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500" style={{ width: (total / 5 * 100) + '%', background: colorForScore(total) }}></div>
+                        </div>
+                        <div className="text-center mt-1 text-xs font-bold" style={{ color: colorForScore(total) }}>{labelForScore(total)}</div>
+                    </div>
+
+                    <button onClick={saveGroup}
+                        className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ background: 'linear-gradient(140deg,#3D008D 0%,#ED1E79 100%)' }}>
+                        <i className="fas fa-save mr-2"></i>Guardar calificaci&#243;n del grupo
+                    </button>
+                </div>
+
+                {history.length > 0 && (
+                    <div className="usta-card p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg text-primary"><i className="fas fa-list-ol mr-2"></i>Grupos calificados ({history.length})</h3>
+                            <button onClick={exportCSV}
+                                className="px-4 py-2 rounded-lg text-white text-xs font-semibold transition-all hover:scale-105"
+                                style={{ background: 'linear-gradient(140deg,#3D008D 0%,#ED1E79 100%)' }}>
+                                <i className="fas fa-file-csv mr-1"></i>Exportar CSV
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            {history.map((g, i) => (
+                                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-bold text-gray-800 truncate">{g.name}</div>
+                                        <div className="text-[10px] text-gray-400">{g.date}{g.obs && <span className="ml-2 italic">&#8212; {g.obs}</span>}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xl font-mono font-bold" style={{ color: colorForScore(g.total) }}>{g.total.toFixed(2)}</div>
+                                        <div className="text-[10px] font-bold" style={{ color: colorForScore(g.total) }}>{labelForScore(g.total)}</div>
+                                    </div>
+                                    <button onClick={() => removeGroup(i)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors" title="Eliminar">
+                                        <i className="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        {history.length >= 2 && (
+                            <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                                <span className="text-xs text-gray-500">Promedio del curso: </span>
+                                <span className="text-sm font-mono font-bold text-primary">{(history.reduce((a, g) => a + g.total, 0) / history.length).toFixed(2)}</span>
+                                <span className="text-xs text-gray-400 ml-3">M&#237;n: {Math.min(...history.map(g => g.total)).toFixed(2)} | M&#225;x: {Math.max(...history.map(g => g.total)).toFixed(2)}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>);
+        };
+
+        /* ---- Sections ---- */
+        const sections = [
+            {
+                id: 'ctx', title: 'Contexto y justificaci\u00F3n', icon: 'Book', body: () => (
+                    <div>
+                        <p className="mb-4">La gesti&#243;n del riesgo financiero es una competencia central para cualquier profesional de la estad&#237;stica. Este proyecto integrador busca que los estudiantes demuestren su comprensi&#243;n de los conceptos, modelos y herramientas cubiertos en el curso de <strong>Teor&#237;a del Riesgo</strong>.</p>
+                        <p className="mb-4">Cada equipo actuar&#225; como un <strong>equipo de anal&#237;tica de riesgo</strong> encargado de construir un tablero interactivo que permita a un inversionista explorar, comprender y tomar decisiones informadas sobre un portafolio de activos financieros.</p>
+                        <div className="new-tag p-4 text-sm mt-4"><strong className="text-green-700"><i className="fas fa-star mr-1"></i> Integraci&#243;n con APIs:</strong> El tablero deber&#225; conectarse a servicios financieros externos para obtener datos actualizados, enriqueciendo el an&#225;lisis con informaci&#243;n macroecon&#243;mica y generando se&#241;ales automatizadas.</div>
+                        <div className="usta-card p-5 mt-6">
+                            <h4 className="font-bold text-lg text-primary mb-3"><i className="fas fa-info-circle mr-2"></i>Informaci&#243;n General</h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div><strong>Profesor:</strong> Javier Mauricio Sierra</div>
+                                <div><strong>Equipos:</strong> M&#225;ximo 2 estudiantes</div>
+                                <div><strong>Plazo:</strong> 15 d&#237;as calendario</div>
+                                <div><strong>Herramientas:</strong> R, Python, APIs, BI</div>
+                            </div></div></div>
+                )
+            },
+
+            {
+                id: 'obj', title: 'Objetivos', icon: 'Target', body: () => (
+                    <div>
+                        <h3 className="font-bold text-lg text-primary mb-3">Objetivo General</h3>
+                        <p className="mb-6 text-sm">Dise&#241;ar y desarrollar un <strong>tablero interactivo conectado a APIs financieras</strong> que integre el an&#225;lisis de riesgo financiero de un portafolio compuesto por al menos cinco activos, aplicando: indicadores t&#233;cnicos, rendimientos, volatilidad, modelos ARCH/GARCH, VaR, CAPM, optimizaci&#243;n de Markowitz, y generaci&#243;n automatizada de se&#241;ales de trading.</p>
+                        <h3 className="font-bold text-lg text-primary mb-3">Objetivos Espec&#237;ficos</h3>
+                        <ol className="list-decimal pl-5 space-y-2 text-sm">
+                            <li>Implementar conexi&#243;n a APIs financieras para obtenci&#243;n din&#225;mica de datos de al menos cinco activos.</li>
+                            <li>Calcular y visualizar indicadores t&#233;cnicos (SMA, EMA, RSI, MACD, Bollinger, Estoc&#225;stico) de forma interactiva.</li>
+                            <li>Estimar rendimientos, evaluar propiedades emp&#237;ricas y aplicar pruebas de normalidad.</li>
+                            <li>Modelar volatilidad condicional mediante ARCH y GARCH con selecci&#243;n por AIC/BIC.</li>
+                            <li>Calcular VaR con al menos dos m&#233;todos y complementar con Expected Shortfall (CVaR).</li>
+                            <li>Estimar Beta y aplicar CAPM con tasa libre de riesgo obtenida de API oficial.</li>
+                            <li>Construir frontera eficiente de Markowitz y determinar portafolios &#243;ptimos.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Implementar m&#243;dulo de se&#241;ales y alertas automatizadas basadas en indicadores t&#233;cnicos.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Integrar datos macroecon&#243;micos desde APIs oficiales (FRED, Banco de la Rep&#250;blica).</li>
+                            <li className="text-green-700 font-semibold">&#9733; (Opcional) Construir API REST propia como backend del tablero.</li>
+                        </ol></div>
+                )
+            },
+
+            {
+                id: 'api', title: 'Datos y APIs', icon: 'Globe', body: () => (
+                    <div>
+                        <h3 className="font-bold text-lg text-primary mb-3">Requisitos de Datos</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-sm mb-6">
+                            <li>M&#237;nimo <strong>cinco activos</strong> de renta variable de distintos sectores o geograf&#237;as.</li>
+                            <li>Horizonte hist&#243;rico m&#237;nimo de <strong>dos a&#241;os</strong> de datos diarios.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Los datos deben obtenerse din&#225;micamente desde una API. No se aceptan datasets est&#225;ticos.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Consumir al menos una API de datos macro para la tasa libre de riesgo actualizada.</li>
+                        </ul>
+                        <h3 className="font-bold text-lg text-primary mb-3">APIs Recomendadas</h3>
+                        <table className="rtable mb-6"><thead><tr><th>API</th><th>Uso principal</th><th>Acceso</th></tr></thead><tbody>
+                            <tr><td className="font-semibold">Yahoo Finance</td><td>Precios hist&#243;ricos y en tiempo real</td><td>Gratuito, sin key</td></tr>
+                            <tr><td className="font-semibold">Alpha Vantage</td><td>Precios, indicadores, divisas</td><td>Gratuito con API key</td></tr>
+                            <tr><td className="font-semibold">Finnhub</td><td>Real-time, noticias, sentimiento</td><td>Gratuito con API key</td></tr>
+                            <tr><td className="font-semibold">FRED API</td><td>Datos macro: tasas, inflaci&#243;n, PIB</td><td>Gratuito con API key</td></tr>
+                            <tr><td className="font-semibold">Banco de la Rep&#250;blica</td><td>DTF, TES, IPC de Colombia</td><td>Abierto</td></tr>
+                            <tr><td className="font-semibold">Polygon.io</td><td>Datos de mercado con WebSocket</td><td>Plan gratuito limitado</td></tr>
+                        </tbody></table>
+                        <h3 className="font-bold text-lg text-primary mb-3">Herramientas</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>C&#243;digo en <strong>R, Python o ambos</strong>.</li>
+                            <li>Tablero en: <strong>Streamlit, Shiny, Power BI, Looker Studio, Bokeh, Dash</strong>.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Usar librer&#237;as HTTP (requests, httr2) con manejo de errores, reintentos y caching.</li>
+                            <li>Se permite y fomenta el uso de <strong>IA como asistente</strong>.</li>
+                        </ul></div>
+                )
+            },
+
+            {
+                id: 'm1', title: 'M\u00F3d. 1: An\u00E1lisis t\u00E9cnico', icon: 'Chart', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Permitir al usuario explorar el comportamiento hist&#243;rico de cada activo y visualizar indicadores t&#233;cnicos.</p>
+                        <ul className="list-disc pl-5 space-y-2 text-sm mb-4">
+                            <li className="text-green-700 font-semibold">&#9733; Selector din&#225;mico de activos: el usuario ingresa tickers y el tablero descarga datos en tiempo real.</li>
+                            <li>Gr&#225;fico de precios hist&#243;ricos (l&#237;nea o velas japonesas) con selector de rango de fechas.</li>
+                            <li>Promedios m&#243;viles superpuestos: <strong>SMA y EMA</strong> con par&#225;metros ajustables.</li>
+                            <li><strong>RSI</strong> con l&#237;neas de sobrecompra (70) y sobreventa (30).</li>
+                            <li><strong>MACD</strong> con l&#237;nea de se&#241;al e histograma.</li>
+                            <li><strong>Bandas de Bollinger</strong>.</li>
+                            <li><strong>Oscilador Estoc&#225;stico</strong> (%K y %D).</li>
+                            <li>Panel de texto explicativo para cada indicador.</li>
+                        </ul>
+                        <div className="tip-box p-4 text-sm"><strong className="text-primary">Tip:</strong> Usa plotly o altair para gr&#225;ficos interactivos con zoom, hover y selecci&#243;n de rangos.</div>
+                    </div>)
+            },
+
+            {
+                id: 'm2', title: 'M\u00F3d. 2: Rendimientos', icon: 'Trend', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Caracterizar estad&#237;sticamente los rendimientos de cada activo.</p>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>C&#225;lculo de rendimientos simples y logar&#237;tmicos.</li>
+                            <li>Estad&#237;sticas descriptivas: media, desviaci&#243;n est&#225;ndar, asimetr&#237;a, curtosis.</li>
+                            <li>Histograma con curva normal superpuesta.</li>
+                            <li>Gr&#225;fico Q-Q contra la distribuci&#243;n normal.</li>
+                            <li>Boxplot de rendimientos.</li>
+                            <li>Pruebas de normalidad: <strong>Jarque-Bera</strong> y <strong>Shapiro-Wilk</strong>, con interpretaci&#243;n.</li>
+                            <li>Discusi&#243;n de hechos estilizados: colas pesadas, agrupamiento de volatilidad, efecto apalancamiento.</li>
+                        </ul></div>
+                )
+            },
+
+            {
+                id: 'm3', title: 'M\u00F3d. 3: ARCH/GARCH', icon: 'Bar', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Modelar la volatilidad condicional de al menos un activo representativo.</p>
+                        <ol className="list-decimal pl-5 space-y-2 text-sm mb-4">
+                            <li>Justificaci&#243;n de por qu&#233; se necesita un modelo de volatilidad condicional.</li>
+                            <li>Ajuste de al menos tres especificaciones: <strong>ARCH(1), GARCH(1,1)</strong> y una adicional.</li>
+                            <li>Tabla comparativa con Log-Likelihood, <strong>AIC y BIC</strong>.</li>
+                            <li>Diagn&#243;stico: Jarque-Bera sobre residuos estandarizados, gr&#225;fico de residuos.</li>
+                            <li>Pron&#243;stico de volatilidad (N-pasos o pron&#243;stico rodante).</li>
+                        </ol>
+                        <div className="tip-box p-4 text-sm"><strong className="text-primary">Tip:</strong> Usa la librer&#237;a <code className="bg-gray-100 px-1 rounded">arch</code> en Python o <code className="bg-gray-100 px-1 rounded">rugarch</code> en R.</div>
+                    </div>)
+            },
+
+            {
+                id: 'm4', title: 'M\u00F3d. 4: CAPM y Beta', icon: 'Shield', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Cuantificar el riesgo sistem&#225;tico y estimar el rendimiento esperado seg&#250;n el CAPM.</p>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>C&#225;lculo del <strong>Beta</strong> de cada activo respecto al &#237;ndice de referencia.</li>
+                            <li>Gr&#225;fico de dispersi&#243;n: rendimientos del activo vs. &#237;ndice, con l&#237;nea de regresi&#243;n.</li>
+                            <li className="text-green-700 font-semibold">&#9733; CAPM con tasa libre de riesgo obtenida autom&#225;ticamente desde la API macro.</li>
+                            <li>Tabla resumen: Beta, rendimiento esperado, clasificaci&#243;n (agresivo, defensivo, neutro).</li>
+                            <li>Discusi&#243;n: riesgo sistem&#225;tico vs. no sistem&#225;tico y diversificaci&#243;n.</li>
+                        </ul></div>
+                )
+            },
+
+            {
+                id: 'm5', title: 'M\u00F3d. 5: VaR y CVaR', icon: 'Shield', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Cuantificar la p&#233;rdida potencial del portafolio.</p>
+                        <ol className="list-decimal pl-5 space-y-2 text-sm">
+                            <li><strong>VaR param&#233;trico</strong> al 95% y 99%, diario y anualizado.</li>
+                            <li><strong>VaR por simulaci&#243;n hist&#243;rica.</strong></li>
+                            <li><strong>VaR por simulaci&#243;n Montecarlo</strong> (m&#237;nimo 10,000 simulaciones).</li>
+                            <li><strong>Expected Shortfall (CVaR)</strong> como medida complementaria.</li>
+                            <li>Tabla comparativa de m&#233;todos con interpretaci&#243;n.</li>
+                            <li>Visualizaci&#243;n: distribuci&#243;n de rendimientos con l&#237;neas de VaR y CVaR.</li>
+                            <li>(Opcional) Backtesting con test de Kupiec.</li>
+                        </ol></div>
+                )
+            },
+
+            {
+                id: 'm6', title: 'M\u00F3d. 6: Markowitz', icon: 'Target', body: () => (
+                    <div>
+                        <p className="mb-4 font-semibold text-primary">Construir la frontera eficiente y encontrar portafolios &#243;ptimos.</p>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>Matriz de correlaci&#243;n entre activos (heatmap interactivo).</li>
+                            <li>Simulaci&#243;n de al menos <strong>10,000 portafolios</strong> aleatorios.</li>
+                            <li>Gr&#225;fico del conjunto factible con <strong>frontera eficiente</strong> resaltada.</li>
+                            <li>Portafolio de <strong>m&#237;nima varianza</strong> y de <strong>m&#225;ximo ratio de Sharpe</strong>.</li>
+                            <li>Tabla con la composici&#243;n (% de cada activo) de ambos portafolios.</li>
+                            <li>(Opcional) El usuario ingresa rendimiento objetivo y obtiene portafolio eficiente.</li>
+                        </ul></div>
+                )
+            },
+
+            {
+                id: 'm7', title: 'M\u00F3d. 7: Se\u00F1ales \u2605', icon: 'Zap', body: () => (
+                    <div>
+                        <div className="new-tag p-3 text-sm mb-4"><strong className="text-green-700"><i className="fas fa-star mr-1"></i> </strong> &#8212; Operacionaliza indicadores t&#233;cnicos como se&#241;ales de compra/venta.</div>
+                        <p className="mb-3 text-sm">El sistema debe evaluar autom&#225;ticamente para cada activo:</p>
+                        <ol className="list-decimal pl-5 space-y-2 text-sm mb-4">
+                            <li><strong>Cruce del MACD:</strong> l&#237;nea MACD cruzando se&#241;al (compra/venta).</li>
+                            <li><strong>RSI en zonas extremas:</strong> RSI mayor a 70 (sobrecompra) o menor a 30 (sobreventa).</li>
+                            <li><strong>Bandas de Bollinger:</strong> precio tocando banda superior o inferior.</li>
+                            <li><strong>Cruce de medias m&#243;viles:</strong> golden cross / death cross.</li>
+                            <li><strong>Oscilador Estoc&#225;stico:</strong> %K cruzando %D en zonas extremas.</li>
+                        </ol>
+                        <h4 className="font-bold text-sm text-primary mb-2">Presentaci&#243;n:</h4>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>Panel de alertas tipo <strong>sem&#225;foro o tarjetas</strong> por activo.</li>
+                            <li>Umbrales <strong>configurables</strong> por el usuario.</li>
+                            <li>Texto interpretativo autom&#225;tico en lenguaje simple.</li>
+                        </ul></div>
+                )
+            },
+
+            {
+                id: 'm8', title: 'M\u00F3d. 8: Macro y benchmark \u2605', icon: 'Globe', body: () => (
+                    <div>
+                        <div className="new-tag p-3 text-sm mb-4"><strong className="text-green-700"><i className="fas fa-star mr-1"></i> </strong> &#8212; Contexto macro y comparaci&#243;n con benchmark.</div>
+                        <ul className="list-disc pl-5 space-y-2 text-sm">
+                            <li>Panel de indicadores macroecon&#243;micos actualizados v&#237;a API: tasa libre de riesgo, inflaci&#243;n, tasa de cambio.</li>
+                            <li>Rendimiento acumulado del portafolio &#243;ptimo vs. benchmark (base 100).</li>
+                            <li>M&#233;tricas: <strong>Alpha de Jensen</strong>, <strong>Tracking Error</strong>, <strong>Information Ratio</strong>.</li>
+                            <li>Tabla de desempe&#241;o: rendimiento acumulado, anualizado, volatilidad, Sharpe, <strong>m&#225;ximo drawdown</strong>.</li>
+                            <li>Interpretaci&#243;n: &#191;El portafolio super&#243; al benchmark? &#191;El alpha es significativo?</li>
+                        </ul>
+                        <div className="tip-box p-4 text-sm mt-4"><strong className="text-primary">Opcional avanzado (bonificaci&#243;n):</strong> Construir una <strong>API REST propia</strong> con FastAPI o Plumber que exponga endpoints como <code className="bg-gray-100 px-1 rounded">/rendimientos/ticker</code>, <code className="bg-gray-100 px-1 rounded">/var/metodo</code>, <code className="bg-gray-100 px-1 rounded">/frontera-eficiente</code>, <code className="bg-gray-100 px-1 rounded">/alertas</code>.</div>
+                    </div>)
+            },
+
+            {
+                id: 'rub', title: 'R\u00FAbrica de evaluaci\u00F3n', icon: 'Award', body: () => (
+                    <div>
+                        <p className="mb-4 text-sm">Calificaci&#243;n total sobre <strong>5.0</strong>. Cada criterio se eval&#250;a en cinco niveles. La nota final es el promedio ponderado.</p>
+
+                        <p className="mb-2 mt-6 font-bold text-primary text-sm">1. An&#225;lisis t&#233;cnico e indicadores (12%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0 Excelente</th><th>4.5&#8211;4.9 Muy bueno</th><th>4.0&#8211;4.4 Bueno</th><th>3.5&#8211;3.9 Aceptable</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Todos los indicadores (SMA, EMA, RSI, MACD, Bollinger, Estoc&#225;stico) implementados, interactivos, con datos en tiempo real v&#237;a API y panel interpretativo claro para cada uno.</td><td>Todos los indicadores presentes e interactivos. Datos v&#237;a API. Falta profundidad en alguna interpretaci&#243;n.</td><td>Al menos 4 indicadores correctos. Datos v&#237;a API pero con limitaciones en la interactividad o par&#225;metros no ajustables.</td><td>Al menos 3 indicadores implementados. Datos est&#225;ticos o parcialmente din&#225;micos. Interpretaciones superficiales.</td><td>Menos de 3 indicadores, o errores conceptuales graves en su c&#225;lculo. Sin conexi&#243;n a API.</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">2. Rendimientos y propiedades emp&#237;ricas (8%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Rendimientos simples y logar&#237;tmicos correctos. Descriptivos completos. Histograma, Q-Q, boxplot. Jarque-Bera y Shapiro-Wilk con interpretaci&#243;n. Discusi&#243;n profunda de hechos estilizados.</td><td>Todo lo anterior pero la discusi&#243;n de hechos estilizados es breve o le falta alg&#250;n detalle.</td><td>Rendimientos y pruebas correctos. Faltan 1&#8211;2 visualizaciones o la interpretaci&#243;n de pruebas es mec&#225;nica.</td><td>Rendimientos calculados correctamente pero faltan pruebas de normalidad o no se discuten propiedades emp&#237;ricas.</td><td>Rendimientos mal calculados o ausentes. No hay an&#225;lisis de propiedades.</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">3. Modelos ARCH/GARCH (12%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>3+ especificaciones comparadas con AIC/BIC en tabla. Diagn&#243;stico completo de residuos (Jarque-Bera, gr&#225;fico). Pron&#243;stico de volatilidad (rodante o N-pasos). Justificaci&#243;n s&#243;lida de heterocedasticidad.</td><td>3 modelos comparados, diagn&#243;stico presente. Pron&#243;stico incluido pero sin mucha discusi&#243;n de resultados.</td><td>2 modelos comparados con AIC/BIC. Diagn&#243;stico parcial (falta gr&#225;fico o prueba). Sin pron&#243;stico o solo b&#225;sico.</td><td>Solo un modelo GARCH(1,1) ajustado sin comparaci&#243;n. Sin diagn&#243;stico formal de residuos.</td><td>No se ajustan modelos de volatilidad condicional, o los resultados contienen errores fundamentales.</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">4. CAPM y riesgo sistem&#225;tico (8%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Beta calculado para todos los activos. Dispersi&#243;n con regresi&#243;n. CAPM con Rf desde API documentada. Tabla resumen. Discusi&#243;n s&#243;lida de riesgo sistem&#225;tico vs. no sistem&#225;tico.</td><td>Beta y CAPM correctos con Rf desde API. Falta profundidad en la discusi&#243;n de diversificaci&#243;n.</td><td>Beta y CAPM correctos pero Rf ingresada manualmente con justificaci&#243;n. Discusi&#243;n breve.</td><td>Beta calculado para algunos activos. CAPM aplicado pero sin documentar fuente de Rf.</td><td>No se calcula Beta, o el CAPM tiene errores conceptuales (f&#243;rmula mal aplicada).</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">5. Valor en Riesgo y CVaR (12%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>3 m&#233;todos (param&#233;trico, hist&#243;rico, Montecarlo). CVaR incluido. Tabla comparativa con interpretaci&#243;n. Visualizaci&#243;n de distribuci&#243;n con l&#237;neas de VaR/CVaR. Backtesting (Kupiec) implementado.</td><td>3 m&#233;todos + CVaR + tabla comparativa + visualizaci&#243;n. Sin backtesting pero la interpretaci&#243;n es s&#243;lida.</td><td>2 m&#233;todos + CVaR. Tabla comparativa presente. Falta alguna visualizaci&#243;n o la interpretaci&#243;n es breve.</td><td>1 m&#233;todo de VaR correctamente implementado. Sin CVaR o sin comparaci&#243;n entre m&#233;todos.</td><td>VaR ausente, mal calculado, o con errores conceptuales (confusi&#243;n de percentiles, f&#243;rmula incorrecta).</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">6. Optimizaci&#243;n de portafolio &#8212; Markowitz (12%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Heatmap de correlaci&#243;n interactivo. 10,000+ portafolios simulados. Frontera eficiente clara. Portafolios de m&#237;nima varianza y m&#225;ximo Sharpe identificados con composici&#243;n detallada. Usuario puede elegir rendimiento objetivo.</td><td>Frontera eficiente correcta, ambos portafolios &#243;ptimos con composici&#243;n. Heatmap presente. Sin opci&#243;n de rendimiento objetivo.</td><td>Frontera eficiente visible. Se identifica al menos un portafolio &#243;ptimo con composici&#243;n. Heatmap b&#225;sico.</td><td>Simulaci&#243;n de portafolios presente pero la frontera no se distingue claramente. Falta identificar &#243;ptimos.</td><td>No se construye la frontera eficiente o la simulaci&#243;n tiene errores fundamentales.</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-green-700 text-sm">7. &#9733; Se&#241;ales y alertas &#8212; M&#243;dulo 7 (10%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Se&#241;ales autom&#225;ticas para 4+ indicadores. Panel tipo sem&#225;foro/cards. Umbrales configurables por el usuario. Texto interpretativo autom&#225;tico en lenguaje claro.</td><td>Se&#241;ales para 3+ indicadores con panel visual. Umbrales configurables. Texto interpretativo presente pero breve.</td><td>Se&#241;ales para 2 indicadores. Panel funcional pero sin configuraci&#243;n de umbrales o sin texto interpretativo.</td><td>Se&#241;ales b&#225;sicas para 1 indicador. Sin panel visual dedicado (solo texto plano).</td><td>M&#243;dulo ausente o se&#241;ales implementadas con errores l&#243;gicos (condiciones invertidas, etc.).</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-green-700 text-sm">8. &#9733; Contexto macro y benchmark &#8212; M&#243;dulo 8 (8%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Datos macro v&#237;a API (Rf, inflaci&#243;n). Rendimiento acumulado vs. benchmark. Alpha de Jensen, Tracking Error, Information Ratio. Tabla de desempe&#241;o completa. Interpretaci&#243;n profunda.</td><td>Datos macro v&#237;a API. Comparaci&#243;n vs. benchmark con al menos 2 m&#233;tricas. Interpretaci&#243;n presente.</td><td>Benchmark mostrado. Datos macro presentes pero manuales. 1 m&#233;trica comparativa calculada.</td><td>Benchmark graficado pero sin m&#233;tricas comparativas formales. Sin datos macro v&#237;a API.</td><td>M&#243;dulo ausente o benchmark incorrecto.</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">9. Calidad del tablero y uso de APIs (8%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Dise&#241;o profesional, navegaci&#243;n intuitiva (tabs/sidebar). Datos 100% din&#225;micos. Caching implementado. Manejo de errores de API con mensajes al usuario. Sin fallos de ejecuci&#243;n.</td><td>Dise&#241;o limpio, navegaci&#243;n clara. Datos din&#225;micos. Manejo de errores b&#225;sico. Alg&#250;n detalle de UX menor.</td><td>Tablero funcional. Datos mayormente din&#225;micos. Alg&#250;n problema de dise&#241;o o navegaci&#243;n confusa en alguna secci&#243;n.</td><td>Tablero que funciona pero con problemas de carga, errores ocasionales de API no manejados, o dise&#241;o descuidado.</td><td>Tablero no ejecutable, con errores cr&#237;ticos, o completamente est&#225;tico (sin integraci&#243;n de API).</td></tr>
+                        </tbody></table>
+
+                        <p className="mb-2 font-bold text-primary text-sm">10. Sustentaci&#243;n oral (10%)</p>
+                        <table className="rtable mb-6"><thead><tr><th>5.0</th><th>4.5&#8211;4.9</th><th>4.0&#8211;4.4</th><th>3.5&#8211;3.9</th><th>Menos de 3.5</th></tr></thead><tbody>
+                            <tr><td>Ambos integrantes demuestran dominio total. Demostraci&#243;n en vivo fluida. Responden preguntas t&#233;cnicas y conceptuales con solidez. Explican integraci&#243;n con APIs y decisiones de dise&#241;o.</td><td>Ambos participan y demuestran buen dominio. Alguna vacilaci&#243;n en preguntas puntuales pero resuelven correctamente.</td><td>Ambos participan. Dominio general del proyecto pero un integrante no puede explicar alg&#250;n m&#243;dulo con profundidad.</td><td>Un integrante domina la mayor&#237;a del proyecto; el otro solo puede explicar su parte. Respuestas superficiales a preguntas.</td><td>No se puede explicar o defender el trabajo. Demostraci&#243;n fallida o solo un integrante participa.</td></tr>
+                        </tbody></table>
+
+                        <div className="tip-box p-4 text-sm"><strong className="text-primary">Bonificaci&#243;n (hasta +0.5 sobre 5.0):</strong> API REST propia como backend (FastAPI/Plumber), backtesting del VaR con test de Kupiec, despliegue en la nube (Streamlit Cloud, Shinyapps.io, Render), optimizaci&#243;n interactiva por rendimiento objetivo, o cualquier an&#225;lisis adicional que demuestre profundidad y creatividad.</div>
+                    </div>)
+            },
+
+            {
+                id: 'cron', title: 'Cronograma sugerido', icon: 'Cal', body: () => (
+                    <div>
+                        <table className="rtable"><thead><tr><th>D&#237;as</th><th>Actividad</th><th>Entregable parcial</th></tr></thead><tbody>
+                            <tr><td className="font-semibold">1&#8211;2</td><td>Conformaci&#243;n, selecci&#243;n de activos, configuraci&#243;n APIs.</td><td>Conexi&#243;n funcional, dataset limpio.</td></tr>
+                            <tr><td className="font-semibold">3&#8211;5</td><td>M&#243;dulos 1 y 2: indicadores t&#233;cnicos y rendimientos.</td><td>Primeras pesta&#241;as funcionales.</td></tr>
+                            <tr><td className="font-semibold">6&#8211;8</td><td>M&#243;dulos 3 y 4: ARCH/GARCH, Beta y CAPM.</td><td>Modelos ajustados, CAPM documentado.</td></tr>
+                            <tr><td className="font-semibold">9&#8211;11</td><td>M&#243;dulos 5, 6 y 7: VaR, Markowitz, se&#241;ales.</td><td>M&#243;dulos core integrados.</td></tr>
+                            <tr><td className="font-semibold">12&#8211;13</td><td>M&#243;dulo 8: benchmark y macro. Integraci&#243;n, informe.</td><td>Tablero completo.</td></tr>
+                            <tr><td className="font-semibold">14&#8211;15</td><td>Sustentaci&#243;n, pruebas finales, README, entrega.</td><td>Entregables finales.</td></tr>
+                        </tbody></table></div>
+                )
+            },
+
+            {
+                id: 'pol', title: 'Pol\u00EDtica de IA y entregables', icon: 'Gear', body: () => (
+                    <div>
+                        <h3 className="font-bold text-lg text-primary mb-3">Pol&#237;tica de Uso de IA</h3>
+                        <ol className="list-decimal pl-5 space-y-2 text-sm mb-6">
+                            <li>El estudiante debe comprender todo el c&#243;digo. La IA es un <strong>asistente, no un sustituto</strong>.</li>
+                            <li>En la sustentaci&#243;n se evaluar&#225; la capacidad de explicar decisiones y responder preguntas.</li>
+                            <li>Copiar sin comprensi&#243;n se considerar&#225; equivalente a plagio.</li>
+                            <li>Se valora documentar el uso de IA en el README.</li>
+                        </ol>
+                        <h3 className="font-bold text-lg text-primary mb-3">Recomendaciones T&#233;cnicas</h3>
+                        <ul className="list-disc pl-5 space-y-1 text-sm mb-6">
+                            <li>Verificar valores faltantes y documentar estrategia de manejo.</li>
+                            <li>Utilizar log-rendimientos por aditividad y estacionariedad.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Implementar caching para respetar rate limits de las APIs.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Manejar errores de red con try/except o tryCatch.</li>
+                            <li className="text-green-700 font-semibold">&#9733; Nunca exponer API keys en c&#243;digo. Usar variables de entorno.</li>
+                            <li>Demostraci&#243;n en vivo del tablero en la sustentaci&#243;n.</li>
+                        </ul>
+                        <h3 className="font-bold text-lg text-primary mb-3">Entregables</h3>
+                        <table className="rtable"><thead><tr><th>Entregable</th><th>Formato</th><th>Descripci&#243;n</th></tr></thead><tbody>
+                            <tr><td className="font-semibold">Tablero interactivo</td><td>URL o ejecutable</td><td>Dashboard con los 8 m&#243;dulos, funcional.</td></tr>
+                            <tr><td className="font-semibold">C&#243;digo fuente</td><td>Repositorio Git</td><td>C&#243;digo documentado, README con instrucciones y APIs.</td></tr>
+                            <tr><td className="font-semibold">Informe ejecutivo</td><td>PDF (m&#225;x. 5 pp.)</td><td>Hallazgos, metodolog&#237;a, conclusiones.</td></tr>
+                            <tr><td className="font-semibold">Sustentaci&#243;n oral</td><td>15&#8211;20 min</td><td>Presentaci&#243;n en vivo con ronda de preguntas.</td></tr>
+                        </tbody></table></div>
+                )
+            },
+
+            {
+                id: 'bib', title: 'Bibliograf\u00EDa', icon: 'Book', body: () => (
+                    <div className="usta-card p-5">
+                        <ol className="list-decimal pl-5 space-y-3 text-sm">
+                            <li><em>Moscote Fl&#243;rez, O.</em> Elementos de estad&#237;stica en riesgo financiero. USTA, 2013.</li>
+                            <li><em>Holton, G. A.</em> Value at Risk: Theory and Practice. <a href="https://www.value-at-risk.net" className="text-secondary underline" target="_blank">value-at-risk.net</a></li>
+                            <li><em>Markowitz, H. (1952).</em> Portfolio Selection. The Journal of Finance, 7(1), 77&#8211;91.</li>
+                            <li><em>Tsay, R. S. (2010).</em> Analysis of Financial Time Series. 3rd ed., Wiley.</li>
+                            <li><em>Hull, J. C. (2018).</em> Risk Management and Financial Institutions. 5th ed., Wiley.</li>
+                            <li>Material de clase: Notebooks R Markdown, Prof. Javier Mauricio Sierra.</li>
+                            <li className="text-green-700 font-semibold">&#9733; APIs: <a href="https://fred.stlouisfed.org/docs/api" className="underline" target="_blank">FRED</a>, <a href="https://pypi.org/project/yfinance/" className="underline" target="_blank">yfinance</a>, <a href="https://www.alphavantage.co/documentation/" className="underline" target="_blank">Alpha Vantage</a>, <a href="https://finnhub.io/docs/api" className="underline" target="_blank">Finnhub</a>.</li>
+                        </ol></div>
+                )
+            },
+
+            { id: 'grader', title: 'Calificador', icon: 'Clip', body: () => (<GraderTool />) },
+        ];
+
+        /* ---- App ---- */
+        const App = () => {
+            const [idx, setIdx] = useState(0);
+            const [open, setOpen] = useState(true);
+            const sec = sections[idx];
+            const Ic = iconMap[sec.icon];
+
+            return (
+                <div className="flex h-screen overflow-hidden relative">
+                    <button onClick={() => setOpen(p => !p)}
+                        className="fixed top-4 left-4 z-50 p-2.5 rounded-full shadow-lg text-white transition-all hover:scale-110"
+                        style={{ background: 'linear-gradient(140deg,#3D008D 0%,#ED1E79 100%)' }}>
+                        <i className={"fas " + (open ? 'fa-times' : 'fa-bars') + " text-sm"}></i>
+                    </button>
+
+                    {open && <div className="fixed inset-0 bg-black/20 z-30 lg:hidden" onClick={() => setOpen(false)} />}
+
+                    <div className="flex-shrink-0 overflow-y-auto z-40 flex flex-col"
+                        style={{ background: 'linear-gradient(180deg,#001A4D 0%,#002868 100%)', width: open ? '17rem' : '0', minWidth: open ? '17rem' : '0', opacity: open ? 1 : 0, transition: 'width .3s,min-width .3s,opacity .25s', overflow: open ? 'visible auto' : 'hidden' }}>
+                        <div className="p-6 pt-16 border-b border-white/10">
+                            <h1 className="text-white font-bold text-lg tracking-tight">
+                                <span className="text-secondary">Risk</span>Lab<span className="text-gold">USTA</span>
+                            </h1>
+                            <p className="text-xs text-white/50 mt-1">Proyecto Integrador</p>
+                        </div>
+                        <nav className="p-3 space-y-1">
+                            {sections.map((s, i) => (
+                                <button key={s.id} onClick={() => { setIdx(i); if (window.innerWidth < 1024) setOpen(false); }}
+                                    className={"w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg transition-all text-left " + (idx === i ? 'text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/10')}
+                                    style={idx === i ? { background: 'linear-gradient(140deg,#3D008D 0%,#ED1E79 100%)' } : {}}>
+                                    <span className="flex-shrink-0">{React.createElement(iconMap[s.icon], { s: 16 })}</span>
+                                    <span className="font-medium leading-tight">{s.title}</span>
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+
+                    <main className="flex-1 overflow-y-auto bg-bg">
+                        <div className="max-w-4xl mx-auto p-8 lg:p-12">
+                            <div className="mb-6 flex items-center justify-between">
+                                <span className="text-xs font-bold tracking-wider text-secondary uppercase">
+                                    Secci&#243;n {idx + 1} de {sections.length}
+                                </span>
+                                <div className="flex gap-2">
+                                    <button disabled={idx === 0} onClick={() => setIdx(c => c - 1)} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"><I.Left s={20} /></button>
+                                    <button disabled={idx === sections.length - 1} onClick={() => setIdx(c => c + 1)} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"><I.Right s={20} /></button>
+                                </div>
+                            </div>
+
+                            <SH title={sec.title} iconKey={sec.icon} />
+
+                            <div className="prose prose-lg text-gray-600 leading-relaxed fade-in" key={sec.id}>
+                                {sec.body()}
+                            </div>
+
+                            <footer className="mt-20">
+                                <div className="usta-header rounded-xl p-6 text-center">
+                                    <p className="text-white font-medium text-sm">Dise&#241;ado por <span className="font-bold">Javier Mauricio Sierra</span></p>
+                                    <p className="text-xs mt-1 text-white/60">Teor&#237;a del Riesgo &#8226; Proyecto Integrador con APIs &#8226; USTA</p>
+                                </div>
+                            </footer>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>
