@@ -1,0 +1,2328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RiskLab USTA — Dashboard</title>
+  <script src="data.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family:'Inter','Outfit',sans-serif; background:#F8FAFC; color:#1f2937; display:flex; height:100vh; overflow:hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width:236px; min-width:236px;
+      background: linear-gradient(180deg, #4b164c 0%, #2d0a2e 100%);
+      display:flex; flex-direction:column; padding:18px 12px; overflow-y:auto; gap:3px;
+      transition: width 0.28s cubic-bezier(0.4,0,0.2,1), min-width 0.28s cubic-bezier(0.4,0,0.2,1), padding 0.28s ease;
+      position:relative; flex-shrink:0;
+    }
+    #sidebar.collapsed {
+      width:0; min-width:0; padding:0; overflow:hidden;
+    }
+
+    /* ── Sidebar toggle button ── */
+    #sidebar-toggle {
+      position:fixed; left:236px; top:50%; transform:translateY(-50%);
+      width:22px; height:48px; z-index:100;
+      background: linear-gradient(135deg, #dd5e89 0%, #f7a35c 100%);
+      border:none; border-radius:0 12px 12px 0;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      box-shadow: 3px 0 16px rgba(221,94,137,0.4);
+      transition: left 0.28s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s;
+    }
+    #sidebar-toggle:hover { box-shadow: 4px 0 22px rgba(221,94,137,0.65); }
+    #sidebar-toggle svg { transition: transform 0.25s; }
+    #sidebar.collapsed ~ #sidebar-toggle,
+    body.sidebar-collapsed #sidebar-toggle { left:0; }
+    body.sidebar-collapsed #sidebar-toggle svg { transform: rotate(180deg); }
+
+    .logo { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+    .logo img { width:40px; height:40px; border-radius:10px; }
+    .logo-title { color:#fff; font-size:1.0rem; font-weight:700; line-height:1.2; font-family:'Outfit',sans-serif; }
+    .logo-sub   { color:rgba(255,255,255,.45); font-size:.68rem; }
+    #sidebar hr { border:none; border-top:1px solid rgba(255,255,255,.12); margin:8px 0; }
+    .nav-label  { color:rgba(255,255,255,.4); font-size:.65rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:5px 4px 2px; }
+
+    .nav-btn {
+      display:block; width:100%; text-align:left;
+      padding:8px 11px; border-radius:8px; border:none;
+      background:transparent; color:rgba(255,255,255,0.6); font-weight:500;
+      font-family:inherit; font-size:.82rem; cursor:pointer; transition:all .15s; margin-bottom:2px;
+    }
+    .nav-btn:hover { background:rgba(255,255,255,0.1); color:#fff; transform:translateX(3px); }
+    .nav-btn.active { background:#dd5e89; color:#fff; font-weight:600; }
+
+    /* ── Ticker chips ── */
+    #ticker-chips { display:flex; flex-direction:column; gap:4px; }
+    .t-chip {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:7px 11px; border-radius:8px; border:1px solid rgba(255,255,255,.15);
+      background:#1E293B; border-color:#334155; color:#F8FAFC;
+      font-family:inherit; font-size:.83rem; font-weight:600; cursor:pointer; transition:all .15s;
+    }
+    .t-chip.active { background:#1E293B; border-color:#334155; color:#F8FAFC; }
+    .t-chip.inactive { background:rgba(255,255,255,.03); color:rgba(255,255,255,.35); border-color:rgba(255,255,255,.06); text-decoration:line-through; }
+    .t-chip .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .t-chip-label { display:flex; align-items:center; gap:7px; }
+    .chip-hint { color:rgba(255,255,255,.35); font-size:.67rem; text-align:center; margin-top:2px; }
+    #gen-info { margin-top:auto; padding-top:10px; color:rgba(255,255,255,.35); font-size:.67rem; line-height:1.6; border-top:1px solid rgba(255,255,255,.1); }
+
+    /* ── Main ── */
+    #main { flex:1; overflow-y:auto; padding:26px 30px; transition: margin-left 0.28s ease; }
+
+    /* ── Typography ── */
+    h1,h2,h3,h4 { font-family:'Outfit',sans-serif; }
+    .header-gradient {
+      margin-top:0;
+      background: linear-gradient(90deg, #dd5e89 0%, #f7a35c 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+      font-family:'Outfit',sans-serif; font-weight:800; font-size:2.1rem;
+      letter-spacing:-0.02em; line-height:1.15; margin-bottom:8px;
+    }
+    .page-subtitle { color:#475569; font-size:0.97rem; font-weight:400; margin-bottom:24px; line-height:1.5; }
+    .section-title {
+      font-weight:700; font-size:1rem; margin:20px 0 10px;
+      border-left:3px solid #dd5e89; padding-left:10px; color:#1f2937;
+    }
+
+    /* ── Cards ── */
+    .card { background:#fff; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.05); border:1px solid #e5e7eb; padding:18px; }
+    /* ── Interpretation boxes ── */
+    .interp-box { background:#fdf4ff; border-left:4px solid #dd5e89; border-radius:0 10px 10px 0; padding:12px 16px; font-size:.875rem; color:#1f2937; margin:12px 0; line-height:1.6; }
+    .interp-blue { background:#eff6ff; border-left-color:#4e8cde; }
+    .interp-green { background:#f0fdf4; border-left-color:#10b981; }
+    .interp-warn  { background:#fffbeb; border-left-color:#f59e0b; }
+    /* ── Future-work cards ── */
+    .fw-card { background:#fff; border-radius:14px; border:1px solid #e5e7eb; border-top:3px solid #dd5e89; box-shadow:0 2px 10px rgba(0,0,0,.05); padding:18px 20px; margin-bottom:14px; transition:box-shadow .2s; }
+    .fw-card:hover { box-shadow:0 6px 20px rgba(0,0,0,.09); }
+    .fw-tag { display:inline-block; font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:20px; background:#fce7f3; color:#9d174d; margin-bottom:8px; }
+
+    /* ── Grids ── */
+    .kpi-grid  { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+    .kpi-card  { padding:14px 18px !important; }
+    .two-col   { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+    .three-col { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+    .four-col  { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+
+    /* ── Module tiles ── */
+    .modules-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+    .module-tile { box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      background:#fff; border-radius:12px; padding:18px; border:1px solid #e5e7eb;
+      text-align:center; cursor:pointer; transition:all .2s;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:110px;
+    }
+    .module-tile:hover { box-shadow: 0 10px 20px rgba(221,94,137,0.15); transform:translateY(-3px); border-color:#f4a0c0; }
+    .tile-icon { font-size:1.6rem; }
+    .tile-id   { font-size:.67rem; font-weight:700; color:#dd5e89; text-transform:uppercase; letter-spacing:.1em; }
+    .tile-name { font-size:.82rem; font-weight:600; color:#1f2937; }
+
+    /* ── No-data ── */
+    .nodata-card { background:#fff; border-radius:12px; padding:40px; text-align:center; border:1px solid #e5e7eb; }
+    .nodata-card h3 { color:#2563EB; margin:12px 0 8px; }
+    .nodata-card p  { color:#6b7280; margin-bottom:10px; }
+    .nodata-card code { display:inline-block; background:#f3f4f6; padding:6px 14px; border-radius:8px; font-family:monospace; font-size:.88rem; }
+
+    /* ── Tables ── */
+    .compare-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+    .compare-table th { background:#0F172A; color:#fff; padding:9px 14px; text-align:left; }
+    .compare-table td { padding:8px 14px; border-bottom:1px solid #f0f0f0; }
+    .compare-table tr:nth-child(even) td { background:#fafafa; }
+    .compare-table tr:hover td { background:#fef3fb; }
+
+    /* ── Stat rows ── */
+    .stat-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #e5e7eb; font-size:.9rem; }
+    .stat-row:last-child { border-bottom:none; }
+    .stat-label { color:#6b7280; }
+    .stat-value { font-weight:600; }
+
+    /* ── Signals ── */
+    .signal-buy  { background:#d1fae5; border-left:4px solid #10b981; border-radius:8px; padding:10px 14px; margin:4px 0; color:#065f46; font-weight:600; font-size:.88rem; }
+    .signal-sell { background:#fee2e2; border-left:4px solid #ef4444; border-radius:8px; padding:10px 14px; margin:4px 0; color:#7f1d1d; font-weight:600; font-size:.88rem; }
+    .signal-ok   { background:#f0fdf4; border-left:4px solid #10b981; border-radius:8px; padding:10px 14px; margin:4px 0; color:#166534; font-size:.88rem; }
+
+    /* ── Badges ── */
+    .badge-normal    { background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:12px; font-size:.74rem; font-weight:700; }
+    .badge-notnormal { background:#fee2e2; color:#7f1d1d; padding:2px 8px; border-radius:12px; font-size:.74rem; font-weight:700; }
+    .badge-best      { background:#fce7f3; color:#9d174d; padding:1px 7px; border-radius:8px; font-size:.7rem; font-weight:700; }
+    .badge-yes       { background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:12px; font-size:.74rem; font-weight:700; }
+    .badge-no        { background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:12px; font-size:.74rem; font-weight:700; }
+
+    .big-number { font-size:1.6rem; font-weight:700; line-height:1; }
+    .unit       { font-size:.85rem; color:#9ca3af; margin-left:1px; }
+    .info-box   { background:#eff6ff; border:1px solid #bfdbfe; border-radius:9px; padding:11px 15px; color:#1e40af; font-size:.86rem; margin-bottom:14px; }
+    .warn-box   { background:#fffbeb; border:1px solid #fde68a; border-radius:9px; padding:11px 15px; color:#92400e; font-size:.86rem; margin-bottom:14px; }
+
+    /* ── Tabs ── */
+    .tabs { display:flex; gap:6px; margin-bottom:0; flex-wrap:wrap; }
+    .tab-btn { padding:7px 16px; border-radius:9px 9px 0 0; border:1px solid #e5e7eb; border-bottom:none; background:#F8FAFC; color:#6b7280; font-family:inherit; font-size:.85rem; cursor:pointer; transition:all .15s; }
+    .tab-btn.active, .tab-btn:hover { background:#fff; color:#1f2937; font-weight:600; }
+    .tab-content { display:none; border-radius:0 13px 13px 13px !important; }
+    .tab-content.active { display:block; }
+
+    .footer { text-align:center; color:#9ca3af; font-size:.8rem; padding:26px 0 6px; }
+
+    /* ── Collapsible sections ── */
+    details.collapsible { border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin:12px 0; }
+    details.collapsible summary {
+      padding:10px 16px; background:#f8fafc; cursor:pointer; font-weight:600; font-size:.88rem;
+      color:#1f2937; list-style:none; display:flex; align-items:center; justify-content:space-between;
+      user-select:none;
+    }
+    details.collapsible summary::after { content:"▼"; font-size:.7rem; color:#9ca3af; transition:transform .2s; }
+    details.collapsible[open] summary::after { transform:rotate(180deg); }
+    details.collapsible summary:hover { background:#f1f5f9; }
+    details.collapsible .details-body { padding:14px; overflow-x:auto; }
+
+    /* ── Improved KPI cards ── */
+    .kpi-card-v2 {
+      background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px 18px;
+      display:flex; flex-direction:column; gap:4px; box-shadow:0 1px 4px rgba(0,0,0,.04);
+    }
+    .kpi-card-v2 .kpi-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
+    .kpi-card-v2 .kpi-value { font-size:1.5rem; font-weight:800; color:#0f172a; line-height:1.1; }
+    .kpi-card-v2 .kpi-sub   { font-size:.78rem; color:#64748b; margin-top:2px; }
+    .kpi-card-v2 .kpi-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:700; margin-top:4px; }
+
+    /* ── Signal explanation ── */
+    .signal-expl { font-size:.82rem; color:#374151; margin-top:6px; line-height:1.5; padding:8px 10px; background:rgba(255,255,255,0.7); border-radius:6px; }
+
+    /* ── Ticker selector inline ── */
+    .ticker-selector { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; align-items:center; }
+    .ticker-sel-btn {
+      padding:4px 10px; border-radius:20px; border:1.5px solid; font-size:.75rem; font-weight:700;
+      cursor:pointer; transition:all .15s; background:transparent;
+    }
+    .ticker-sel-btn.on  { opacity:1; }
+    .ticker-sel-btn.off { opacity:.35; text-decoration:line-through; }
+
+    /* ── Param panel (sidebar) ── */
+    .param-label {
+      color:rgba(255,255,255,.55); font-size:.68rem; font-weight:700; letter-spacing:.04em;
+      display:block; margin-bottom:3px; text-transform:uppercase;
+    }
+    .param-input {
+      width:100%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
+      border-radius:7px; color:#f0f0f0; font-size:.78rem; padding:5px 8px;
+      font-family:inherit; outline:none; transition:border-color .15s;
+      color-scheme: dark;
+    }
+    .param-input:focus { border-color:#dd5e89; background:rgba(255,255,255,.13); }
+    .param-input option { background:#2d0a2e; color:#f0f0f0; }
+    .param-row { margin-bottom:9px; }
+    .param-range {
+      width:100%; accent-color:#dd5e89; height:4px; cursor:pointer;
+      background:rgba(255,255,255,.15); border-radius:2px;
+    }
+    .recalc-btn {
+      width:100%; padding:8px 12px; border-radius:8px; border:none; margin-top:2px;
+      background:linear-gradient(135deg,#dd5e89,#f7a35c); color:#fff; font-weight:700;
+      font-size:.8rem; cursor:pointer; transition:opacity .15s, transform .1s;
+      letter-spacing:.03em;
+    }
+    .recalc-btn:hover:not(:disabled) { opacity:.88; transform:translateY(-1px); }
+    .recalc-btn:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .param-error {
+      color:#fca5a5; font-size:.7rem; margin-top:5px; line-height:1.4;
+      background:rgba(239,68,68,.12); border-radius:5px; padding:4px 7px;
+      display:none;
+    }
+    .api-badge { font-size:.67rem; text-align:center; margin-top:5px; line-height:1.5; }
+    .api-badge.online  { color:#4ade80; }
+    .api-badge.offline { color:#fca5a5; }
+
+    /* ── VaR live-results banner ── */
+    .var-live-banner {
+      background:linear-gradient(135deg,#4b164c18,#dd5e8918);
+      border:1.5px solid #dd5e8940; border-radius:10px;
+      padding:12px 16px; margin-bottom:16px;
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    }
+    .var-live-badge {
+      background:#dd5e89; color:#fff; font-size:.7rem; font-weight:700;
+      padding:2px 8px; border-radius:20px; letter-spacing:.04em;
+    }
+
+    @media (max-width:860px) {
+      #sidebar { display:none; }
+      .kpi-grid,.four-col { grid-template-columns:repeat(2,1fr); }
+      .modules-grid { grid-template-columns:repeat(2,1fr); }
+      .two-col,.three-col { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR TOGGLE ═══════════════════════════════════════════ -->
+<button id="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar / Ocultar panel lateral">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="15 18 9 12 15 6"></polyline>
+  </svg>
+</button>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <div class="logo">
+    <div style="background:#2563EB; padding:8px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+    </div>
+    <div>
+      <div class="logo-title">RiskLab USTA</div>
+      <div class="logo-sub">Análisis cuantitativo</div>
+    </div>
+  </div>
+  <hr />
+
+  <div class="nav-label">Acciones visibles</div>
+  <div id="ticker-chips"></div>
+  <div class="chip-hint">Clic para ocultar / mostrar</div>
+
+  <hr />
+  <div class="nav-label">Navegación</div>
+  <button class="nav-btn active" data-page="home"   onclick="navigate('home')">🏠 Inicio</button>
+  <button class="nav-btn" data-page="gauss"         onclick="navigate('gauss')">📊 Taller Gauss (M1–M4)</button>
+  <button class="nav-btn" data-page="riesgo"        onclick="navigate('riesgo')">🛡️ Gestión de Riesgo (M5–M8)</button>
+  <hr />
+  <div class="nav-label">Módulos</div>
+  <button class="nav-btn" data-page="m1" onclick="navigate('m1')">📈 M1 — Análisis Técnico</button>
+  <button class="nav-btn" data-page="m2" onclick="navigate('m2')">📉 M2 — Rendimientos</button>
+  <button class="nav-btn" data-page="m3" onclick="navigate('m3')">🌊 M3 — Volatilidad GARCH</button>
+  <button class="nav-btn" data-page="m4" onclick="navigate('m4')">🔭 M4 — CAPM &amp; Beta</button>
+  <button class="nav-btn" data-page="m5" onclick="navigate('m5')">🛡️ M5 — VaR / CVaR</button>
+  <button class="nav-btn" data-page="m6" onclick="navigate('m6')">💎 M6 — Optimización</button>
+  <button class="nav-btn" data-page="m7" onclick="navigate('m7')">🔔 M7 — Señales y Alertas</button>
+  <button class="nav-btn" data-page="m8" onclick="navigate('m8')">🌍 M8 — Benchmark</button>
+  <button class="nav-btn" data-page="m9" onclick="navigate('m9')">🚀 M9 — Oportunidades</button>
+
+  <hr />
+  <div class="nav-label">⚙️ Parámetros de Análisis</div>
+
+  <div id="param-panel">
+    <!-- Rango de fechas -->
+    <div class="param-row">
+      <label class="param-label">📅 Fecha Inicio</label>
+      <input type="date" id="p-start" class="param-input" min="2000-01-01"
+             onchange="onParamChange()" title="Mínimo: 01/01/2000">
+    </div>
+    <div class="param-row">
+      <label class="param-label">📅 Fecha Fin</label>
+      <input type="date" id="p-end" class="param-input"
+             onchange="onParamChange()" title="No puede ser una fecha futura">
+    </div>
+
+    <!-- Confianza VaR -->
+    <div class="param-row">
+      <label class="param-label">🎯 Confianza VaR: <span id="p-conf-display" style="color:#f7a35c;font-size:.78rem">95%</span></label>
+      <input type="range" id="p-conf" class="param-range"
+             min="80" max="99" step="1" value="95"
+             oninput="updateConfidenceDisplay()" onchange="onParamChange()">
+      <div style="display:flex;justify-content:space-between;font-size:.62rem;color:rgba(255,255,255,.3);margin-top:2px">
+        <span>80%</span><span>90%</span><span>99%</span>
+      </div>
+    </div>
+
+    <!-- Iteraciones Monte Carlo -->
+    <div class="param-row">
+      <label class="param-label">🎲 Iteraciones MC</label>
+      <select id="p-sims" class="param-input" onchange="onParamChange()">
+        <option value="1000">1,000 (rápido)</option>
+        <option value="5000">5,000</option>
+        <option value="10000" selected>10,000 (por defecto)</option>
+        <option value="50000">50,000 (preciso)</option>
+        <option value="100000">100,000 (muy preciso)</option>
+      </select>
+    </div>
+
+    <div id="p-error" class="param-error"></div>
+
+    <button class="recalc-btn" id="btn-recalc" onclick="recalculateFromAPI()">
+      ⚡ Recalcular (API)
+    </button>
+    <div id="api-status" class="api-badge offline">● verificando API...</div>
+
+    <div style="font-size:.63rem;color:rgba(255,255,255,.25);margin-top:6px;line-height:1.5">
+      Requiere: <code style="font-size:.62rem;color:rgba(255,255,255,.35)">uvicorn api.main:app --port 8001</code>
+    </div>
+  </div>
+
+  <div id="gen-info"></div>
+</aside>
+
+<!-- ═══ MAIN ═══════════════════════════════════════════════════════ -->
+<main id="main"><div id="content"></div></main>
+
+<script>
+// ─────────────────────────────────────────
+//  DATOS Y COLORES
+// ─────────────────────────────────────────
+const D = window.RISKLAB_DATA || null;
+
+// Paleta coherente: familia curada, distinguible, con lógica estética común
+const PALETTE = ['#dd5e89','#f7a35c','#4e8cde','#52b788','#9b7fe8']; // NU, MELI, SONY, XOM, WPM
+const TICKER_COLOR = {};
+
+const C = { primary:'#4b164c', secondary:'#2d0a2e',
+  nu:'#dd5e89', meli:'#f7a35c', sony:'#4e8cde', xom:'#52b788', wpm:'#9b7fe8',
+  pink:'#dd5e89', orange:'#f7a35c', text:'#1f2937',
+  border:'#E2E8F0', green:'#10b981', red:'#ef4444',
+  blue:'#4e8cde', yellow:'#f59e0b', sidebar:'#4b164c',
+};
+
+const PB = {
+  font:{ family:"'Inter','Outfit',sans-serif", color:C.text, size:13 },
+  paper_bgcolor:'#fff', plot_bgcolor:'#fafafa',
+  margin:{ t:46, b:42, l:58, r:22 },
+  xaxis:{ gridcolor:'#f0f0f0', linecolor:C.border, zeroline:false },
+  yaxis:{ gridcolor:'#f0f0f0', linecolor:C.border, zeroline:false },
+  legend:{ bgcolor:'rgba(0,0,0,0)', font:{ color:C.text, size:12 }, bordercolor:C.border },
+  hoverlabel:{ bgcolor:'#fff', bordercolor:C.border, font:{color:C.text,size:12} },
+};
+const PCFG = { responsive:true, displaylogo:false, modeBarButtonsToRemove:['lasso2d','select2d'] };
+
+// ─────────────────────────────────────────
+//  ESTADO
+// ─────────────────────────────────────────
+const state = {
+  activeTickers: [],
+  page: 'home',
+  sidebarOpen: true,
+  params: {
+    startDate:    '',
+    endDate:      '',
+    confidence:   0.95,
+    nSimulations: 10000,
+    apiBase:      'http://localhost:8001',
+    valid:        true,
+    varOverride:  null,   // populated after successful API recalculation
+  },
+};
+
+// ─────────────────────────────────────────
+//  SIDEBAR TOGGLE
+// ─────────────────────────────────────────
+function toggleSidebar() {
+  const sb  = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  state.sidebarOpen = !state.sidebarOpen;
+  if (state.sidebarOpen) {
+    sb.classList.remove('collapsed');
+    btn.style.left = '236px';
+    btn.querySelector('svg').style.transform = 'rotate(0deg)';
+  } else {
+    sb.classList.add('collapsed');
+    btn.style.left = '0px';
+    btn.querySelector('svg').style.transform = 'rotate(180deg)';
+  }
+}
+
+// ─────────────────────────────────────────
+//  PARAM PANEL — VALIDACIÓN Y API
+// ─────────────────────────────────────────
+
+/** Muestra u oculta el mensaje de error del panel de parámetros. */
+function showParamError(msg) {
+  const el = document.getElementById('p-error');
+  if (msg) { el.textContent = msg; el.style.display = 'block'; }
+  else      { el.style.display = 'none'; }
+}
+
+/** Actualiza el label de confianza al mover el slider. */
+function updateConfidenceDisplay() {
+  const v = document.getElementById('p-conf').value;
+  document.getElementById('p-conf-display').textContent = v + '%';
+}
+
+/**
+ * Validación de parámetros — reglas idénticas a Pydantic (GeneratorConfig
+ * y los Depends validate_date_range / validate_var_params de FastAPI).
+ * Retorna true si todo es válido, false si hay error (y muestra el mensaje).
+ */
+function validateParams() {
+  const start = document.getElementById('p-start').value;
+  const end   = document.getElementById('p-end').value;
+  const conf  = parseInt(document.getElementById('p-conf').value);
+  const sims  = parseInt(document.getElementById('p-sims').value);
+
+  showParamError('');
+
+  // Validar que ambas fechas estén presentes o ninguna
+  if (Boolean(start) !== Boolean(end)) {
+    showParamError('Debes especificar ambas fechas o dejar las dos vacías.');
+    return false;
+  }
+
+  if (start && end) {
+    const startD = new Date(start + 'T00:00:00');
+    const endD   = new Date(end   + 'T00:00:00');
+    const today  = new Date(); today.setHours(0, 0, 0, 0);
+    const minDate = new Date('2000-01-01T00:00:00');
+
+    if (startD < minDate) {
+      showParamError('La fecha de inicio no puede ser anterior al año 2000.');
+      return false;
+    }
+    if (endD > today) {
+      showParamError('La fecha de fin no puede ser una fecha futura.');
+      return false;
+    }
+    if (endD <= startD) {
+      showParamError('La fecha de fin debe ser posterior al inicio.');
+      return false;
+    }
+    const diffDays = (endD - startD) / 86400000;
+    if (diffDays < 30) {
+      showParamError('El período mínimo de análisis es de 30 días.');
+      return false;
+    }
+  }
+
+  // Confianza: [0.80, 0.99] → slider [80, 99]
+  if (conf < 80 || conf > 99) {
+    showParamError('La confianza VaR debe estar entre 80% y 99%.');
+    return false;
+  }
+
+  // Iteraciones: [1000, 100000]
+  if (sims < 1000 || sims > 100000) {
+    showParamError('Las iteraciones deben estar entre 1,000 y 100,000.');
+    return false;
+  }
+
+  // Guardar en state
+  state.params.startDate    = start;
+  state.params.endDate      = end;
+  state.params.confidence   = conf / 100;
+  state.params.nSimulations = sims;
+  state.params.valid        = true;
+  return true;
+}
+
+/** Se llama cuando el usuario cambia cualquier parámetro — solo valida, no recalcula. */
+function onParamChange() {
+  validateParams();
+}
+
+/** Comprueba si la API está en línea y actualiza el badge. */
+async function checkAPIStatus() {
+  const badge = document.getElementById('api-status');
+  try {
+    const r = await fetch(`${state.params.apiBase}/`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (r.ok) {
+      badge.className = 'api-badge online';
+      badge.textContent = '● API conectada';
+      return true;
+    }
+  } catch (_) {}
+  badge.className = 'api-badge offline';
+  badge.textContent = '● API offline';
+  return false;
+}
+
+/**
+ * Llama al endpoint /api/v1/risk/{ticker} para cada ticker activo con los
+ * parámetros del panel (confidence, n_simulations, fechas).
+ * Si tiene éxito, almacena los resultados en state.params.varOverride
+ * y navega a M5 para mostrarlos.
+ */
+async function recalculateFromAPI() {
+  if (!validateParams()) return;
+
+  const btn = document.getElementById('btn-recalc');
+  btn.disabled = true;
+  btn.textContent = '⏳ Calculando...';
+
+  const online = await checkAPIStatus();
+  if (!online) {
+    showParamError(
+      'La API no está disponible. Ejecútala con:\n' +
+      'uvicorn api.main:app --port 8001'
+    );
+    btn.disabled = false;
+    btn.textContent = '⚡ Recalcular (API)';
+    return;
+  }
+
+  // Construir query string (mismo contrato que FastAPI)
+  const qp = new URLSearchParams({
+    confidence:    state.params.confidence,
+    n_simulations: state.params.nSimulations,
+  });
+  if (state.params.startDate) qp.set('start_date', state.params.startDate);
+  if (state.params.endDate)   qp.set('end_date',   state.params.endDate);
+
+  const errors = [];
+  const varOverride = {};
+
+  for (const t of state.activeTickers) {
+    try {
+      const r = await fetch(
+        `${state.params.apiBase}/api/v1/risk/${t}?${qp}`,
+        { signal: AbortSignal.timeout(15000) }
+      );
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        errors.push(`${t}: ${body.detail || r.statusText}`);
+        continue;
+      }
+      varOverride[t] = await r.json();
+    } catch (e) {
+      errors.push(`${t}: ${e.message}`);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ Recalcular (API)';
+
+  if (errors.length) {
+    showParamError('Errores: ' + errors.join(' | '));
+  }
+
+  if (Object.keys(varOverride).length > 0) {
+    showParamError('');
+    state.params.varOverride = varOverride;
+    navigate('m5');
+  }
+}
+
+// ─────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────
+const setContent = h => { document.getElementById('content').innerHTML = h; };
+
+// ─────────────────────────────────────────
+//  INTERPRETACIONES DINÁMICAS
+// ─────────────────────────────────────────
+function getInsight(title, text, type="neutral") {
+  const colors = {
+    positive: { b: "#059669", bg: "#F0FDF4", t: "#065F46", i: "📈" },
+    negative: { b: "#DC2626", bg: "#FEF2F2", t: "#991B1B", i: "📉" },
+    warning:  { b: "#D97706", bg: "#FFFBEB", t: "#92400E", i: "⚠️" },
+    neutral:  { b: "#2563EB", bg: "#EFF6FF", t: "#1E3A8A", i: "💡" }
+  };
+  const th = colors[type];
+  return `<div style="margin-top:12px; margin-bottom:12px; border-left:4px solid ${th.b}; background-color:${th.bg}; border-radius:0 8px 8px 0; padding:14px 18px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+    <div style="font-weight:700; color:${th.t}; margin-bottom:6px; font-size:0.9rem; display:flex; align-items:center; gap:6px;"><span>${th.i}</span> ${title}</div>
+    <div style="color:#334155; font-size:0.87rem; line-height:1.5;">${text}</div>
+  </div>`;
+}
+function addInterp(text) {} // deprecated used in old code
+
+
+
+function hexToRgba(hex, a) {
+  const h = hex.replace('#','');
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function fmt(n, dec=4) {
+  if (n == null || (typeof n==='number' && isNaN(n))) return 'N/A';
+  return Number(n).toFixed(dec);
+}
+function pct(n, dec=2) { return fmt(n*100, dec)+'%'; }
+
+function kpiCard(label, value, delta='', dcolor='') {
+  const d = delta ? `<div style="font-size:.78rem;color:${dcolor||'#9ca3af'};margin-top:3px">${delta}</div>` : '';
+  return `<div class="card kpi-card">
+    <div style="color:#6b7280;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${label}</div>
+    <div style="font-size:1.45rem;font-weight:700;color:${C.text}">${value}</div>${d}
+  </div>`;
+}
+
+function statRow(l,v,vc='') {
+  return `<div class="stat-row"><span class="stat-label">${l}</span><span class="stat-value" style="color:${vc||C.text}">${v}</span></div>`;
+}
+
+function normBadge(p) {
+  return p>0.05 ? `<span class="badge-normal">Normal (p>0.05)</span>` : `<span class="badge-notnormal">No Normal (p≤0.05)</span>`;
+}
+
+function noData(msg='') {
+  setContent(`<div class="nodata-card">
+    <div style="font-size:2.8rem">📂</div>
+    <h3>${msg||'Sin datos disponibles'}</h3>
+    <p>Ejecuta el generador de datos primero:</p>
+    <code>python generate_data.py</code>
+    <p style="margin-top:10px;color:#9ca3af;font-size:.82rem">Luego recarga esta página (F5).</p>
+  </div>`);
+}
+
+function noTickers() {
+  setContent(`<div class="nodata-card">
+    <div style="font-size:2.5rem">👁️</div>
+    <h3>Ninguna acción visible</h3>
+    <p style="color:#6b7280">Activa al menos una acción en el panel lateral.</p>
+  </div>`);
+}
+
+function colorDot(color) {
+  return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>`;
+}
+
+function getD(section, ticker) {
+  if (!D) return null;
+  return ticker ? (D[section]?.[ticker] ?? null) : (D[section] ?? null);
+}
+
+// ─────────────────────────────────────────
+//  TICKER CHIPS (sidebar)
+// ─────────────────────────────────────────
+function buildChips() {
+  if (!D) return;
+  const container = document.getElementById('ticker-chips');
+  container.innerHTML = D.tickers.map((t,i) => {
+    const color = TICKER_COLOR[t];
+    return `<button class="t-chip active" id="chip-${t}" onclick="toggleTicker('${t}')">
+      <span class="t-chip-label">${colorDot(color)} ${t}</span>
+      <span style="font-size:.68rem;opacity:.7">ocultar</span>
+    </button>`;
+  }).join('');
+}
+
+function toggleTicker(t) {
+  const chip = document.getElementById(`chip-${t}`);
+  if (state.activeTickers.includes(t)) {
+    if (state.activeTickers.length === 1) return;
+    state.activeTickers = state.activeTickers.filter(x => x !== t);
+    chip.classList.remove('active');
+    chip.classList.add('inactive');
+    chip.querySelector('span:last-child').textContent = 'mostrar';
+  } else {
+    state.activeTickers.push(t);
+    state.activeTickers.sort((a,b) => D.tickers.indexOf(a) - D.tickers.indexOf(b));
+    chip.classList.add('active');
+    chip.classList.remove('inactive');
+    chip.querySelector('span:last-child').textContent = 'ocultar';
+  }
+  renderPage();
+}
+
+// ─────────────────────────────────────────
+//  TABS
+// ─────────────────────────────────────────
+function switchTab(mod, tab, el) {
+  document.querySelectorAll(`#${mod}-tabs .tab-btn`).forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll(`[id^="${mod}-tab-"]`).forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  const panel = document.getElementById(`${mod}-tab-${tab}`);
+  if (panel) {
+    panel.classList.add('active');
+    setTimeout(()=>{
+      panel.querySelectorAll('[id^="ch-"]').forEach(e=>{ try{ if(e.data) Plotly.Plots.resize(e.id); }catch(_){} });
+    }, 60);
+  }
+}
+
+// ─────────────────────────────────────────
+//  NAVEGACIÓN
+// ─────────────────────────────────────────
+function navigate(page) {
+  state.page = page;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const btn = document.querySelector(`.nav-btn[data-page="${page}"]`);
+  if (btn) btn.classList.add('active');
+  renderPage();
+}
+
+function renderPage() {
+  if (!D) { noData(); return; }
+  if (!state.activeTickers.length) { noTickers(); return; }
+  switch(state.page) {
+    case 'home':   renderHome();   break;
+    case 'gauss':  renderGauss();  break;
+    case 'riesgo': renderRiesgo(); break;
+    case 'm1':     renderM1();     break;
+    case 'm2':     renderM2();     break;
+    case 'm3':     renderM3();     break;
+    case 'm4':     renderM4();     break;
+    case 'm5':     renderM5();     break;
+    case 'm6':     renderM6();     break;
+    case 'm7':     renderM7();     break;
+    case 'm8':     renderM8();     break;
+    case 'm9':     renderM9();     break;
+    default:       renderHome();
+  }
+}
+
+// ═══════════════════════════════════════════
+//  HOME
+// ═══════════════════════════════════════════
+function renderHome() {
+  const mods = [
+    {id:'M1',icon:'📈',name:'Análisis Técnico',  page:'m1'},
+    {id:'M2',icon:'📉',name:'Rendimientos',       page:'m2'},
+    {id:'M3',icon:'🌊',name:'Volatilidad GARCH',  page:'m3'},
+    {id:'M4',icon:'🔭',name:'CAPM & Beta',        page:'m4'},
+    {id:'M5',icon:'🛡️',name:'VaR / CVaR',        page:'m5'},
+    {id:'M6',icon:'💎',name:'Optimización',       page:'m6'},
+    {id:'M7',icon:'🔔',name:'Señales y Alertas',  page:'m7'},
+    {id:'M8',icon:'📊',name:'Portfolio vs. Benchmark', page:'m8'},
+  ];
+  const rf = D.rf_rate != null ? (D.rf_rate*100).toFixed(2)+'%' : 'N/A';
+  const rfSrc = D.rf_source || 'Federal Reserve';
+  
+  const cInfo = [
+    {t:'NU',   n:'Nubank', sector:'Fintech / Banco Digital', desc:'El mayor banco digital de América Latina, disruptor financiero integral.'},
+    {t:'MELI', n:'Mercado Libre', sector:'E-commerce / Fintech', desc:'El ecosistema de comercio electrónico y pagos líder indiscutible en Latam.'},
+    {t:'SONY', n:'Sony Group', sector:'Tecnología / Entretenimiento', desc:'Conglomerado global, líder en entretenimiento, sensores y electrónica.'},
+    {t:'XOM',  n:'Exxon Mobil', sector:'Energía', desc:'Un gigante energético mundial enfocado en exploración y gas.'},
+    {t:'WPM',  n:'Wheaton Metals', sector:'Minería / Metales', desc:'Streaming de metales preciosos con fuerte exposición al oro y la plata.'}
+  ];
+
+  const activeInfo = cInfo.filter(c => state.activeTickers.includes(c.t));
+
+  const coCards = activeInfo.map(c => `
+    <div style="background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:18px; display:flex; flex-direction:column; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <div>
+                <h4 style="font-size:1.05rem; font-weight:700; color:#0F172A; margin:0;">${c.n}</h4>
+                <p style="font-size:0.75rem; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;">${c.sector}</p>
+            </div>
+            <span style="background:${TICKER_COLOR[c.t]}15; color:${TICKER_COLOR[c.t]}; padding:4px 8px; border-radius:6px; font-size:0.8rem; font-weight:700; border: 1px solid ${TICKER_COLOR[c.t]}30;">${c.t}</span>
+        </div>
+        <p style="font-size:0.88rem; color:#475569; line-height:1.4; margin:0;">${c.desc}</p>
+    </div>
+  `).join('');
+
+  setContent(`
+    <h1 class="header-gradient">Inteligencia Cuantitativa</h1>
+    <p class="page-subtitle">Plataforma institucional de análisis de portafolios, métricas de riesgo y modelación financiera.</p>
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:18px 24px; margin-bottom:28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); flex-wrap:wrap; gap:15px;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <div style="background:#F1F5F9; padding:12px; border-radius:10px; font-size:1.5rem; border:1px solid #E2E8F0;">🏛️</div>
+            <div>
+                <div style="font-size:0.75rem; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:2px;">Tasa Libre de Riesgo (Risk-Free)</div>
+                <div style="font-size:1.5rem; font-weight:800; color:#0F172A; line-height:1;">${rf}</div>
+            </div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:0.75rem; font-weight:700; color:#94A3B8; letter-spacing:0.05em; text-transform:uppercase;">Fuente Macro</div>
+            <div style="font-size:0.95rem; font-weight:600; color:#475569;">${rfSrc}</div>
+        </div>
+    </div>
+
+    <h3 class="section-title">Composición del Portafolio</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin-bottom:32px;">
+        ${coCards}
+    </div>
+
+    <h3 class="section-title">Módulos de Análisis Financiero</h3>
+    <div class="modules-grid">
+      ${mods.map(m=>`
+        <div class="module-tile" onclick="navigate('${m.page}')">
+          <div class="tile-icon" style="margin-bottom:8px; opacity:0.9;">${m.icon}</div>
+          <div class="tile-id" style="color:#2563EB;">${m.id}</div>
+          <div class="tile-name">${m.name}</div>
+        </div>`).join('')}
+    </div>
+    <div class="footer">RiskLab USTA · Análisis Cuantitativo Institucional 2025</div>`);
+}
+
+function renderGauss() {
+  const cards = [
+    {icon:'📈',id:'M1',title:'Análisis Técnico',  desc:'Precio normalizado, SMA, EMA, RSI, MACD y Bollinger.',   page:'m1'},
+    {icon:'📉',id:'M2',title:'Rendimientos',       desc:'Histograma, Q-Q plot, boxplot y hechos estilizados.',     page:'m2'},
+    {icon:'🌊',id:'M3',title:'Volatilidad GARCH',  desc:'ARCH, GARCH, EGARCH, residuos y pronóstico.',             page:'m3'},
+    {icon:'🔭',id:'M4',title:'CAPM & Beta',        desc:'Beta, Alpha, scatter de regresión y retorno esperado.',   page:'m4'},
+  ];
+  setContent(`<h1 class="header-gradient">Taller Gauss — M1 a M4</h1>
+    <p class="page-subtitle">Análisis técnico, estadístico y de riesgo sistemático.</p>
+    <div class="two-col">${cards.map(c=>`
+      <div class="card" style="cursor:pointer" onclick="navigate('${c.page}')">
+        <div style="font-size:1.7rem">${c.icon}</div>
+        <h3 style="margin:7px 0 3px;font-weight:700">${c.id} — ${c.title}</h3>
+        <p style="color:#6b7280;font-size:.88rem;margin:0 0 10px">${c.desc}</p>
+        <button class="nav-btn active" style="width:auto;padding:6px 16px;display:inline-block">Explorar ${c.id}</button>
+      </div>`).join('')}
+    </div>`);
+}
+
+function renderRiesgo() {
+  const cards = [
+    {icon:'🛡️',id:'M5',title:'VaR / CVaR',         desc:'95% y 99%, métodos histórico, paramétrico y Monte Carlo.', page:'m5'},
+    {icon:'💎',id:'M6',title:'Optimización',         desc:'Frontera eficiente Markowitz con 10.000 simulaciones.',    page:'m6'},
+    {icon:'🔔',id:'M7',title:'Señales',              desc:'RSI, MACD, Bollinger, Golden/Death Cross, Estocástico.',   page:'m7'},
+    {icon:'📊',id:'M8',title:'Portfolio vs. Bench',  desc:'Alpha de Jensen, Beta, TE, IR, Max Drawdown y Sharpe.',    page:'m8'},
+  ];
+  setContent(`<h1 class="header-gradient">Gestión de Riesgo — M5 a M8</h1>
+    <p class="page-subtitle">VaR, optimización de portafolio, alertas y comparativa con benchmark.</p>
+    <div class="two-col">${cards.map(c=>`
+      <div class="card" style="cursor:pointer" onclick="navigate('${c.page}')">
+        <div style="font-size:1.7rem">${c.icon}</div>
+        <h3 style="margin:7px 0 3px;font-weight:700">${c.id} — ${c.title}</h3>
+        <p style="color:#6b7280;font-size:.88rem;margin:0 0 10px">${c.desc}</p>
+        <button class="nav-btn active" style="width:auto;padding:6px 16px;display:inline-block">Explorar ${c.id}</button>
+      </div>`).join('')}
+    </div>`);
+}
+
+// ═══════════════════════════════════════════
+//  M1 — ANÁLISIS TÉCNICO COMPARATIVO
+// ═══════════════════════════════════════════
+function renderM1() {
+  const tickers = state.activeTickers;
+  const datasets = tickers.map(t => ({ t, d: getD('technical', t) })).filter(x => x.d);
+  if (!datasets.length) { noData(); return; }
+
+  const posCount = datasets.filter(x => x.d[x.d.length-1].Close > x.d[x.d.length-1].SMA_20).length;
+  const posPct = posCount / datasets.length;
+  
+  const upTickers = datasets.filter(x => x.d[x.d.length-1].Close > x.d[x.d.length-1].SMA_20).map(x=>x.t);
+  const downTickers = datasets.filter(x => x.d[x.d.length-1].Close <= x.d[x.d.length-1].SMA_20).map(x=>x.t);
+
+  const dailyChanges = datasets.map(({t,d}) => {
+    const last = d[d.length-1], prev = d[d.length-2];
+    const chg = prev.Close > 0 ? ((last.Close/prev.Close)-1)*100 : 0;
+    return {t, close: last.Close, chg, aboveSMA: last.Close > last.SMA_20};
+  });
+  const gainers = dailyChanges.filter(x => x.chg > 0).map(x => `${x.t} (+${fmt(x.chg,2)}%)`);
+  const losers  = dailyChanges.filter(x => x.chg <= 0).map(x => `${x.t} (${fmt(x.chg,2)}%)`);
+  let insightGlobal = `Cierre más reciente: ${gainers.length ? `alzas en ${gainers.join(', ')}` : 'sin alzas'}${losers.length ? `; bajas en ${losers.join(', ')}` : ''}. `;
+  if (posPct === 1) insightGlobal += `${upTickers.join(', ')} operan por encima de la SMA-20 — sesgo técnico alcista unificado en todo el portafolio.`;
+  else if (posPct === 0) insightGlobal += `Ningún activo cotiza sobre la SMA-20 (${downTickers.join(', ')}) — presión bajista generalizada en el portafolio.`;
+  else insightGlobal += `${upTickers.join(', ')} sostienen el precio sobre la SMA-20 (fortaleza técnica); ${downTickers.join(', ')} han cedido ese nivel de soporte (señal de debilidad a corto plazo).`;
+
+  const typeGlobal = posPct > 0.5 ? "positive" : (posPct === 0 ? "negative" : "warning");
+
+  const kpis = datasets.map(({t,d}) => {
+    const last = d[d.length-1], prev = d[d.length-2];
+    const delta = last.Close - prev.Close;
+    const rsi = last.RSI ?? 50;
+    const rsiEmoji = rsi>70?'🔴':rsi<30?'🟢':'🟡';
+    return kpiCard(`<span style="color:${TICKER_COLOR[t]}">${t}</span> — Precio`,
+      '$'+fmt(last.Close,2), (delta>=0?'+':'')+fmt(delta,2), delta>=0?C.green:C.red) +
+      kpiCard(`<span style="color:${TICKER_COLOR[t]}">${t}</span> — RSI`, rsiEmoji+' '+fmt(rsi,1));
+  }).join('');
+
+  setContent(`
+    <h1 class="header-gradient">M1 — Análisis Técnico Comparativo</h1>
+    <p class="page-subtitle">Precio normalizado (base 100), SMA, EMA, RSI, MACD y Bandas de Bollinger.</p>
+    ${getInsight("Resumen de Portafolio", "Muestra si el mercado general sube o baja. CÓMO LEERLO: Si la mayoría de las líneas apuntan hacia arriba, tus acciones en general están ganando valor.", "neutral")}
+    <div class="kpi-grid">${kpis}</div>
+    <div class="tabs" id="m1-tabs">
+      <button class="tab-btn active" onclick="switchTab('m1','price',this)">📈 Precio</button>
+      <button class="tab-btn"        onclick="switchTab('m1','sma',this)">📏 Medias</button>
+      <button class="tab-btn"        onclick="switchTab('m1','rsi',this)">📊 RSI</button>
+      <button class="tab-btn"        onclick="switchTab('m1','bb',this)">🎯 Bollinger</button>
+      <button class="tab-btn"        onclick="switchTab('m1','macd',this)">📉 MACD</button>
+    </div>
+    <div id="m1-tab-price" class="tab-content card active" style="padding:12px">
+      <div id="ch-price"></div><div id="in-price"></div>
+    </div>
+    <div id="m1-tab-sma" class="tab-content card" style="padding:12px">
+      <div id="ch-sma"></div><div id="in-sma"></div>
+    </div>
+    <div id="m1-tab-rsi" class="tab-content card" style="padding:12px">
+      <div id="ch-rsi"></div><div id="in-rsi"></div>
+    </div>
+    <div id="m1-tab-bb" class="tab-content card" style="padding:12px">
+      <div id="ch-bb"></div><div id="in-bb"></div>
+    </div>
+    <div id="m1-tab-macd" class="tab-content card" style="padding:12px">
+      <div id="ch-macd"></div><div id="in-macd"></div>
+    </div>
+    <div class="footer">RiskLab USTA · M1 Análisis Técnico</div>`);
+
+  Plotly.newPlot('ch-price', datasets.map(({t,d}) => {
+    const base = d[0].Close;
+    return { type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.Close/base*100), name:t, line:{ color:TICKER_COLOR[t], width:2 } };
+  }), { ...PB, height:380,
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:100,y1:100,line:{color:'#94A3B8',dash:'dot',width:1.5}}],
+    yaxis:{...PB.yaxis, title:'Valor Indexado (Base = 100)'},
+    xaxis:{...PB.xaxis, title:''},
+    title:{text:'Precio Normalizado — Evolución Relativa (Base = 100 al inicio)',font:{size:13}}
+  }, PCFG);
+
+  let rets = datasets.map(x => ({t:x.t, r: x.d[x.d.length-1].Close / x.d[0].Close}));
+  rets.sort((a,b) => b.r - a.r);
+  let bestT = rets[0].t; let worstT = rets[rets.length-1].t;
+  let gap = (rets[0].r - rets[rets.length-1].r)*100;
+  
+  const priceRanking = rets.map((x,i) => `${i+1}. ${x.t}: ${pct(x.r-1,1)}`).join(' | ');
+  const priceType = rets[rets.length-1].r < 1 ? 'warning' : 'positive';
+  document.getElementById('in-price').innerHTML = getInsight('Rendimiento Acumulado', 'Compara quién ha crecido más desde el inicio. CÓMO LEERLO: La línea que termine más arriba es la que te hubiera dado más ganancias si hubieras invertido lo mismo al principio.', 'neutral');
+
+  const smaTraces = [];
+  let gcTkrs = []; let dcTkrs = [];
+  datasets.forEach(({t,d}) => {
+    const last20 = d[d.length-1].SMA_20; const last50 = d[d.length-1].SMA_50;
+    if(last20 > last50) gcTkrs.push(t); else if(last20 < last50) dcTkrs.push(t);
+    smaTraces.push({ type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.Close), name:`${t} Precio`, line:{ color:TICKER_COLOR[t], width:1.5 } });
+    smaTraces.push({ type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.SMA_20), name:`${t} SMA20`, line:{ color:TICKER_COLOR[t], width:1.5, dash:'dash' } });
+    smaTraces.push({ type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.SMA_50), name:`${t} SMA50`, line:{ color:TICKER_COLOR[t], width:1.5, dash:'dot' } });
+  });
+  Plotly.newPlot('ch-sma', smaTraces, { ...PB, height:440,
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'Precio (USD)', tickprefix:'$'},
+    title:{text:'SMA20 (línea continua) y SMA50 (línea punteada) — Precio vs Medias Móviles',font:{size:13}},
+    margin:{...PB.margin, b:100},
+    legend:{...PB.legend, orientation:'h', y:-0.22, traceorder:'normal', font:{size:10}}
+  }, PCFG);
+
+  const smaPositionDetail = datasets.map(({t,d}) => {
+    const last = d[d.length-1];
+    const aboveSMA20 = last.Close > last.SMA_20;
+    const pctFromSMA20 = last.SMA_20 > 0 ? ((last.Close/last.SMA_20)-1)*100 : 0;
+    return `${t}: ${aboveSMA20?'▲':' ▼'} SMA20 (${(pctFromSMA20>=0?'+':'')}${fmt(pctFromSMA20,1)}%)`;
+  }).join(' | ');
+  let smaInterp = '';
+  if (gcTkrs.length && dcTkrs.length) {
+    smaInterp = `Señales mixtas: Golden Cross (SMA20>SMA50) vigente en ${gcTkrs.join(', ')} — tendencia alcista de mediano plazo. Death Cross activo en ${dcTkrs.join(', ')} — presión vendedora estructural. `;
+  } else if (gcTkrs.length) {
+    smaInterp = `Golden Cross confirmado en ${gcTkrs.join(', ')}: SMA20 por encima de SMA50, señal técnica de tendencia alcista de mediano plazo. `;
+  } else if (dcTkrs.length) {
+    smaInterp = `Death Cross detectado en ${dcTkrs.join(', ')}: SMA20 por debajo de SMA50, señal de deterioro de tendencia. Sin activos con Golden Cross activo. `;
+  } else {
+    smaInterp = `Las medias móviles SMA20 y SMA50 están aproximadamente alineadas sin cruces definitivos. Mercado en fase de consolidación lateral. `;
+  }
+  smaInterp += `Posición respecto a SMA20 — ${smaPositionDetail}.`;
+  document.getElementById('in-sma').innerHTML = getInsight('Medias Móviles (Tendencia)', 'Muestran la tendencia sin el ruido diario. CÓMO LEERLO: Si la línea rápida (corta) cruza hacia arriba a la lenta, es señal de compra. Si cruza abajo, señal de venta.', 'neutral');
+
+  Plotly.newPlot('ch-rsi', datasets.map(({t,d}) => ({
+    type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.RSI), name:t, line:{ color:TICKER_COLOR[t], width:2 }
+  })), { ...PB, height:340,
+    shapes:[
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:70,y1:100,fillcolor:C.red,  opacity:.05,line:{width:0}},
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:0, y1:30, fillcolor:C.green,opacity:.05,line:{width:0}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:70,y1:70,line:{color:C.red,  dash:'dash',width:1.2}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:50,y1:50,line:{color:'#94A3B8',dash:'dot',width:1}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:30,y1:30,line:{color:C.green,dash:'dash',width:1.2}},
+    ],
+    annotations:[
+      {x:1.01,xref:'paper',y:70,yref:'y',text:'Sobrecompra',showarrow:false,font:{color:C.red,  size:9},xanchor:'left'},
+      {x:1.01,xref:'paper',y:30,yref:'y',text:'Sobreventa', showarrow:false,font:{color:C.green,size:9},xanchor:'left'},
+    ],
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'RSI (14)', range:[0,100]},
+    title:{text:'RSI (14) — Índice de Fuerza Relativa',font:{size:13}}
+  }, PCFG);
+
+  const rsiValues = datasets.map(({t,d}) => ({t, rsi: parseFloat((d[d.length-1].RSI||50).toFixed(1))}));
+  const rsiOverb  = rsiValues.filter(x => x.rsi > 70);
+  const rsiOvers  = rsiValues.filter(x => x.rsi < 30);
+  const rsiNeut   = rsiValues.filter(x => x.rsi >= 30 && x.rsi <= 70);
+  const overbCount = rsiOverb.length; const oversCount = rsiOvers.length;
+  let rsiInt, rsiType;
+  const rsiList = rsiValues.map(x => `${x.t}: ${x.rsi}`).join(' | ');
+  if (rsiOverb.length && rsiOvers.length) {
+    rsiInt = `Señales contradictorias: ${rsiOverb.map(x=>`${x.t} (RSI ${x.rsi})`).join(', ')} en zona de sobrecompra (>70), mientras ${rsiOvers.map(x=>`${x.t} (RSI ${x.rsi})`).join(', ')} está en sobreventa (<30). La divergencia RSI entre activos del portafolio sugiere rotación sectorial activa. Valores actuales — ${rsiList}.`;
+    rsiType = 'warning';
+  } else if (rsiOverb.length) {
+    rsiInt = `${rsiOverb.map(x=>`${x.t} (RSI ${x.rsi})`).join(', ')} supera el umbral de sobrecompra (>70), señal de momentum fuerte pero con riesgo de reversión técnica a corto plazo. ${rsiNeut.length ? `${rsiNeut.map(x=>`${x.t} (${x.rsi})`).join(', ')} permanece en zona neutral.` : ''} Valores: ${rsiList}.`;
+    rsiType = 'warning';
+  } else if (rsiOvers.length) {
+    rsiInt = `${rsiOvers.map(x=>`${x.t} (RSI ${x.rsi})`).join(', ')} se encuentra en zona de sobreventa (<30), históricamente asociada a rebotes técnicos cuando no existe deterioro fundamental adicional. ${rsiNeut.length ? `${rsiNeut.map(x=>`${x.t} (${x.rsi})`).join(', ')} en zona neutral.` : ''} Valores: ${rsiList}.`;
+    rsiType = 'positive';
+  } else {
+    const rsiAvg = parseFloat((rsiValues.reduce((s,x)=>s+x.rsi,0)/rsiValues.length).toFixed(1));
+    rsiInt = `Todos los activos operan en zona neutral (RSI promedio: ${rsiAvg}). Sin presiones técnicas de sobrecompra (>70) ni sobreventa (<30). El momentum de corto plazo no genera señales de reversión inmediata. Valores actuales — ${rsiList}.`;
+    rsiType = 'neutral';
+  }
+  document.getElementById('in-rsi').innerHTML = getInsight('Indicador RSI', 'Mide si un activo ha subido o bajado demasiado rápido. CÓMO LEERLO: Arriba de 70 (zona roja) está muy caro (podría caer pronto). Debajo de 30 (zona verde) está barato (podría rebotar).', 'neutral');
+
+  Plotly.newPlot('ch-bb', datasets.map(({t,d}) => {
+    const y = d.map(r => { const rng = (r.BB_Upper||0) - (r.BB_Lower||0); return rng > 0 ? ((r.Close - r.BB_Lower) / rng) * 100 : 50; });
+    return { type:'scatter', x:d.map(r=>r.Date), y, name:t, line:{ color:TICKER_COLOR[t], width:2 } };
+  }), { ...PB, height:340,
+    shapes:[
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:90, y1:110,fillcolor:C.red,  opacity:.06,line:{width:0}},
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:-10,y1:10, fillcolor:C.green,opacity:.06,line:{width:0}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:100,y1:100,line:{color:C.red,  dash:'dash',width:1.2}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:50, y1:50, line:{color:'#94A3B8',dash:'dot',width:1}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:0,  y1:0,  line:{color:C.green,dash:'dash',width:1.2}},
+    ],
+    annotations:[
+      {x:1.01,xref:'paper',y:100,yref:'y',text:'Banda superior',showarrow:false,font:{color:C.red,  size:9},xanchor:'left'},
+      {x:1.01,xref:'paper',y:0,  yref:'y',text:'Banda inferior',showarrow:false,font:{color:C.green,size:9},xanchor:'left'},
+    ],
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'%B — Posición en Bandas Bollinger', range:[-15,115]},
+    title:{text:'Bandas de Bollinger — %B (posición del precio dentro de las bandas ±2σ)',font:{size:13}}
+  }, PCFG);
+
+  const bbPos = datasets.map(({t,d}) => {
+    const last = d[d.length-1];
+    const rng = (last.BB_Upper||0) - (last.BB_Lower||0);
+    const pB = rng > 0 ? ((last.Close - last.BB_Lower) / rng) * 100 : 50;
+    return {t, pB: Math.round(pB)};
+  });
+  const bbAtUpper = bbPos.filter(x => x.pB >= 90).map(x => x.t);
+  const bbAtLower = bbPos.filter(x => x.pB <= 10).map(x => x.t);
+  const bbNeutral = bbPos.filter(x => x.pB > 10 && x.pB < 90).map(x => x.t);
+  let bbText, bbType;
+  if (bbAtUpper.length && bbAtLower.length) {
+    bbText = `Señales mixtas en el portafolio: ${bbAtUpper.join(', ')} toca la banda superior (±2σ), zona de sobreextensión estadística con probabilidad de reversión. ${bbAtLower.join(', ')} alcanza la banda inferior, zona históricamente asociada a rebotes técnicos. La divergencia extrema entre activos exige cautela.`;
+    bbType = 'warning';
+  } else if (bbAtUpper.length) {
+    bbText = `${bbAtUpper.join(', ')} cotiza sobre la banda superior de Bollinger (±2σ), indicando sobreextensión técnica. Estadísticamente, el precio se aleja más de 2 desviaciones estándar de la media móvil de 20 días, condición asociada a reversión si no hay catalizador fundamental que sostenga el movimiento. ${bbNeutral.length ? `El resto de activos (${bbNeutral.join(', ')}) opera dentro del canal normal.` : ''}`;
+    bbType = 'warning';
+  } else if (bbAtLower.length) {
+    bbText = `${bbAtLower.join(', ')} alcanza la banda inferior de Bollinger (±2σ), zona de sobreventa técnica. Cuando el precio cae más de 2 desviaciones estándar por debajo de la SMA-20, históricamente se producen rebotes de corto plazo en ausencia de deterioro fundamental. ${bbNeutral.length ? `Los demás activos (${bbNeutral.join(', ')}) se mantienen dentro del canal paramétrico.` : ''}`;
+    bbType = 'positive';
+  } else {
+    const avgPB = bbPos.reduce((s,x)=>s+x.pB,0)/bbPos.length;
+    bbText = `El conjunto opera dentro del canal paramétrico de Bollinger (%B promedio: ${fmt(avgPB,1)}%). Ningún activo registra presión técnica extrema en los umbrales de ±2σ. La volatilidad actual está contenida y los precios se mantienen dentro de la distribución estadística esperada de 20 días.`;
+    bbType = 'neutral';
+  }
+  document.getElementById('in-bb').innerHTML = getInsight('Bandas de Bollinger', 'Enmarcan el precio normal esperado. CÓMO LEERLO: Si el precio toca la banda superior, podría estar sobrecomprado. Si rompe los límites constantemente, el activo está inestable.', 'neutral');
+
+  Plotly.newPlot('ch-macd', datasets.map(({t,d}) => ({
+    type:'scatter', x:d.map(r=>r.Date), y:d.map(r=>r.MACD_Hist),
+    name:t, line:{ color:TICKER_COLOR[t], width:1.5 },
+    fill:'tozeroy', fillcolor:hexToRgba(TICKER_COLOR[t],0.12)
+  })), { ...PB, height:340,
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:0,y1:0,line:{color:'#94A3B8',width:1}}],
+    yaxis:{...PB.yaxis,title:'Histograma MACD'},
+    xaxis:{...PB.xaxis,title:''},
+    title:{text:'MACD — Histograma Multi-Activo (convergencia/divergencia EMAs 12/26)',font:{size:13}}
+  }, PCFG);
+
+  const macdLast = datasets.map(({t,d}) => {
+    const last = d[d.length-1]; const prev = d[d.length-2];
+    const hist = last.MACD_Hist || 0; const prevHist = prev?.MACD_Hist || 0;
+    const bullCross = hist > 0 && prevHist <= 0;
+    const bearCross = hist < 0 && prevHist >= 0;
+    return {t, hist, bullCross, bearCross};
+  });
+  const macdBull = macdLast.filter(x => x.hist > 0).map(x => x.t);
+  const macdBear = macdLast.filter(x => x.hist < 0).map(x => x.t);
+  const newBullCross = macdLast.filter(x => x.bullCross).map(x => x.t);
+  const newBearCross = macdLast.filter(x => x.bearCross).map(x => x.t);
+  let macdText, macdType;
+  if (newBullCross.length) {
+    macdText = `Cruce alcista reciente en ${newBullCross.join(', ')}: el histograma cruza de negativo a positivo, señal técnica de expansión de momentum. ${macdBull.length > macdBear.length ? `En general, ${macdBull.join(', ')} mantienen histograma positivo (EMA12 > EMA26), confirmando sesgo alcista de corto plazo.` : ''}`;
+    macdType = 'positive';
+  } else if (newBearCross.length) {
+    macdText = `Cruce bajista reciente en ${newBearCross.join(', ')}: el histograma cruza de positivo a negativo, señal de deterioro de momentum. ${macdBear.length >= macdBull.length ? `La presión vendedora domina actualmente en ${macdBear.join(', ')}.` : `Sin embargo, ${macdBull.join(', ')} mantienen histograma positivo, conteniendo el sesgo bajista general.`}`;
+    macdType = 'warning';
+  } else if (macdBull.length > macdBear.length) {
+    macdText = `${macdBull.join(', ')} mantienen histograma MACD positivo (EMA12 > EMA26), confirmando momentum alcista vigente sin cruce reciente. ${macdBear.length ? `${macdBear.join(', ')} permanecen en zona negativa.` : 'Sin señales bajistas en ningún activo actualmente.'}`;
+    macdType = 'positive';
+  } else if (macdBear.length > macdBull.length) {
+    macdText = `${macdBear.join(', ')} muestran histograma MACD negativo, indicando que la EMA rápida (12d) está por debajo de la lenta (26d). El momentum de corto plazo es bajista sin cruce de reversión aún. ${macdBull.length ? `Únicamente ${macdBull.join(', ')} mantienen histograma positivo.` : ''}`;
+    macdType = 'warning';
+  } else {
+    macdText = `Balance MACD neutro: misma cantidad de activos con histograma positivo y negativo. Sin cruce reciente en ninguna dirección. El momentum del portafolio se encuentra en transición sin tendencia definida.`;
+    macdType = 'neutral';
+  }
+  document.getElementById('in-macd').innerHTML = getInsight('Histograma MACD', 'Muestra la fuerza del impulso reciente. CÓMO LEERLO: Barras verdes altas indican que el precio sube con mucha fuerza compradora. Barras rojas indican ventas masivas.', 'neutral');
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M2 — RENDIMIENTOS COMPARATIVOS
+// ═══════════════════════════════════════════
+function renderM2() {
+  const tickers = state.activeTickers;
+  const datasets = tickers.map(t => ({ t, d: getD('returns', t) })).filter(x => x.d);
+  if (!datasets.length) { noData(); return; }
+
+  const sfHTML = datasets.map(({t,d}) => {
+    const sf = d.stylized_facts; if (!sf) return '';
+    const yesNo = (v, trueGood=false) => { if (v == null) return '<span style="color:#9ca3af">N/A</span>'; const cls = trueGood ? (v?'badge-yes':'badge-no') : (v?'badge-no':'badge-yes'); return `<span class="${cls}">${v?'Sí':'No'}</span>`; };
+    return `<div class="card" style="border-top:3px solid ${TICKER_COLOR[t]}; font-size:0.85rem; flex: 1; min-width: 160px; margin-bottom:0;">
+      <div style="font-weight:700;color:${TICKER_COLOR[t]};margin-bottom:10px">${t}</div>
+      ${statRow('Sesgo Real', fmt(sf.Skewness,4))}
+      ${statRow('Curtosis Exc.', fmt(sf.Excess_Kurtosis,4))}
+    </div>`;
+  }).join('');
+
+  const tableHead = `<tr><th>Métrica</th>${datasets.map(({t})=>`<th style="color:#2563EB">${t}</th>`).join('')}</tr>`;
+  const metrics = [
+    ['Media Diaria',      d => fmt(d.stats['Media'],5)],
+    ['Desv. Estándar',    d => fmt(d.stats['Desviación Estándar'],5)],
+    ['Mínimo',            d => fmt(d.stats['Mínimo'],4)],
+    ['Máximo',            d => fmt(d.stats['Máximo'],4)],
+    ['Sesgo (Skewness)',  d => fmt(d.stats['Asimetría (Skewness)'],4)],
+    ['Curtosis (Exceso)', d => fmt(d.stats['Curtosis'],4)],
+    ['Observaciones',     d => String(d.stats['Conteo'] ?? 'N/A')],
+  ];
+  const tableBody = metrics.map(([lb, fn]) => `<tr><td><b>${lb}</b></td>${datasets.map(({d})=>`<td>${fn(d)}</td>`).join('')}</tr>`).join('');
+
+  const avgSkew = datasets.reduce((sum, x) => sum + x.d.stylized_facts.Skewness, 0) / datasets.length;
+  const avgKurt = datasets.reduce((sum, x) => sum + x.d.stylized_facts.Excess_Kurtosis, 0) / datasets.length;
+  
+  setContent(`
+    <h1 class="header-gradient">M2 — Análisis de Rendimientos Diarios</h1>
+    <p class="page-subtitle">Forma de la distribución de retornos, test de normalidad y hechos estilizados de los mercados financieros.</p>
+
+    <div class="tabs" id="m2-tabs">
+      <button class="tab-btn active" onclick="switchTab('m2','hist',this)">📊 Histograma</button>
+      <button class="tab-btn"        onclick="switchTab('m2','qq',this)">📐 Test de Normalidad (Q-Q)</button>
+      <button class="tab-btn"        onclick="switchTab('m2','box',this)">📦 Boxplot</button>
+      <button class="tab-btn"        onclick="switchTab('m2','series',this)">📉 Serie Histórica</button>
+    </div>
+    
+    <div id="m2-tab-hist" class="tab-content card active" style="padding:12px; margin-bottom: 24px;">
+      <div id="ch-hist"></div><div id="in-hist"></div>
+    </div>
+    <div id="m2-tab-qq" class="tab-content card" style="padding:12px; margin-bottom: 24px;">
+      <div id="ch-qq"></div><div id="in-qq"></div>
+    </div>
+    <div id="m2-tab-box" class="tab-content card" style="padding:12px; margin-bottom: 24px;">
+      <div id="ch-box"></div><div id="in-box"></div>
+    </div>
+    <div id="m2-tab-series" class="tab-content card" style="padding:12px; margin-bottom: 24px;"><div id="ch-series"></div><div id="in-series"></div></div>
+
+    <details class="collapsible" style="background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.05); margin-bottom: 16px;">
+      <summary>📋 Mostrar tabla detallada de estadísticos</summary>
+      <div class="details-body" style="padding:0; border-top:1px solid #e5e7eb; overflow-x:auto;">
+        <table class="compare-table" style="margin:0;">${tableHead}<tbody>${tableBody}</tbody></table>
+      </div>
+    </details>
+
+    <div style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom: 24px;">
+      ${sfHTML}
+    </div>
+
+    <div class="footer">RiskLab USTA · M2 Análisis Estadístico Estructural</div>`);
+
+  Plotly.newPlot('ch-hist', datasets.map(({t,d}) => ({
+    type:'histogram', x:d.plot_data.Simple_Returns, nbinsx:70,
+    name:t, opacity:0.62, marker:{ color:TICKER_COLOR[t] },
+  })), { ...PB, height:360, barmode:'overlay', bargap:0.02,
+    xaxis:{...PB.xaxis, title:'Rendimiento Diario', tickformat:'.1%'},
+    yaxis:{...PB.yaxis, title:'Número de Días'},
+    title:{text:'Distribución de Rendimientos Diarios — Frecuencia Empírica',font:{size:13}}
+  }, PCFG);
+
+  const perSkew = datasets.map(({t,d}) => ({t, sk: d.stylized_facts.Skewness, kt: d.stylized_facts.Excess_Kurtosis}));
+  const negSkewTk = perSkew.filter(x => x.sk < -0.1).map(x => `${x.t} (${fmt(x.sk,2)})`);
+  const posSkewTk = perSkew.filter(x => x.sk > 0.1).map(x => `${x.t} (${fmt(x.sk,2)})`);
+  const fatTailTk = perSkew.filter(x => x.kt > 1.0).map(x => `${x.t} (κ=${fmt(x.kt,2)})`);
+  let histInterp = '';
+  if (negSkewTk.length && posSkewTk.length) {
+    histInterp = `Sesgo mixto: ${negSkewTk.join(', ')} presentan cola izquierda más pesada (caídas extremas más frecuentes que ganancias extremas); ${posSkewTk.join(', ')} tienen sesgo positivo. `;
+  } else if (negSkewTk.length) {
+    histInterp = `Sesgo negativo en ${negSkewTk.join(', ')}: la distribución está inclinada hacia la izquierda, indicando que las pérdidas extremas son más frecuentes y pronunciadas que las ganancias de igual magnitud. `;
+  } else if (posSkewTk.length) {
+    histInterp = `Sesgo positivo en ${posSkewTk.join(', ')}: la cola derecha es más pesada, con episodios de ganancias excepcionales que superan en magnitud los crashes (sesgo promedio: ${fmt(avgSkew,2)}). `;
+  } else {
+    histInterp = `Distribución aproximadamente simétrica en todos los activos (sesgo promedio: ${fmt(avgSkew,2)}): las ganancias y pérdidas extremas son estadísticamente equiparables en magnitud. `;
+  }
+  if (fatTailTk.length) {
+    histInterp += `Curtosis excesiva detectada en ${fatTailTk.join(', ')}: las colas son significativamente más pesadas que la normal (fat tails), lo que implica mayor frecuencia real de eventos extremos de la que predice un modelo gaussiano. Curtosis promedio: ${fmt(avgKurt,2)}.`;
+  } else {
+    histInterp += `Curtosis moderada (promedio: ${fmt(avgKurt,2)}): sin fat tails pronunciadas, aunque ningún activo financiero real es perfectamente normal.`;
+  }
+  document.getElementById('in-hist').innerHTML = getInsight('Histograma de Retornos', 'Muestra los días comunes vs días extremos. CÓMO LEERLO: Una campana alta en el centro es segura. Barras esparcidas a los lados muestran días con ganancias o pérdidas demasiado bruscas.', 'neutral');
+
+  const qqTraces = [];
+  datasets.forEach(({t,d}) => { 
+    if (d.qq_data) {
+      const mean = d.stats['Media'] || 0;
+      const std  = d.stats['Desviación Estándar'] || 1;
+      const stdY = d.qq_data.Empirical.map(v => (v - mean) / std);
+      qqTraces.push({ type:'scatter', x:d.qq_data.Theoretical, y:stdY, mode:'markers', name:t, marker:{ color:TICKER_COLOR[t], size:3, opacity:.6 } }); 
+    }
+  });
+  const allTh = datasets.flatMap(({d}) => d.qq_data?.Theoretical||[]);
+  const minQ = allTh.length ? Math.min(...allTh) : -3; const maxQ = allTh.length ? Math.max(...allTh) :  3;
+  qqTraces.push({ type:'scatter', x:[minQ,maxQ], y:[minQ,maxQ], mode:'lines', name:'Normal Teórica', line:{ color:'#DC2626', dash:'dash', width:1.5 } });
+  Plotly.newPlot('ch-qq', qqTraces, { ...PB, height:380,
+    xaxis:{...PB.xaxis, title:'Cuantiles Teóricos (Distribución Normal Estándar)'},
+    yaxis:{...PB.yaxis, title:'Cuantiles Empíricos Estandarizados (Z-Scores)'},
+    title:{text:'Gráfico Q-Q — Verificación de Normalidad (puntos en diagonal = normal)',font:{size:13}}
+  }, PCFG);
+
+  const normResults = datasets.map(({t,d}) => {
+    const jbP = d.normality?.['Jarque-Bera']?.p_value ?? null;
+    const swP = d.normality?.['Shapiro-Wilk']?.p_value ?? null;
+    const rejectNorm = (jbP !== null && jbP < 0.05) || (swP !== null && swP < 0.05);
+    return {t, jbP, swP, rejectNorm};
+  });
+  const rejectAll = normResults.filter(x => x.rejectNorm);
+  const passAll   = normResults.filter(x => !x.rejectNorm);
+  let qqIn, qqType;
+  if (rejectAll.length === normResults.length && normResults.length > 0) {
+    const detail = rejectAll.map(x => `${x.t} (JB p=${x.jbP!=null?x.jbP.toExponential(1):'N/A'})`).join(', ');
+    qqIn = `La hipótesis de normalidad es rechazada estadísticamente (p < 0.05) en todos los activos: ${detail}. En el gráfico Q-Q, los puntos se desvían sistemáticamente de la diagonal en las colas, confirmando que los retornos reales tienen más eventos extremos de los que predice una distribución normal. Usar VaR Histórico o Monte Carlo es más prudente que el Paramétrico.`;
+    qqType = 'warning';
+  } else if (rejectAll.length > 0) {
+    qqIn = `Normalidad rechazada en ${rejectAll.map(x=>`${x.t} (JB p=${x.jbP!=null?x.jbP.toExponential(1):'N/A'})`).join(', ')}. ${passAll.length ? `${passAll.map(x=>x.t).join(', ')} no rechazan normalidad al 5%.` : ''} La desviación de la diagonal en las colas del Q-Q evidencia leptocurtosis real.`;
+    qqType = 'warning';
+  } else if (passAll.length > 0) {
+    qqIn = `Ningún activo rechaza la normalidad al 5% (${passAll.map(x=>`${x.t}: JB p=${x.jbP!=null?x.jbP.toFixed(3):'N/A'}`).join(', ')}). Los puntos del Q-Q siguen aproximadamente la diagonal, aunque la curtosis (${fmt(avgKurt,2)}) indica que las colas siguen siendo algo más pesadas que en la normal estricta.`;
+    qqType = 'positive';
+  } else {
+    qqIn = avgKurt > 0.8
+      ? `Curtosis promedio elevada (${fmt(avgKurt,2)}): los puntos del Q-Q se arquean en las colas, alejándose de la diagonal teórica. Los retornos presentan frecuencia de eventos extremos mayor a la predicha por la distribución normal.`
+      : `Curtosis moderada (${fmt(avgKurt,2)}): los cuantiles empíricos se alinean razonablemente con la distribución normal teórica. Los eventos extremos observados son consistentes con lo esperado bajo normalidad.`;
+    qqType = avgKurt > 0.8 ? 'warning' : 'positive';
+  }
+  document.getElementById('in-qq').innerHTML = getInsight('Gráfico Q-Q (Normalidad)', 'Compara la realidad con la teoría normal. CÓMO LEERLO: Si los puntos se alejan de la línea diagonal roja formando una letra S, significa que el activo es propenso a sufrir grandes colapsos sorpresa.', 'neutral');
+
+  Plotly.newPlot('ch-box', datasets.map(({t,d}) => ({
+    type:'box', y:d.plot_data.Simple_Returns, name:t,
+    marker:{ color:TICKER_COLOR[t], outliercolor:TICKER_COLOR[t], size:3 },
+    boxpoints:'outliers', jitter:0.3,
+    boxmean:'sd'
+  })), { ...PB, height:380,
+    xaxis:{...PB.xaxis, title:'Activo'},
+    yaxis:{...PB.yaxis, title:'Rendimiento Diario', tickformat:'.2%'},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:0,y1:0,line:{color:'#94A3B8',dash:'dot',width:1}}],
+    title:{text:'Boxplot de Rendimientos — Distribución, IQR y Valores Extremos (outliers)',font:{size:13}}
+  }, PCFG);
+  
+  const boxStats = datasets.map(({t,d}) => {
+    const rets = d.plot_data.Simple_Returns;
+    const sorted = [...rets].sort((a,b)=>a-b);
+    const n = sorted.length;
+    const q1 = sorted[Math.floor(n*0.25)];
+    const q3 = sorted[Math.floor(n*0.75)];
+    const iqr = q3 - q1;
+    const minVal = sorted[0];
+    const maxVal = sorted[n-1];
+    const outlierLow  = rets.filter(v => v < q1 - 1.5*iqr).length;
+    const outlierHigh = rets.filter(v => v > q3 + 1.5*iqr).length;
+    return {t, q1, q3, iqr, minVal, maxVal, outlierLow, outlierHigh, totalOut: outlierLow+outlierHigh};
+  });
+  const maxOutlierTk = boxStats.reduce((m,x) => x.totalOut > m.totalOut ? x : m, boxStats[0]);
+  const worstDropTk  = boxStats.reduce((m,x) => x.minVal < m.minVal ? x : m, boxStats[0]);
+  const boxDetail = boxStats.map(x => `${x.t}: IQR=${pct(x.iqr,2)}, mín=${pct(x.minVal,2)}, outliers=${x.totalOut}`).join(' | ');
+  document.getElementById('in-box').innerHTML = getInsight('Diagrama de Caja (Boxplot)', 'Muestra el rango de ganancias más común condensado en una caja. CÓMO LEERLO: Los puntos por fuera de las líneas (bigotes) representan crisis o records anómalos. Muchos puntos abajo significan constantes choques graves.', 'neutral');
+
+  Plotly.newPlot('ch-series', datasets.map(({t,d}) => ({
+    type:'scatter', x:d.plot_data.Dates, y:d.plot_data.Simple_Returns,
+    name:t, line:{ color:TICKER_COLOR[t], width:1 }, opacity:0.85
+  })), { ...PB, height:340,
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'Rendimiento Diario', tickformat:'.2%'},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:0,y1:0,line:{color:'#94A3B8',width:1,dash:'dot'}}],
+    title:{text:'Rendimientos Diarios — Serie Histórica (agrupamiento de volatilidad visible)',font:{size:13}}
+  }, PCFG);
+  const vClusterTks = datasets.filter(x => x.d.stylized_facts.Vol_Clustering).map(x => x.t);
+  const noClusterTks = datasets.filter(x => !x.d.stylized_facts.Vol_Clustering).map(x => x.t);
+  const vCluster = vClusterTks.length;
+  let seriesText, seriesType;
+  if (vCluster === datasets.length) {
+    seriesText = `Agrupamiento de volatilidad (Vol Clustering) confirmado por el test de Ljung-Box en todos los activos: ${vClusterTks.join(', ')}. Las series temporales muestran regímenes alternos de baja y alta volatilidad, validando el uso de modelos ARCH/GARCH que capturan la heterocedasticidad condicional. Los periodos de estrés se propagan y concentran temporalmente en lugar de distribuirse aleatoriamente.`;
+    seriesType = 'warning';
+  } else if (vCluster > 0) {
+    seriesText = `Vol Clustering detectado en ${vClusterTks.join(', ')} (Ljung-Box p < 0.05): la volatilidad se agrupa en episodios, justificando modelos GARCH para esos activos. ${noClusterTks.length ? `${noClusterTks.join(', ')} no presentan agrupamiento significativo, sugiriendo varianza más homogénea en el tiempo.` : ''}`;
+    seriesType = 'warning';
+  } else {
+    seriesText = `El test de Ljung-Box no detecta agrupamiento de volatilidad significativo en ningún activo. La dispersión de retornos parece más homogénea a lo largo del tiempo, aunque la inspección visual de la serie puede revelar episodios puntuales de mayor volatilidad coincidentes con eventos de mercado.`;
+    seriesType = 'neutral';
+  }
+  document.getElementById('in-series').innerHTML = getInsight('💡 Agrupamiento de Volatilidad', 'Un accidente financiero nunca viene solo. La serie temporal muestra racimos intensos delatando las épocas agitas y tensas antes de recuperar el ecosistema pacifico.', 'neutral');
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M3 — VOLATILIDAD GARCH COMPARATIVA
+// ═══════════════════════════════════════════
+function renderM3() {
+  const tickers = state.activeTickers;
+  const datasets = tickers.map(t => ({ t, d: getD('volatility', t) })).filter(x => x.d && Object.keys(x.d).length);
+  if (!datasets.length) { noData(); return; }
+
+  const modelNames = ['ARCH(1)','GARCH(1,1)','EGARCH(1,1)'];
+  const tableHead = `<tr><th>Ticker</th>${modelNames.map(m=>`<th>${m} AIC</th><th>${m} BIC</th>`).join('')}</tr>`;
+  
+  let egarchBestCount = 0;
+  
+  const tableBody = datasets.map(({t,d}) => {
+    const cells = modelNames.map(m => {
+      const md = d[m] || {};
+      const bestAIC = modelNames.reduce((best, mn) => (d[mn] && d[mn].AIC < best) ? d[mn].AIC : best, Infinity);
+      const isBest = md.AIC <= bestAIC;
+      if (isBest && m === 'EGARCH(1,1)') egarchBestCount++;
+      return `<td${isBest?' style="font-weight:700;color:#059669"':''}>${fmt(md.AIC,2)}${isBest?' ★':''}</td><td>${fmt(md.BIC,2)}</td>`;
+    }).join('');
+    return `<tr><td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>${cells}</tr>`;
+  }).join('');
+
+  const forecastHTML = datasets.map(({t,d}) => {
+    if (!d.Forecast_10d) return '';
+    const vals = d.Forecast_10d;
+    const isUp = vals[vals.length-1] > vals[0];
+    return `<div style="margin-bottom:16px">
+      <div style="font-weight:700;color:${TICKER_COLOR[t]};margin-bottom:6px; display:flex; justify-content:space-between">
+        <span>${t} — Pronóstico a 10 días</span>
+        <span style="color:${isUp?C.red:C.green}; font-size:0.8rem">Proyección: ${isUp?'Expansión':'Retracción asintótica'}</span>
+      </div>
+      <div style="display:flex;gap:4px;align-items:flex-end;height:80px">
+        ${vals.map((v,i)=>{
+          const h = v != null ? Math.min(100, v*8000) : 0;
+          return `<div style="flex:1;background:${TICKER_COLOR[t]};opacity:.8;height:${h}%;border-radius:4px 4px 0 0;display:flex;align-items:flex-start;justify-content:center">
+            <span style="font-size:.6rem;color:#fff;padding:2px;writing-mode:vertical-lr;transform:rotate(180deg)">${v!=null?(v*100).toFixed(2)+'%':''}</span>
+          </div>`;
+        }).join('')}
+      </div></div>`;
+  }).join('');
+
+  let volEndState = datasets.map(({d}) => d['GARCH(1,1)']?.Volatility?.[d['GARCH(1,1)'].Volatility.length-1]).filter(x=>x);
+  let maxV = Math.max(...volEndState); let avgV = volEndState.reduce((a,b)=>a+b,0)/volEndState.length;
+  let maxVTk = datasets.find(x => x.d['GARCH(1,1)']?.Volatility?.[x.d['GARCH(1,1)'].Volatility.length-1] === maxV)?.t;
+
+  setContent(`
+    <h1 class="header-gradient">M3 — Modelos de Volatilidad GARCH</h1>
+    <p class="page-subtitle">Los modelos ARCH/GARCH capturan que la volatilidad no es constante: los mercados tienen períodos de calma y períodos de turbulencia que se agrupan en el tiempo.</p>
+    
+    ${(()=>{
+      const annualV = avgV * Math.sqrt(252) * 100;
+      const regime = annualV < 20 ? 'baja' : (annualV < 35 ? 'moderada' : 'alta');
+      const regimeType = annualV < 20 ? 'positive' : (annualV < 35 ? 'neutral' : 'warning');
+      const volDetail = datasets.map(({t,d}) => {
+        const v = d['GARCH(1,1)']?.Volatility?.[d['GARCH(1,1)'].Volatility.length-1] || 0;
+        return `${t}: ${fmt(v*100,2)}%d/${fmt(v*Math.sqrt(252)*100,1)}%a`;
+      }).join(' | ');
+      const m3text = `Volatilidad diaria GARCH promedio: ${fmt(avgV*100,2)}% (equiv. ${fmt(annualV,1)}% anualizada) — régimen <b>${regime}</b>. ${maxVTk} registra la mayor tensión condicional actual (${fmt(maxV*100,2)}%d / ${fmt(maxV*Math.sqrt(252)*100,1)}%a). ${maxV > avgV*1.5 ? `El diferencial con el promedio (×${fmt(maxV/avgV,1)}) indica shock reciente no absorbido en ${maxVTk}.` : `La dispersión entre activos es contenida, sin outliers extremos de volatilidad.`} Detalle — ${volDetail}.`;
+      return getInsight("Volatilidad GARCH", "Mide el nivel de pánico de esta semana sin engañarse por meses calmados del pasado. CÓMO LEERLO: Si la línea salta bruscamente demostrando alta concentración, has entrado oficialmente a una zona de altísimo riesgo temporal.", "neutral");
+    })()}
+
+    <div class="tabs" id="m3-tabs">
+      <button class="tab-btn active" onclick="switchTab('m3','vol',this)">📈 Volatilidad GARCH</button>
+      <button class="tab-btn"        onclick="switchTab('m3','resid',this)">🔬 Diagnóstico de Residuos</button>
+      <button class="tab-btn"        onclick="switchTab('m3','forecast',this)">🔮 Pronóstico a 10 Días</button>
+      <button class="tab-btn"        onclick="switchTab('m3','table',this)">📋 Comparación de Modelos</button>
+    </div>
+    
+    <div id="m3-tab-vol" class="tab-content card active" style="padding:12px">
+        <div id="ch-garch"></div><div id="in-garch"></div>
+    </div>
+    <div id="m3-tab-resid" class="tab-content card" style="padding:12px">
+        <div id="ch-resid"></div><div id="in-resid"></div>
+    </div>
+    <div id="m3-tab-forecast" class="tab-content card" style="padding:18px">
+        <div id="ch-forecast"></div>
+        ${(()=>{
+          const fTrends = datasets.filter(({d}) => d.Forecast_10d && d.Forecast_10d.length >= 2).map(({t,d}) => {
+            const fv = d.Forecast_10d.filter(v => v != null);
+            return {t, isUp: fv[fv.length-1] > fv[0], d1: fv[0], d10: fv[fv.length-1]};
+          });
+          const expanding = fTrends.filter(x => x.isUp).map(x => x.t);
+          const contracting = fTrends.filter(x => !x.isUp).map(x => x.t);
+          let fText, fType;
+          if (!fTrends.length) {
+            fText = "No hay datos de pronóstico disponibles para el horizonte de 10 días.";
+            fType = "neutral";
+          } else if (expanding.length && contracting.length) {
+            fText = `El horizonte de 10 días muestra bifurcación: ${expanding.join(', ')} proyecta expansión de volatilidad (shock reciente aún no absorbido), mientras ${contracting.join(', ')} converge hacia su media incondicional. Una persistencia (α+β) cercana a 1 explica por qué la reversión es lenta y gradual, no instantánea.`;
+            fType = 'warning';
+          } else if (expanding.length) {
+            fText = `El modelo GARCH proyecta expansión de volatilidad para los próximos 10 días en ${expanding.join(', ')}. La alta persistencia del proceso indica que el shock reciente continuará propagándose, con sesiones potencialmente erráticas antes de alcanzar equilibrio.`;
+            fType = 'warning';
+          } else {
+            fText = `El pronóstico confirma reversión asintótica a la media incondicional en ${contracting.join(', ')}. La persistencia (α+β) del modelo permite anticipar sesiones progresivamente más calmas durante las próximas 10 jornadas, aunque la memoria del proceso mantiene la volatilidad sobre sus mínimos históricos.`;
+            fType = 'positive';
+          }
+          return getInsight("💡 Pronóstico Predictivo", "Este indicador delinea con el horizonte a los 10 días siguientes el relajamiento general que podemos aguardar o bien los aumentos sorpresivos previstos por la tensión previa acumulada.", "neutral");
+        })()}
+    </div>
+    <div id="m3-tab-table" class="tab-content card" style="padding:16px;">
+      <p style="font-size:.88rem;color:#475569;margin-bottom:12px">El <b>AIC</b> (Criterio de Información de Akaike) mide qué tan bien ajusta cada modelo penalizando la complejidad. <b>Menor AIC = mejor modelo</b>. El símbolo ★ indica el ganador para cada activo.</p>
+      <details class="collapsible" open>
+        <summary>📋 Tabla AIC/BIC por modelo y activo <span style="font-size:.75rem;color:#9ca3af;font-weight:400;margin-left:8px">clic para expandir/contraer</span></summary>
+        <div class="details-body" style="overflow-x:auto"><table class="compare-table">${tableHead}<tbody>${tableBody}</tbody></table></div>
+      </details>
+      ${(()=>{
+        const aicWinners = datasets.map(({t,d}) => {
+          const best = ['ARCH(1)','GARCH(1,1)','EGARCH(1,1)'].reduce((b,m) => (d[m]?.AIC||Infinity) < (d[b]?.AIC||Infinity) ? m : b, 'ARCH(1)');
+          return {t, best};
+        });
+        const egarchWins  = aicWinners.filter(x => x.best === 'EGARCH(1,1)').map(x => x.t);
+        const garchWins   = aicWinners.filter(x => x.best === 'GARCH(1,1)').map(x => x.t);
+        const archWins    = aicWinners.filter(x => x.best === 'ARCH(1)').map(x => x.t);
+        let tableText = `Selección por AIC (menor = mejor ajuste penalizado por complejidad): `;
+        if (egarchWins.length) tableText += `EGARCH(1,1) gana en ${egarchWins.join(', ')}, confirmando efecto de apalancamiento (shocks negativos generan mayor volatilidad que positivos de igual magnitud). `;
+        if (garchWins.length) tableText += `GARCH(1,1) es óptimo en ${garchWins.join(', ')}: volatilidad simétrica suficiente para el ajuste. `;
+        if (archWins.length) tableText += `ARCH(1) es suficiente en ${archWins.join(', ')}: poca persistencia de volatilidad. `;
+        tableText += `EGARCH dominante en ${egarchBestCount}/${datasets.length} activos.`;
+        return getInsight("💡 Modelamiento Robusto (AIC/BIC)", "Cada algoritmo evalúa el estrés del activo y gana el que tenga menor puntaje. En resumen, esto elige automáticamente aquel modelo defensivo que mejor captura el comportamiento caótico real del activo sin ser engañado por subidas.", "neutral");
+      })()}
+    </div>
+    <div class="footer">RiskLab USTA · M3 Volatilidad Condicional</div>`);
+
+  Plotly.newPlot('ch-garch', datasets.map(({t,d}) => {
+    const vols = d['GARCH(1,1)']?.Volatility || [];
+    const techD = getD('technical', t) || [];
+    const allDates = techD.map(r => r.Date);
+    // GARCH vol tiene N-1 puntos (igual que los retornos); tomamos las últimas N fechas
+    const xDates = allDates.length >= vols.length ? allDates.slice(allDates.length - vols.length) : undefined;
+    return { type:'scatter', x:xDates, y:vols, name:t, line:{ color:TICKER_COLOR[t], width:2 } };
+  }), { ...PB, height:380,
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'Volatilidad Diaria Condicional', tickformat:'.2%'},
+    title:{text:'Volatilidad Condicional GARCH(1,1) — Serie Temporal',font:{size:13}}
+  }, PCFG);
+
+  let clusterPeaks = maxV > avgV * 1.5;
+  const garchTrends = datasets.map(({t,d}) => {
+    const vols = d['GARCH(1,1)']?.Volatility || [];
+    if (vols.length < 10) return {t, trend: 'sin datos'};
+    const recent5 = vols.slice(-5).reduce((a,b)=>a+b,0)/5;
+    const prior5  = vols.slice(-10,-5).reduce((a,b)=>a+b,0)/5;
+    const chg = prior5 > 0 ? (recent5/prior5 - 1)*100 : 0;
+    return {t, trend: chg > 5 ? `subiendo (+${fmt(chg,1)}%)` : (chg < -5 ? `bajando (${fmt(chg,1)}%)` : `estable (${fmt(chg,1)}%)`), chg};
+  });
+  const rising  = garchTrends.filter(x => x.chg > 5).map(x => `${x.t} (${x.trend})`);
+  const falling = garchTrends.filter(x => x.chg < -5).map(x => `${x.t} (${x.trend})`);
+  const garchIntText = `Nivel actual — ${maxVTk}: ${fmt(maxV*100,2)}%d (máximo), promedio portafolio: ${fmt(avgV*100,2)}%d. `
+    + (clusterPeaks ? `${maxVTk} supera ×${fmt(maxV/avgV,1)} la media del grupo, indicando persistencia de estrés condicional activo. ` : `La dispersión entre activos es contenida (ratio máx/prom: ×${fmt(maxV/avgV,1)}). `)
+    + (rising.length ? `Tendencia reciente alcista en ${rising.join(', ')}.` : '')
+    + (falling.length ? ` Compresión de volatilidad en ${falling.join(', ')}, consistente con reversión hacia media incondicional.` : '');
+  document.getElementById('in-garch').innerHTML = getInsight('Evolución del Pánico', 'Muestra la escala del riesgo actual. CÓMO LEERLO: Si la gráfica supera la línea divisoria punteada blanca, cruzaste el humbral hacia inestabilidad excesiva que castiga profundamente las previsiones seguras de tu cartera de fondo.', 'neutral');
+
+  const residTraces = [];
+  datasets.forEach(({t,d}) => {
+    if (!d.Residuals?.Std_Residuals) return;
+    residTraces.push({ type:'histogram', x:d.Residuals.Std_Residuals, nbinsx:30, name:t, opacity:.6, marker:{ color:TICKER_COLOR[t] } });
+  });
+  if (residTraces.length) {
+    Plotly.newPlot('ch-resid', residTraces, { ...PB, height:360, barmode:'overlay', bargap:.02,
+      xaxis:{...PB.xaxis,title:'Residuos Estandarizados (Z-Score)'},
+      yaxis:{...PB.yaxis,title:'Frecuencia'},
+      title:{text:'Histograma de Residuos Estandarizados GARCH(1,1)',font:{size:13}}
+    }, PCFG);
+    const residStats = datasets.filter(({d}) => d.Residuals?.Std_Residuals?.length > 4).map(({t,d}) => {
+      const res = d.Residuals.Std_Residuals;
+      const n = res.length;
+      const mean = res.reduce((a,b)=>a+b,0)/n;
+      const variance = res.reduce((a,v)=>a+(v-mean)**2,0)/(n-1);
+      const m4 = res.reduce((a,v)=>a+(v-mean)**4,0)/n;
+      const kurt = variance > 0 ? m4/(variance**2) - 3 : 0;
+      const tailCount = res.filter(v => Math.abs(v) > 2.5).length;
+      return {t, kurt: parseFloat(kurt.toFixed(2)), tailPct: parseFloat((tailCount/n*100).toFixed(1))};
+    });
+    let residText, residType;
+    if (!residStats.length) {
+      const activeDs = datasets.filter(({d}) => d['GARCH(1,1)']?.Volatility?.length > 0);
+      residText = activeDs.length
+        ? `Los residuos del modelo GARCH se distribuyen idealmente en N(0,1). Valores |Z| > 2.5 indican eventos extremos no capturados. Si la curtosis residual supera 3, considerar GARCH-t o GJR-GARCH para mejorar el ajuste en las colas.`
+        : "Datos de residuos no disponibles para los activos seleccionados.";
+      residType = "neutral";
+    } else {
+      const heavyTails = residStats.filter(x => x.kurt > 1.5);
+      const wellFit = residStats.filter(x => x.kurt <= 1.5);
+      if (heavyTails.length > 0) {
+        residText = `Colas pesadas detectadas en ${heavyTails.map(x=>`${x.t} (κ=${x.kurt})`).join(', ')}: el GARCH Gaussiano subestima la frecuencia de eventos extremos. Se recomienda especificación con distribución t-Student (GARCH-t) para reducir el sesgo en estimación de riesgo de cola. ${wellFit.length ? `${wellFit.map(x=>x.t).join(', ')} presentan ajuste residual más próximo a la normalidad.` : ''}`;
+        residType = "warning";
+      } else {
+        residText = `Los residuos estandarizados muestran distribución cercana a N(0,1) en ${residStats.map(x=>`${x.t} (κ=${x.kurt})`).join(', ')}, validando los supuestos del modelo. La presencia de eventos extremos (|Z| > 2.5) es estadísticamente esperada y no indica fallo estructural del GARCH.`;
+        residType = "positive";
+      }
+    }
+    document.getElementById('in-resid').innerHTML = getInsight('💡 Residuos Limpios', 'Los puntos al centro verifican que la formula y diseño capturó de manera eficiente e indiscutible los sobresaltos atípicos asilando exitosamente el factor riesgo.', 'neutral');
+  }
+
+  // Pronóstico a 10 días — gráfico Plotly
+  const fLabels = ['D+1','D+2','D+3','D+4','D+5','D+6','D+7','D+8','D+9','D+10'];
+  const fTraces = datasets.filter(({d}) => d.Forecast_10d && d.Forecast_10d.length).map(({t,d}) => ({
+    type:'bar', name:t,
+    x: fLabels,
+    y: d.Forecast_10d.map(v => v != null ? parseFloat((v*100).toFixed(4)) : null),
+    marker:{ color:TICKER_COLOR[t], opacity:0.85 },
+  }));
+  if(fTraces.length) {
+    Plotly.newPlot('ch-forecast', fTraces, { ...PB, height:360, barmode:'group',
+      xaxis:{...PB.xaxis, title:'Horizonte de Pronóstico (días hábiles)'},
+      yaxis:{...PB.yaxis, title:'Volatilidad Diaria Proyectada (%)', tickformat:'.3f', ticksuffix:'%'},
+      title:{text:'Pronóstico de Volatilidad GARCH(1,1) — Próximos 10 Días',font:{size:13}},
+      legend:{...PB.legend, orientation:'h', y:-0.15}
+    }, PCFG);
+  }
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M4 — CAPM COMPARATIVO
+// ═══════════════════════════════════════════
+function renderM4() {
+  const tickers = state.activeTickers;
+  const datasets = tickers.map(t => ({ t, d: getD('risk', t) })).filter(x => x.d?.capm);
+  if (!datasets.length) { noData(); return; }
+
+  const rf = D.rf_rate || 0.045;
+  const cls  = c => c==='Agresivo'?C.red:c==='Defensivo'?C.green:C.yellow;
+  const clsI = c => c==='Agresivo'?'🔴':c==='Defensivo'?'🟢':'🟡';
+
+  const tableRows = datasets.map(({t,d}) => {
+    const q = d.capm;
+    return `<tr>
+      <td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>
+      <td><b>${fmt(q.Beta,3)}</b></td>
+      <td>${fmt(q.Alpha,5)}</td>
+      <td>${fmt(q.R_Squared,3)}</td>
+      <td style="color:#2563EB; font-weight:700;">${pct(q.Expected_Return_Annual)}</td>
+      <td><span style="color:${cls(q.Classification)};font-weight:700">${clsI(q.Classification)} ${q.Classification}</span></td>
+    </tr>`;
+  }).join('');
+
+  let bestR2 = datasets.reduce((best, cur) => cur.d.capm.R_Squared > best.d.capm.R_Squared ? cur : best, datasets[0]);
+  let maxBeta = datasets.reduce((best, cur) => cur.d.capm.Beta > best.d.capm.Beta ? cur : best, datasets[0]);
+  let minBeta = datasets.reduce((best, cur) => cur.d.capm.Beta < best.d.capm.Beta ? cur : best, datasets[0]);
+
+  const m4Summary = datasets.map(({t,d}) => `${t}: β=${fmt(d.capm.Beta,2)}, R²=${pct(d.capm.R_Squared,1)}, E[R]=${pct(d.capm.Expected_Return_Annual,1)}`).join(' | ');
+  let m4txtGlobal = `Tasa libre de riesgo: ${pct(rf,2)}. Beta más alto: <b>${maxBeta.t}</b> (β=${fmt(maxBeta.d.capm.Beta,2)}, ${maxBeta.d.capm.Classification}) — amplifica movimientos del mercado; retorno esperado CAPM: ${pct(maxBeta.d.capm.Expected_Return_Annual,1)}. Beta más bajo: <b>${minBeta.t}</b> (β=${fmt(minBeta.d.capm.Beta,2)}, ${minBeta.d.capm.Classification}) — menor exposición sistemática. Mayor R²: <b>${bestR2.t}</b> (${pct(bestR2.d.capm.R_Squared,1)}), indica que ${pct(bestR2.d.capm.R_Squared,1)} de su varianza de retornos es explicado directamente por el S&P 500. Detalle — ${m4Summary}.`;
+
+  setContent(`
+    <h1 class="header-gradient">M4 — CAPM: Riesgo y Retorno Esperado</h1>
+    <p class="page-subtitle">El modelo CAPM explica cuánto riesgo de mercado tiene cada activo (Beta) y qué retorno debería esperarse en compensación por ese riesgo.</p>
+
+    ${getInsight("Premio por Riesgo (CAPM)", "Indica la recompensa extra que deberías exigir dados tus infartos. CÓMO LEERLO: Tu activo no valió el esfuerzo si su rendimiento proyectado real no supera al Rendimiento Mínimo Esperado que dicta el modelo CAPM comparando frente a Bonos de Estado estadounidenses resguardados.", "neutral")}
+
+    <div class="tabs" id="m4-tabs">
+      <button class="tab-btn active" onclick="switchTab('m4','beta',this)">📊 Beta por Activo</button>
+      <button class="tab-btn"        onclick="switchTab('m4','scatter',this)">🔵 Dispersión vs. Mercado</button>
+      <button class="tab-btn"        onclick="switchTab('m4','table',this)">📋 Tabla CAPM Completa</button>
+    </div>
+
+    <div id="m4-tab-beta" class="tab-content card active" style="padding:12px">
+        <div id="ch-beta"></div><div id="in-beta"></div>
+    </div>
+    <div id="m4-tab-scatter" class="tab-content card" style="padding:12px">
+        <div id="ch-scatter"></div><div id="in-scatter"></div>
+    </div>
+    <div id="m4-tab-table" class="tab-content card" style="padding:16px;">
+      <p style="font-size:.88rem;color:#475569;margin-bottom:12px"><b>Beta (β):</b> 1 = igual al mercado · &gt;1.2 agresivo · &lt;0.8 defensivo. <b>Alpha (α):</b> retorno no explicado por el mercado. <b>R²:</b> qué % de la variación del activo se explica por el S&P 500.</p>
+      <details class="collapsible" open>
+        <summary>📋 Tabla de parámetros CAPM por activo</summary>
+        <div class="details-body" style="overflow-x:auto">
+          <table class="compare-table"><thead><tr><th>Activo</th><th>Beta (β)</th><th>Alpha (α)</th><th>R² (ajuste)</th><th>Retorno Esperado Anual</th><th>Clasificación</th></tr></thead><tbody>${tableRows}</tbody></table>
+        </div>
+      </details>
+      ${(()=>{
+        const positiveAlpha = datasets.filter(x => x.d.capm.Alpha > 0.0002).map(x => `${x.t} (α=${fmt(x.d.capm.Alpha,5)})`);
+        const negativeAlpha = datasets.filter(x => x.d.capm.Alpha < -0.0002).map(x => `${x.t} (α=${fmt(x.d.capm.Alpha,5)})`);
+        const neutralAlpha  = datasets.filter(x => Math.abs(x.d.capm.Alpha) <= 0.0002).map(x => x.t);
+        let alphaText, alphaType;
+        if (positiveAlpha.length && negativeAlpha.length) {
+          alphaText = `Alpha positivo en ${positiveAlpha.join(', ')}: estos activos generaron retorno idiosincrático por encima de lo compensado por el CAPM. ${negativeAlpha.join(', ')} destruyen valor ajustado al riesgo sistemático. El alpha diario pequeño se acumula materialmente en períodos largos, pero su significancia estadística requiere validación.`;
+          alphaType = 'warning';
+        } else if (positiveAlpha.length) {
+          alphaText = `${positiveAlpha.join(', ')} presentan alpha positivo, superando la rentabilidad predicha por la exposición beta pura. Representa retorno idiosincrático no explicado por el mercado. ${neutralAlpha.length ? `Los demás (${neutralAlpha.join(', ')}) tienen alpha negligible, actuando en línea con el modelo.` : ''}`;
+          alphaType = 'positive';
+        } else if (negativeAlpha.length) {
+          alphaText = `${negativeAlpha.join(', ')} muestran alpha negativo, generando menos retorno del exigido por su nivel de riesgo sistemático. El retorno esperado CAPM representado en la tabla es la compensación mínima teórica por la exposición beta asumida, sin incorporar alfa idiosincrático.`;
+          alphaType = 'warning';
+        } else {
+          alphaText = `Los alphas son prácticamente nulos en todos los activos, coherente con mercados eficientes (HME semi-fuerte). El retorno esperado CAPM en la tabla representa exclusivamente la prima de riesgo sistemático calculada como: Rf + β × (E[Rm] − Rf).`;
+          alphaType = 'neutral';
+        }
+        return getInsight("Generación de Valor (Alpha)", "¿El CEO superó al mercado por talento puro? CÓMO LEERLO: Alpha positiva superior a 0 confirma una generación milagrosa de valor corporativo independiente a las fuerzas aburridas ascendentes del S&P 500 rutinario.", "neutral");
+      })()}
+    </div>
+    <div class="footer">RiskLab USTA · M4 Riesgo Lineal</div>`);
+
+  const betas = datasets.map(({t,d}) => d.capm.Beta);
+  const retAnual = datasets.map(({t,d}) => d.capm.Expected_Return_Annual * 100);
+
+  Plotly.newPlot('ch-beta', [
+    { type:'bar', name:'Beta (β)',
+      x:datasets.map(({t})=>t), y:betas,
+      marker:{ color:datasets.map(({t})=>TICKER_COLOR[t]), opacity:0.85 },
+      text:betas.map(b=>fmt(b,2)), textposition:'auto', textfont:{size:11, color:'#fff'}
+    },
+    { type:'scatter', name:'Retorno Esperado CAPM (eje der.)',
+      x:datasets.map(({t})=>t), y:retAnual,
+      mode:'markers', yaxis:'y2',
+      marker:{ size:14, color:datasets.map(({t})=>TICKER_COLOR[t]), symbol:'diamond', line:{color:'#fff',width:1.5} },
+    },
+  ], { ...PB, height:400, barmode:'group', margin:{...PB.margin, t:55, r:90},
+    xaxis:{...PB.xaxis, title:'Activo'},
+    yaxis:{...PB.yaxis, title:'Beta (β)', zeroline:true, zerolinecolor:'#94A3B8'},
+    yaxis2:{ overlaying:'y', side:'right', title:'Retorno Esperado Anual (%)', gridcolor:'transparent', ticksuffix:'%' },
+    shapes:[
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:1.2,y1:3,  fillcolor:C.red,  opacity:.04,line:{width:0}},
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:0,  y1:0.8, fillcolor:C.green,opacity:.04,line:{width:0}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:1.0,y1:1.0,line:{color:'#94A3B8',dash:'dot',width:1.5}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:1.2,y1:1.2,line:{color:C.red,  dash:'dash',width:1.2}},
+      {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:0.8,y1:0.8,line:{color:C.green,dash:'dash',width:1.2}},
+    ],
+    annotations:[
+      {x:1.02,xref:'paper',y:1.2,yref:'y',text:'Agresivo (>1.2)', showarrow:false,font:{color:C.red,  size:9},xanchor:'left'},
+      {x:1.02,xref:'paper',y:0.8,yref:'y',text:'Defensivo (<0.8)',showarrow:false,font:{color:C.green,size:9},xanchor:'left'},
+      {x:1.02,xref:'paper',y:1.0,yref:'y',text:'Mercado (=1.0)', showarrow:false,font:{color:'#475569',size:9},xanchor:'left'},
+    ],
+    title:{text:'Beta por Activo — Clasificación de Riesgo Sistemático (♦ = retorno esperado CAPM)',font:{size:13}}
+  }, PCFG);
+
+  const betaDetail = datasets.map(({t,d}) => `${t}: β=${fmt(d.capm.Beta,2)} (${d.capm.Classification})`).join(' | ');
+  const agresivos   = datasets.filter(x => x.d.capm.Classification === 'Agresivo').map(x => x.t);
+  const defensivos  = datasets.filter(x => x.d.capm.Classification === 'Defensivo').map(x => x.t);
+  const neutros     = datasets.filter(x => x.d.capm.Classification === 'Neutro').map(x => x.t);
+  let betaStr = '';
+  if (agresivos.length) betaStr += `Beta > 1.2 (Agresivo): ${agresivos.join(', ')} — amplifican los movimientos del mercado. Por cada 1% que sube el S&P 500, estos activos suben más que 1.2% en promedio; en caídas, el efecto se invierte igualmente. `;
+  if (defensivos.length) betaStr += `Beta < 0.8 (Defensivo): ${defensivos.join(', ')} — atenúan los movimientos del mercado, comportándose como amortiguadores ante caídas sistémicas. `;
+  if (neutros.length) betaStr += `Beta neutro (0.8–1.2): ${neutros.join(', ')} — se mueven aproximadamente en línea con el mercado. `;
+  betaStr += `Retorno esperado CAPM más alto: ${maxBeta.t} (β=${fmt(maxBeta.d.capm.Beta,2)} → ${pct(maxBeta.d.capm.Expected_Return_Annual,1)} anual). Detalle — ${betaDetail}.`;
+  document.getElementById('in-beta').innerHTML = getInsight('Reacción al Mercado (Beta)', 'Mide la agresividad frente a caídas. CÓMO LEERLO: Mayores a 1.0 significan que amplifica la caída global en el peor día del mercado. Inferiores a 1.0 funcionan como protecciones conservadoras.', 'neutral');
+
+  const scatTraces = [];
+  datasets.forEach(({t,d}) => {
+    if (!d.scatter?.Asset) return;
+    scatTraces.push({ type:'scatter', mode:'markers', name:`Sct-${t}`, x:d.scatter.Benchmark, y:d.scatter.Asset, marker:{ color:TICKER_COLOR[t], size:4, opacity:.5 } });
+    if (d.scatter.Reg_X) scatTraces.push({ type:'scatter', mode:'lines', name:`L(B)=${fmt(d.capm.Beta,2)}`, x:d.scatter.Reg_X, y:d.scatter.Reg_Y, line:{ color:TICKER_COLOR[t], width:2.5 } });
+  });
+  Plotly.newPlot('ch-scatter', scatTraces, { ...PB, height:400,
+    xaxis:{...PB.xaxis, title:'Retorno Diario — Benchmark (S&P 500)', tickformat:'.2%'},
+    yaxis:{...PB.yaxis, title:'Retorno Diario — Activo', tickformat:'.2%'},
+    title:{text:'Dispersión CAPM: Retorno del Activo vs. Benchmark (línea = regresión OLS)',font:{size:13}}
+  }, PCFG);
+  
+  const r2Stats = datasets.map(x => ({t: x.t, r2: x.d.capm.R_Squared, beta: x.d.capm.Beta}));
+  const avgR2 = r2Stats.reduce((s,x) => s + x.r2, 0) / r2Stats.length;
+  const highR2 = r2Stats.filter(x => x.r2 > 0.5).map(x => `${x.t} (R²=${pct(x.r2,1)})`);
+  const lowR2  = r2Stats.filter(x => x.r2 < 0.2).map(x => `${x.t} (R²=${pct(x.r2,1)})`);
+  let scatText, scatType;
+  if (avgR2 > 0.5) {
+    scatText = `R² promedio elevado (${pct(avgR2,1)}): la mayor parte de la varianza de estos activos es explicada sistemáticamente por el S&P 500. ${highR2.length ? `Alta sincronía en ${highR2.join(', ')}.` : ''} La nube de puntos apretada alrededor de la recta OLS confirma dependencia mercado dominante y limitada diversificación idiosincrática.`;
+    scatType = 'warning';
+  } else if (avgR2 > 0.3) {
+    scatText = `R² moderado (${pct(avgR2,1)} promedio): correlación significativa con el benchmark coexiste con retorno idiosincrático relevante. ${highR2.length ? `Mayor dependencia del mercado en ${highR2.join(', ')}.` : ''} ${lowR2.length ? `${lowR2.join(', ')} exhibe mayor dispersión independiente.` : ''} La combinación de activos con distintos R² contribuye a la diversificación del portafolio.`;
+    scatType = 'neutral';
+  } else {
+    scatText = `R² bajo (${pct(avgR2,1)} promedio): estos activos tienen alta componente idiosincrática. ${lowR2.length ? `Particularmente ${lowR2.join(', ')}, donde la dispersión residual frente a la regresión OLS refleja factores sectoriales o específicos predominantes sobre el movimiento del índice.` : ''} Mayor potencial de diversificación real dentro del portafolio.`;
+    scatType = 'positive';
+  }
+  document.getElementById('in-scatter').innerHTML = getInsight('Nivel de Dependencia (R²)', 'Verifica si el activo se comporta obediente al mercado exterior (S&P 500). CÓMO LEERLO: Puntajes cercanos al 1.0 (100%) testifican el mimetismo ciego del activo al ritmo de los desplomes externos arrastrados de la marea.', 'neutral');
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M5 — VaR / CVaR COMPARATIVO
+// ═══════════════════════════════════════════
+function renderM5() {
+  const tickers = state.activeTickers;
+
+  // Usa datos dinámicos de API si están disponibles, si no cae en data.js
+  const isLive = !!state.params.varOverride;
+  const datasets = tickers.map(t => {
+    if (isLive && state.params.varOverride[t]) {
+      const api = state.params.varOverride[t];
+      // La API devuelve { capm:{...}, var:{...} } — misma forma que data.js risk
+      return { t, d: api, live: true };
+    }
+    return { t, d: getD('risk', t), live: false };
+  }).filter(x => x.d?.var);
+
+  if (!datasets.length) { noData(); return; }
+
+  const methods = [{key:'Historico',label:'Histórico'}, {key:'Parametrico',label:'Paramétrico'}, {key:'Montecarlo',label:'Montecarlo'}];
+  
+  let worstVaRTk = datasets.reduce((max, obj) => Math.abs(obj.d.var.Historico.VaR) > Math.abs(max.d.var.Historico.VaR) ? obj : max, datasets[0]);
+  let safeVaRTk = datasets.reduce((min, obj) => Math.abs(obj.d.var.Historico.VaR) < Math.abs(min.d.var.Historico.VaR) ? obj : min, datasets[0]);
+
+  const tRows95 = datasets.map(({t,d}) => {
+    const v = d.var;
+    const items = methods.map(m => `<td><b>${pct(v[m.key].VaR,3)}</b></td><td style="color:#64748b">${pct(v[m.key].CVaR,3)}</td>`).join('');
+    return `<tr><td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>${items}</tr>`;
+  }).join('');
+
+  const tRows99 = datasets.map(({t,d}) => {
+    const v = d.var_99 || d.var;
+    const items = methods.map(m => `<td><b style="color:#b91c1c">${pct(v[m.key].VaR,3)}</b></td><td style="color:#64748b">${pct(v[m.key].CVaR,3)}</td>`).join('');
+    return `<tr><td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>${items}</tr>`;
+  }).join('');
+
+  let m5Global = `El VaR indica cuánto podría perder un activo en un día malo (con 95% de confianza). El activo con mayor riesgo es <b>${worstVaRTk.t}</b>: al 95% de confianza, puede perder hasta ${pct(worstVaRTk.d.var.Historico.VaR,2)} en un solo día. El más conservador es <b>${safeVaRTk.t}</b>, con una pérdida máxima probable de ${pct(safeVaRTk.d.var.Historico.VaR,2)}. El CVaR va más allá: indica cuánto se pierde en promedio los días en que se supera ese umbral (los peores días), siendo siempre mayor que el VaR.`;
+
+  const liveBanner = isLive ? `
+    <div class="var-live-banner">
+      <div>
+        <span class="var-live-badge">⚡ DATOS EN TIEMPO REAL</span>
+        <span style="margin-left:10px;font-size:.88rem;color:#374151">
+          Confianza: <b>${(state.params.confidence*100).toFixed(0)}%</b> ·
+          Iteraciones MC: <b>${state.params.nSimulations.toLocaleString()}</b>
+          ${state.params.startDate ? `· Período: ${state.params.startDate} → ${state.params.endDate}` : '· Período: últimos 2 años'}
+        </span>
+      </div>
+      <button onclick="state.params.varOverride=null; renderM5();"
+        style="font-size:.75rem;color:#dd5e89;background:none;border:1px solid #dd5e8940;padding:3px 10px;border-radius:6px;cursor:pointer">
+        Volver a datos estáticos
+      </button>
+    </div>` : `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.83rem;color:#64748b">
+      💡 Mostrando datos estáticos de <code>data.js</code>.
+      Para recalcular con parámetros personalizados, usa el panel lateral <b>⚙️ Parámetros de Análisis</b>.
+    </div>`;
+
+  setContent(`
+    <h1 class="header-gradient">M5 — Valor en Riesgo (VaR / CVaR)</h1>
+    <p class="page-subtitle">¿Cuánto puedo perder en un día malo? El VaR responde esa pregunta con base estadística. Se calcula con tres métodos para mayor robustez.</p>
+
+    ${liveBanner}
+    ${getInsight("Riesgo de Pérdida Máxima (VaR)", "Calcula tu piso económico protector base. CÓMO LEERLO: Un porcentaje de -3.0% indica que, en situaciones malas regulares, protegerás firmemente tus valores sabiendo que el daño no superará esa cifra barrera impuesta probabilísticamente.", "neutral")}
+
+    <div class="tabs" id="m5-tabs">
+      <button class="tab-btn active" onclick="switchTab('m5','95',this)">🛡️ Confianza 95%</button>
+      <button class="tab-btn"        onclick="switchTab('m5','99',this)">🚨 Escenario Extremo 99%</button>
+      <button class="tab-btn"        onclick="switchTab('m5','charts',this)">📊 Histogramas por Activo</button>
+    </div>
+
+    <div id="m5-tab-95" class="tab-content card active" style="padding:16px;">
+      <p style="font-size:.87rem;color:#475569;margin-bottom:10px">Con <b>95% de confianza</b>: solo el 5% de los días históricamente se ha perdido más que el VaR mostrado. CVaR = pérdida promedio en esos días malos.</p>
+      <details class="collapsible" open>
+        <summary>📋 VaR y CVaR al 95% por método y activo</summary>
+        <div class="details-body" style="overflow-x:auto">
+          <table class="compare-table">
+            <thead><tr><th rowspan="2">Activo</th><th colspan="2" style="text-align:center;color:#0F172A">Histórico</th><th colspan="2" style="text-align:center;color:#0F172A">Paramétrico (Normal)</th><th colspan="2" style="text-align:center;color:#0F172A">Montecarlo</th></tr>
+            <tr><th>VaR</th><th>CVaR</th><th>VaR</th><th>CVaR</th><th>VaR</th><th>CVaR</th></tr></thead>
+            <tbody>${tRows95}</tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
+    <div id="m5-tab-99" class="tab-content card" style="padding:16px;">
+      <p style="font-size:.87rem;color:#475569;margin-bottom:10px">Con <b>99% de confianza</b>: solo el 1% de los días se pierde más que este umbral. Representa el peor 1% de escenarios históricos.</p>
+      <details class="collapsible" open>
+        <summary>📋 VaR y CVaR al 99% por método y activo (escenario extremo)</summary>
+        <div class="details-body" style="overflow-x:auto">
+          <table class="compare-table">
+            <thead><tr><th rowspan="2">Activo</th><th colspan="2" style="text-align:center;color:#b91c1c">Histórico</th><th colspan="2" style="text-align:center;color:#b91c1c">Paramétrico (Normal)</th><th colspan="2" style="text-align:center;color:#b91c1c">Montecarlo</th></tr>
+            <tr><th>VaR</th><th>CVaR</th><th>VaR</th><th>CVaR</th><th>VaR</th><th>CVaR</th></tr></thead>
+            <tbody>${tRows99}</tbody>
+          </table>
+        </div>
+      </details>
+      ${(()=>{
+        const ampData = datasets.filter(x => x.d.var_99).map(({t,d}) => {
+          const v95 = d.var.Historico.VaR;
+          const v99 = d.var_99.Historico.VaR;
+          const c95 = d.var.Historico.CVaR;
+          const c99 = d.var_99.Historico.CVaR;
+          const varAmp  = v95 !== 0 ? v99/v95 : null;
+          const cvarAmp = c95 !== 0 ? c99/c95 : null;
+          return {t, varAmp, cvarAmp, v95, v99, c99};
+        }).filter(x => x.varAmp !== null);
+        let tailText, tailType;
+        if (ampData.length > 0) {
+          const avgVarAmp  = ampData.reduce((s,x)=>s+x.varAmp,0)/ampData.length;
+          const avgCvarAmp = ampData.filter(x=>x.cvarAmp).reduce((s,x)=>s+x.cvarAmp,0)/(ampData.filter(x=>x.cvarAmp).length||1);
+          const maxRisk = ampData.reduce((m,x) => Math.abs(x.c99) > Math.abs(m.c99) ? x : m, ampData[0]);
+          tailText = `Al 99% de confianza, el VaR Histórico se amplifica en promedio ×${Math.abs(avgVarAmp).toFixed(2)} respecto al 95%, y el CVaR ×${Math.abs(avgCvarAmp).toFixed(2)}. El Paramétrico Gaussiano subestima sistemáticamente esta expansión por su asunción de normalidad. En el peor escenario (1% de los días), ${maxRisk.t} puede perder hasta ${pct(maxRisk.c99,2)} (CVaR 99%), representando riesgo de cola real que ningún modelo Gaussiano captura fielmente.`;
+          tailType = 'negative';
+        } else {
+          tailText = `Al escalar al 99% de confianza, el VaR e Histórico y Monte Carlo se amplían materialmente frente al 95%, mientras el Paramétrico Gaussiano diverge hacia abajo por su cola ligera teórica. Esta brecha cuantifica el coste real de asumir normalidad en distribuciones financieras leptocúrticas.`;
+          tailType = 'negative';
+        }
+        return getInsight("Daños Colaterales (CVaR)", "¿Qué sucede el día fatídico en que el dique se revienta? CÓMO LEERLO: Entre el fondo (VaR) y el vacío existe daño real en la crisis absoluta de mercado; revisa este dolor porcentual del precipicio antes de comprometer fondos irrecuperables en tu inversión de ahorros.", "neutral");
+      })()}
+    </div>
+    
+    <div id="m5-tab-charts" class="tab-content" style="padding:0"></div>
+    <div class="footer">RiskLab USTA · M5 Value at Risk & Expected Shortfall</div>`);
+
+  const chartsContainer = document.getElementById('m5-tab-charts');
+  let chartsHtml = '';
+  datasets.forEach(({t}) => { chartsHtml += `<div class="card" style="margin-bottom:15px;padding:12px"><div id="ch-var-${t}"></div></div>`; });
+  chartsContainer.innerHTML = chartsHtml;
+
+  const spreadStats = datasets.map(({t,d}) => {
+    const hVar  = Math.abs(d.var.Historico.VaR);
+    const hCVaR = Math.abs(d.var.Historico.CVaR);
+    return {t, spread: hVar > 0 ? ((hCVaR/hVar - 1)*100) : 0, hVar, hCVaR};
+  });
+  const maxSpread = spreadStats.length ? spreadStats.reduce((m,x) => x.spread > m.spread ? x : m, spreadStats[0]) : null;
+  const avgSpread = spreadStats.length ? spreadStats.reduce((s,x)=>s+x.spread,0)/spreadStats.length : 0;
+  const m5InterpGlobal = maxSpread
+    ? `Las líneas VaR (rojo) y CVaR (azul) en cada histograma cuantifican la pérdida umbral vs. la pérdida esperada una vez superado ese umbral. La brecha entre ambas líneas mide la severidad de la cola izquierda. Con un exceso medio del ${fmt(avgSpread,1)}% entre VaR y CVaR, ${maxSpread.t} muestra la mayor asimetría de cola (${fmt(maxSpread.spread,1)}%): cuando su pérdida supera el VaR del ${pct(maxSpread.hVar,2)}, la pérdida promedio en ese escenario alcanza ${pct(maxSpread.hCVaR,2)}.`
+    : "Las líneas VaR y CVaR delimitan la pérdida umbral (95%) y la pérdida esperada condicionada a superar ese umbral. La distancia entre ambas refleja el riesgo de cola del activo.";
+  chartsContainer.innerHTML += getInsight("Histogramas de Riesgo", "La zona límite marcada te expone crudamente todas las veces en el pasado temporal donde el activo violó descaradamente estas métricas seguras.", "neutral");
+
+  datasets.forEach(({t,d}) => {
+    const rData = getD('returns', t)?.plot_data?.Simple_Returns; if(!rData) return;
+    const hVar = d.var.Historico.VaR; const hCVaR = d.var.Historico.CVaR;
+    Plotly.newPlot(`ch-var-${t}`, [
+      { type:'histogram', x:rData, nbinsx:70, name:'Retornos', opacity:0.65, marker:{color:hexToRgba(TICKER_COLOR[t],0.7)} }
+    ], { ...PB, height:270, margin:{t:50,b:35,l:55,r:20},
+      shapes:[
+        {type:'line',xref:'x',x0:hVar, x1:hVar, yref:'paper',y0:0,y1:0.92,line:{color:C.red,  width:2,dash:'solid'}},
+        {type:'line',xref:'x',x0:hCVaR,x1:hCVaR,yref:'paper',y0:0,y1:0.78,line:{color:C.blue, width:2,dash:'dash'}}
+      ],
+      annotations:[
+        {x:hVar, xref:'x',y:0.97,yref:'paper',text:'VaR 95%',  showarrow:false,font:{color:C.red,  size:10},yanchor:'top'},
+        {x:hCVaR,xref:'x',y:0.83,yref:'paper',text:'CVaR 95%', showarrow:false,font:{color:C.blue, size:10},yanchor:'top'}
+      ],
+      xaxis:{...PB.xaxis, title:'Rendimiento Diario', tickformat:'.1%'},
+      yaxis:{...PB.yaxis, title:'Frecuencia'},
+      title:{text:`Distribución de Retornos con VaR/CVaR al 95% — ${t}`,font:{size:12}}
+    });
+  });
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M6 — OPTIMIZACIÓN (Markowitz)
+// ═══════════════════════════════════════════
+function renderM6() {
+  const p = getD('portfolio'); const dReturns = getD('returns'); const tickers = state.activeTickers.filter(t => dReturns?.[t]);
+  if (!p || Object.keys(p).length===0 || tickers.length<2) { noData('Faltan datos de portafolio o series'); return; }
+
+  const wMaxS = p.Max_Sharpe; const wMinV = p.Min_Volatility;
+
+  let corrMatrix = ''; const highCorrPairs = []; const negCorrPairs = [];
+  if (p.Correlation) {
+    const keys = Object.keys(p.Correlation);
+    const head = `<tr><th>Tensión</th>${keys.map(k=>`<th>${k}</th>`).join('')}</tr>`;
+    const rows = keys.map(k1 => {
+        const cells = keys.map(k2 => {
+            const v = p.Correlation[k1][k2];
+            const cStr = v > 0.6 ? C.red : (v < -0.3 ? C.green : C.text);
+            if (k1 !== k2 && v > 0.6 && !highCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) highCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
+            if (k1 !== k2 && v < -0.1 && !negCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) negCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
+            return `<td style="color:${cStr}">${fmt(v,2)}</td>`;
+        }).join('');
+        return `<tr><th>${k1}</th>${cells}</tr>`;
+    }).join('');
+    corrMatrix = `<table class="compare-table" style="font-size:0.85rem">${head}<tbody>${rows}</tbody></table>`;
+  }
+
+  const wHTML = (obj, title, logic) => {
+    let dominantAsset = Object.keys(obj.Weights).reduce((a, b) => obj.Weights[a] > obj.Weights[b] ? a : b);
+    return `<div class="card" style="flex:1;min-width:300px;padding:16px;">
+        <h3 style="margin-top:0;font-size:1.05rem;color:#0F172A;">${title}</h3>
+        <div style="font-size:0.9rem;color:#475569;margin-bottom:12px;">
+            Retorno Anual Esperado: <strong style="color:${C.green}">${pct(obj.Return)}</strong><br/>
+            Volatilidad Anual: <strong style="color:${C.red}">${pct(obj.Volatility)}</strong><br/>
+            Sharpe Ratio: <strong>${fmt(obj.Sharpe,3)}</strong>
+        </div>
+        <div style="display:flex;height:24px;width:100%;border-radius:4px;overflow:hidden;margin-bottom:10px;">
+            ${tickers.map(t=> (obj.Weights[t]||0)>0.005 ? `<div style="width:${(obj.Weights[t]||0)*100}%;height:100%;background:${TICKER_COLOR[t]};" title="${t}"></div>` : '').join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+            ${tickers.map(t=> (obj.Weights[t]||0)>0.005 ? `<div style="font-size:0.75rem;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TICKER_COLOR[t]};margin-right:4px;"></span>${t} ${pct(obj.Weights[t]||0,1)}</div>` : '').join('')}
+        </div>
+        <div style="background:#f1f5f9; padding:8px; border-radius:6px; font-size:0.8rem; color:#334155;">
+          <b>Activo dominante:</b> <b>${dominantAsset}</b> recibe la mayor ponderación (${pct(obj.Weights[dominantAsset],1)}). ${logic}
+        </div>
+    </div>`;
+  };
+
+  let corrInterp = highCorrPairs.length > 0
+    ? `Atención: Los pares ${highCorrPairs.join(', ')} tienen correlación alta (>0.6), lo que significa que tienden a subir y bajar juntos. Esto reduce el beneficio de la diversificación, ya que en días de caída general ambos activos caerán simultáneamente.`
+    : `La diversificación es efectiva: ningún par de activos tiene correlación superior a 0.6. Esto significa que cuando un activo cae, los demás no necesariamente lo hacen al mismo tiempo, reduciendo el riesgo total del portafolio.`;
+  if (negCorrPairs.length > 0) corrInterp += ` Adicionalmente, los pares ${negCorrPairs.join(', ')} tienen correlación negativa: cuando uno sube, el otro tiende a bajar. Este comportamiento opuesto actúa como cobertura natural dentro del portafolio.`;
+
+  setContent(`
+    <h1 class="header-gradient">M6 — Optimización de Portafolio (Markowitz)</h1>
+    <p class="page-subtitle">La teoría de Markowitz encuentra la combinación de activos que maximiza el retorno esperado para cada nivel de riesgo asumido (frontera eficiente).</p>
+
+    <div class="tabs" id="m6-tabs">
+      <button class="tab-btn active" onclick="switchTab('m6','graf',this)">💎 Frontera Eficiente</button>
+      <button class="tab-btn"        onclick="switchTab('m6','pesos',this)">⚖️ Pesos Óptimos</button>
+      <button class="tab-btn"        onclick="switchTab('m6','corr',this)">🔗 Correlaciones entre Activos</button>
+    </div>
+    <div id="m6-tab-graf"  class="tab-content card active" style="padding:12px">
+        <div id="ch-frontier"></div>
+        ${(()=>{
+          const wMS = p.Max_Sharpe; const wMV = p.Min_Volatility;
+          const FD = p.Frontier;
+          let frontText, frontType;
+          if (wMS && wMV) {
+            const sharpeMin = FD?.Sharpe?.length ? Math.min(...FD.Sharpe).toFixed(2) : 'N/A';
+            const sharpeMax = FD?.Sharpe?.length ? Math.max(...FD.Sharpe).toFixed(2) : 'N/A';
+            const dominantMS = Object.keys(wMS.Weights).reduce((a,b) => wMS.Weights[a] > wMS.Weights[b] ? a : b);
+            frontText = `De las 10,000 simulaciones (Sharpe: ${sharpeMin} – ${sharpeMax}), el portafolio de tangencia óptimo alcanza SR=${fmt(wMS.Sharpe,2)} con retorno ${pct(wMS.Return,1)} y volatilidad ${pct(wMS.Volatility,1)}. El activo dominante es ${dominantMS} (${pct(wMS.Weights[dominantMS],1)}). Los puntos interiores de la nube son ineficientes: existe alguna combinación en la frontera superior izquierda que ofrece mejor retorno al mismo riesgo, o igual retorno con menor riesgo.`;
+            frontType = 'positive';
+          } else {
+            frontText = "Cada punto representa un portafolio con pesos aleatorios. La frontera eficiente (envolvente superior-izquierda) contiene las únicas combinaciones que maximizan el retorno esperado para cada nivel de volatilidad. Los portafolios interiores son dominados y subóptimos.";
+            frontType = 'neutral';
+          }
+          return getInsight("Frontera Eficiente", "Visualiza decenas de mezclas en fondos. CÓMO LEERLO: La línea superior redondeada alberga los esquemas inmejorables. Combinaciones fuera o debajo de la frontera te regalan altísima volatilidad nociva por pura rentabilidad estancada en cero.", "neutral");
+        })()}
+    </div>
+    <div id="m6-tab-pesos" class="tab-content" style="padding:0">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+            ${wHTML(wMaxS, "⭐ Portafolio de Máximo Sharpe (mejor relación retorno/riesgo)", "Esta combinación maximiza el retorno obtenido por cada unidad de riesgo asumida. Es la opción más eficiente para un inversor que busca equilibrio entre rentabilidad y estabilidad.")}
+            ${wHTML(wMinV, "🛡️ Portafolio de Mínima Volatilidad (máxima protección)", "Esta distribución reduce al máximo las fluctuaciones de la cartera. Ideal para perfiles conservadores que priorizan la estabilidad del capital por encima del retorno potencial.")}
+        </div>
+    </div>
+    <div id="m6-tab-corr"  class="tab-content card" style="padding:16px;">
+        <p style="font-size:.88rem;color:#475569;margin-bottom:12px"><b>Correlación:</b> va de -1 a +1. Valores cercanos a <b>+1</b> = activos que se mueven juntos. Valores cercanos a <b>-1</b> = activos que se mueven en sentido opuesto. <b>0</b> = sin relación. Para diversificar bien, se buscan correlaciones bajas o negativas entre los activos.</p>
+        <details class="collapsible" open>
+          <summary>📋 Matriz de correlación entre activos</summary>
+          <div class="details-body" style="overflow-x:auto">${corrMatrix}</div>
+        </details>
+        ${getInsight("Resumen de Correlaciones", "Jamás pongas tus fichas aliadas de la mano. CÓMO LEERLO: Valores rojos próximos a +1 auguran que al momento de perder caerán hermanados a doble fondo afectando la balanza de todo tu portafolio; elige el azul.", "neutral")}
+    </div>
+    <div class="footer">RiskLab USTA · M6 Fronteras de Optimización</div>`);
+
+  const F = p.Frontier; if (!F) return;
+  Plotly.newPlot('ch-frontier', [
+    { type:'scatter', mode:'markers', name:'Portafolios Simulados (10,000)',
+      x:F.Volatility, y:F.Returns,
+      marker:{ color:F.Sharpe, colorscale:'RdYlGn', size:4, opacity:0.55,
+        colorbar:{title:'Sharpe Ratio', thickness:12, len:0.7} },
+      text:F.Sharpe.map((s,i)=>`Vol: ${(F.Volatility[i]*100).toFixed(1)}%<br>Ret: ${(F.Returns[i]*100).toFixed(1)}%<br>Sharpe: ${fmt(s,3)}`),
+      hovertemplate:'%{text}<extra></extra>'
+    },
+    { type:'scatter', mode:'markers+text', name:`Máx. Sharpe (SR=${fmt(wMaxS.Sharpe,2)})`,
+      x:[wMaxS.Volatility], y:[wMaxS.Return],
+      text:[`SR ${fmt(wMaxS.Sharpe,2)}`], textposition:'top center',
+      marker:{ color:C.red, size:16, symbol:'star', line:{color:'#fff',width:1.5} }
+    },
+    { type:'scatter', mode:'markers+text', name:`Mín. Volatilidad (${(wMinV.Volatility*100).toFixed(1)}%)`,
+      x:[wMinV.Volatility], y:[wMinV.Return],
+      text:[`Vol ${(wMinV.Volatility*100).toFixed(1)}%`], textposition:'bottom center',
+      marker:{ color:C.green, size:14, symbol:'diamond', line:{color:'#fff',width:1.5} }
+    }
+  ], { ...PB, height:480, margin:{t:50,b:50,l:70,r:20},
+    xaxis:{...PB.xaxis, title:'Volatilidad Anual (%)', tickformat:'.1%'},
+    yaxis:{...PB.yaxis, title:'Retorno Anual (%)', tickformat:'.1%'},
+    title:{text:`Frontera Eficiente de Markowitz — ${tickers.length} Activos · 10,000 Simulaciones`,font:{size:13}},
+    legend:{...PB.legend, orientation:'h', y:-0.12}
+  }, PCFG);
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M7 — SEÑALES Y ALERTAS
+// ═══════════════════════════════════════════
+function renderM7() {
+  const tickers = state.activeTickers;
+  let allRows = "";
+  
+  let sigSell = 0; let sigBuy = 0;
+
+  tickers.forEach(t => {
+      const d = getD('signals', t);
+      if (!d || !d.signals || !d.signals.length) return;
+      const tc = TICKER_COLOR[t];
+      d.signals.forEach(s => {
+          const isBuy = s.type === "Buy";
+          if (isBuy) sigBuy++; else sigSell++;
+          const clr = isBuy ? '#10b981' : '#dc2626'; 
+          const bg  = isBuy ? '#ecfdf5' : '#fcf3f3'; 
+          const icn = isBuy ? '+ PÁNICO COMPRA' : '- PÁNICO VENTA';
+
+          let finalExpl = '';
+          const mup = s.msg.toUpperCase();
+          if (mup.includes('BANDA SUPERIOR') || mup.includes('BANDA SUPERIOR')) {
+              finalExpl = "El precio rompió el límite superior de desviaciones estándar permitidas. La corrección bajista ocurre como reversión a la normalidad estadística.";
+          } else if (mup.includes('SOBRECOMPRA')) {
+              finalExpl = "El indicador RSI señala saturación de compradores. El mercado se quedó sin fuerza para seguir subiendo, abriendo la puerta a ventas de liquidación.";
+          } else if (mup.includes('SOBREVENTA')) {
+              finalExpl = "El activo fue castigado excesivamente. El agotamiento de ventas sugiere que pronto habrá un rebote orgánico.";
+          } else if (mup.includes('BANDA INFERIOR')) {
+              finalExpl = "El precio perforó el soporte mínimo esperado, indicando un nivel de pánico que suele atraer compradores fuertes por los bajos precios.";
+          } else if (mup.includes('GOLDEN CROSS') || mup.includes('CRUCE ALCISTA')) {
+              finalExpl = "Las tendencias de corto plazo superaron a las de largo plazo, marcando inicio de un posible ciclo macro alcista sostenido.";
+          } else if (mup.includes('DEATH CROSS') || mup.includes('CRUCE BAJISTA')) {
+              finalExpl = "Intersección negativa donde el momentum cortó por debajo de la media histórica, indicando un cambio estructural riesgoso.";
+          } else {
+              finalExpl = s.explanation || '';
+              if (finalExpl.includes('💡')) finalExpl = finalExpl.replace(/💡\s*/g, '');
+          }
+
+          allRows += `<div style="padding:10px 14px;margin-bottom:8px;border-left:3px solid ${clr};background:${bg};">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <div>
+                      <span style="font-weight:800;color:${tc};margin-right:8px;font-size:0.95rem">${t}</span>
+                      <span style="font-weight:700;color:#0F172A;font-size:0.85rem">${s.msg.toUpperCase()}</span>
+                  </div>
+                  <span style="font-weight:800;color:${clr};font-size:0.75rem;white-space:nowrap;margin-left:10px">${icn}</span>
+              </div>
+              ${finalExpl ? `<div style="font-size:0.75rem; color:#64748b; margin-top:2px;">${finalExpl}</div>` : ''}
+          </div>`;
+      });
+  });
+
+  const totalSigs = sigBuy + sigSell;
+  let summary, typeSumm;
+  if (totalSigs === 0) {
+    summary = `Total pacifismo y llanura del ecosistema (0 registros perversos vs 0 entradas en falso). Literalmente no existen fluctuaciones graves, canales rasgados ni divergencias, sugiriendo un balance de inactividad que no exige tu intromisión.`;
+    typeSumm = "neutral";
+  } else if (sigBuy > sigSell) {
+    summary = `Contundente fiebre alcista generalizada (${sigBuy} registros técnicos propulsivos vs ${sigSell} salidas en falso). Literalmente, las líneas móviles veloces, suelos de bandas y macrodirecciones están resurgiendo como misiles que superan las cúpulas en simultáneo, inyectando flujos masivos de compra en toda la industria.`;
+    typeSumm = "positive";
+  } else if (sigSell > sigBuy) {
+    summary = `Grave predominancia vendedora sistemática (${sigSell} registros perversos técnicos vs ${sigBuy} entradas en falso). Literalmente, las líneas móviles lentas, bandas lognormales altas y macrodirecciones están confluyendo y rompiendo por debajo en varios canales a la vez, advirtiendo salidas de flujos en forma masiva.`;
+    typeSumm = "negative";
+  } else {
+    summary = `Ambiente de colisión algorítmica (${sigBuy} señales compradoras luchando contra ${sigSell} alertas vendedoras en crudo). El ecosistema entero está fragmentado por polarización matemática en corto tiempo. Conviene salvaguardar capital hasta evidenciar la rendición del pulso macroeconómico subyacente.`;
+    typeSumm = "warning";
+  }
+
+  setContent(`
+    <h1 class="header-gradient" style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em;">M7 — Puesto de Operaciones Táctica y Transaccional</h1>
+    <p class="page-subtitle" style="font-size: 0.95rem; color: #475569;">Algoritmo unificado de escrutinio técnico simultáneo multi-activos evaluando eventos lógicos puros de cruce.</p>
+
+    ${getInsight("📉 Métricas Confluentes Generales de Gatillo Táctico", summary, typeSumm)}
+
+    <div class="card" style="padding:16px; max-width:820px; margin:20px 0;">
+        <h3 style="margin-top:0;margin-bottom:16px;color:#0F172A;font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:6px;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            Registro de Terminal Oficial Interdiario
+        </h3>
+        ${allRows || `<div style="background:#f0fdf4;border-left:3px solid #10b981;padding:12px;color:#166534;font-size:.85rem;">
+          ✅ Bandeja Limpia. Sistemas algorítmicos transaccionales descartaron anomalías puras.
+        </div>`}
+    </div>
+
+    <div class="footer">RiskLab USTA · M7 Operatividad Centralizada</div>`);
+}
+
+
+
+// ═══════════════════════════════════════════
+//  M8 — PORTFOLIO vs. BENCHMARK
+// ═══════════════════════════════════════════
+function renderM8() {
+  const d = getD('benchmark');
+  if (!d || !d.Dates) { noData('Benchmark inoperante, sin traza base SP500'); return; }
+  const pdx = d.Port; const bdx = d.Bench;
+
+  const outperforming = pdx.Ann_Return > bdx.Ann_Return;
+  const safer = pdx.Ann_Volatility < bdx.Ann_Volatility;
+  
+  let valInsight = "";
+  if (outperforming && safer) valInsight = `El portafolio óptimo superó al S&P 500 en retorno (+${pct(pdx.Ann_Return - bdx.Ann_Return,2)} de diferencia anual) y además tuvo menor volatilidad. Esto es el escenario ideal: más ganancia con menos riesgo, lo que valida la diversificación del portafolio construido.`;
+  else if (outperforming && !safer) valInsight = `El portafolio generó mayor retorno que el S&P 500 (+${pct(pdx.Ann_Return - bdx.Ann_Return,2)} al año), pero asumiendo más volatilidad. Es un intercambio válido si el inversor está cómodo con mayores fluctuaciones a cambio de mayor rentabilidad potencial.`;
+  else if (!outperforming && safer) valInsight = `El portafolio obtuvo menor retorno que el benchmark, pero con menor volatilidad. Actúa como portafolio defensivo: protege mejor en caídas pero crece más lento en mercados alcistas. Útil para perfiles conservadores.`;
+  else valInsight = `El portafolio actual rindió por debajo del S&P 500 y con mayor volatilidad. Esto sugiere revisar la composición de activos: la diversificación actual no está compensando adecuadamente el riesgo adicional frente a simplemente indexarse al mercado.`;
+
+  setContent(`
+    <h1 class="header-gradient">M8 — Portafolio vs. Benchmark S&P 500</h1>
+    <p class="page-subtitle">Comparación del portafolio óptimo (máximo Sharpe) frente al índice S&P 500 como referencia de mercado.</p>
+
+    ${getInsight("Desempeño del Portafolio", "Un portafolio estructurado compite frente a inversiones aburridas (como solo S&P 500). CÓMO LEERLO: Compara las métricas verdes frente al benchmark; si diversificar no te dio victoria, el sufrimiento por la variación no valió la pena.", "neutral")}
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px,1fr));gap:15px;margin-bottom:20px">
+        <div class="card" style="padding:18px;border-top:3px solid ${C.blue}">
+            <h3 style="margin:0 0 12px;font-size:0.95rem;color:#0F172A;font-weight:700">Portafolio Óptimo (Máx. Sharpe)</h3>
+            ${statRow('Retorno Anual', pct(pdx.Ann_Return), pdx.Ann_Return>0?C.green:C.red)}
+            ${statRow('Volatilidad Anual', pct(pdx.Ann_Volatility))}
+            ${statRow('Máx. Drawdown', pct(pdx.Max_Drawdown,2), C.red)}
+            ${statRow('Sharpe Ratio', fmt(pdx.Sharpe,2), C.blue)}
+        </div>
+        <div class="card" style="padding:18px;border-top:3px solid #9CA3AF">
+            <h3 style="margin:0 0 12px;font-size:0.95rem;color:#0F172A;font-weight:700">Benchmark — S&amp;P 500</h3>
+            ${statRow('Retorno Anual', pct(bdx.Ann_Return), bdx.Ann_Return>0?C.green:C.red)}
+            ${statRow('Volatilidad Anual', pct(bdx.Ann_Volatility))}
+            ${statRow('Máx. Drawdown', pct(bdx.Max_Drawdown,2), C.red)}
+            ${statRow('Sharpe Ratio', fmt(bdx.Sharpe,2), C.blue)}
+        </div>
+        <div class="card" style="padding:18px;background:#f8fafc;border:1px solid #cbd5e1;">
+            <h3 style="margin:0 0 12px;font-size:0.95rem;color:#0F172A;font-weight:700">Portafolio vs. Benchmark</h3>
+            ${statRow('Alpha de Jensen (Anual)', pct(d.Jensen_Alpha), d.Jensen_Alpha>0?C.green:C.red)}
+            ${statRow('Beta del Portafolio', fmt(d.Beta,2))}
+            ${statRow('Tracking Error Anual', pct(d.Tracking_Error))}
+            ${statRow('Information Ratio', fmt(d.Information_Ratio,2), d.Information_Ratio>0?C.green:C.red)}
+            ${statRow('R²', fmt(d.R_Squared,3))}
+        </div>
+    </div>
+    
+    <div class="tabs" id="m8-tabs">
+      <button class="tab-btn active" onclick="switchTab('m8','cum',this)">📈 Rendimiento Crecimiento Compuesto Vivo</button>
+      <button class="tab-btn"        onclick="switchTab('m8','dd',this)">📉 Disminución Traumática Base Drawdown</button>
+    </div>
+    <div id="m8-tab-cum" class="tab-content card active" style="padding:12px">
+        <div id="ch-cum"></div>
+        ${(()=>{
+          const ir = d.Information_Ratio;
+          const te = d.Tracking_Error;
+          const alpha = d.Jensen_Alpha;
+          const cumGap = d.Port_Cum && d.Bench_Cum ? d.Port_Cum[d.Port_Cum.length-1] - d.Bench_Cum[d.Bench_Cum.length-1] : null;
+          let cumText = `Information Ratio: ${fmt(ir,2)} (IR > 0.5 = buena gestión activa; IR > 1.0 = excelente). `;
+          cumText += `Tracking Error anual: ${pct(te,2)} — mide cuánto se desvía la trayectoria del portafolio del benchmark. `;
+          if (cumGap !== null) cumText += `Diferencial acumulado al final del período: ${cumGap >= 0 ? '+' : ''}${fmt(cumGap,1)} puntos base (portafolio vs. S&P 500 base 100). `;
+          cumText += alpha > 0 ? `Alpha de Jensen positivo (${pct(alpha,2)}/año): el portafolio generó retorno adicional por encima del exigido por su beta.` : `Alpha de Jensen negativo (${pct(alpha,2)}/año): el portafolio no compensó adecuadamente el riesgo sistemático asumido.`;
+          return getInsight("Rendimiento Compuesto Superior", "Comprueba gráficamente la victoria. CÓMO LEERLO: Si la traza general dista del promedio neutral subiendo de sobremanera significa que has sido mejor inversor gestor frente los esquemas simplistas estándar garantizados.", "neutral");
+        })()}
+    </div>
+    <div id="m8-tab-dd"  class="tab-content card" style="padding:12px">
+        <div id="ch-dd"></div>
+        ${(()=>{
+          const portDD = pdx.Max_Drawdown;
+          const benchDD = bdx.Max_Drawdown;
+          const ddDiff = portDD - benchDD; // both negative; less negative = smaller drawdown
+          let ddText = `Máx. Drawdown portafolio: ${pct(portDD,2)} | Benchmark S&P 500: ${pct(benchDD,2)}. `;
+          if (portDD > benchDD) { // less negative = smaller absolute drawdown
+            ddText += `El portafolio absorbió caídas ${pct(Math.abs(ddDiff),2)} menores que el benchmark en el peor momento del período, evidenciando un efecto de diversificación efectivo ante shocks sistémicos.`;
+          } else {
+            ddText += `El portafolio sufrió drawdowns ${pct(Math.abs(ddDiff),2)} más profundos que el benchmark, indicando que la concentración en activos volátiles amplificó las caídas sistémicas en lugar de amortigüarlas.`;
+          }
+          ddText += ` Sharpe portafolio: ${fmt(pdx.Sharpe,2)} vs. benchmark: ${fmt(bdx.Sharpe,2)}.`;
+          return getInsight("Fosas Personales Admisibles (Drawdown)", "CÓMO LEERLO: Las zonas rojas bajo 0 exponen visualmente los meses infartantes completos sufridos aguantando una desvalorización máxima tolerada soportada tras tocar pico y romper el fondo antes de resurgir sanamente por un horizonte verde y prospero.", "neutral");
+        })()}
+    </div>
+    <div class="footer">RiskLab USTA · M8 Desempeño Estratégico</div>`);
+
+  Plotly.newPlot('ch-cum', [
+    { type:'scatter', x:d.Dates, y:d.Bench_Cum, name:'S&P 500 (Benchmark)', line:{color:'#9CA3AF', width:2} },
+    { type:'scatter', x:d.Dates, y:d.Port_Cum,  name:'Portafolio Óptimo (Máx. Sharpe)', line:{color:C.blue, width:2.5} }
+  ], { ...PB, height:380, margin:{t:40,b:40,l:60,r:20},
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'Valor Acumulado (Base = 100)'},
+    title:{text:'Retorno Acumulado: Portafolio Óptimo vs. S&P 500',font:{size:13}},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:100,y1:100,line:{color:'#94A3B8',dash:'dot',width:1}}]
+  });
+  Plotly.newPlot('ch-dd', [
+    { type:'scatter', x:d.Dates, y:d.Bench_DD, name:'S&P 500', line:{color:'#9CA3AF', width:1.5}, fill:'tozeroy', fillcolor:'rgba(156,163,175,0.15)' },
+    { type:'scatter', x:d.Dates, y:d.Port_DD, name:'Portafolio Óptimo', line:{color:C.red, width:2}, fill:'tozeroy', fillcolor:'rgba(220,38,38,0.15)' }
+  ], { ...PB, height:340, margin:{t:40,b:40,l:65,r:20},
+    xaxis:{...PB.xaxis, title:''},
+    yaxis:{...PB.yaxis, title:'Drawdown (%)', tickformat:'.1%'},
+    title:{text:'Drawdown: Portafolio Óptimo vs. S&P 500',font:{size:13}}
+  });
+}
+
+
+
+// ─────────────────────────────────────────
+//  M9 — OPORTUNIDADES DE MEJORA
+// ─────────────────────────────────────────
+function renderM9() {
+  const cards = [
+    {
+      icon: '🤖',
+      title: 'Modelos Predictivos con ML',
+      tags: ['Machine Learning', 'Alta Prioridad'],
+      tagColors: ['#dd5e89', '#f7a35c'],
+      body: 'Incorporar modelos LSTM, XGBoost o Random Forest para predicción de precios y volatilidad. Estos modelos capturan patrones no lineales que GARCH no puede detectar.',
+      impact: 'Alto',
+      effort: 'Alto',
+    },
+    {
+      icon: '🌐',
+      title: 'Análisis de Sentimiento NLP',
+      tags: ['NLP', 'Datos Alternativos'],
+      tagColors: ['#4e8cde', '#9b7fe8'],
+      body: 'Integrar análisis de noticias financieras y redes sociales (Twitter/X, Reddit) con modelos de lenguaje para generar señales adicionales basadas en sentimiento del mercado.',
+      impact: 'Alto',
+      effort: 'Medio',
+    },
+    {
+      icon: '⚡',
+      title: 'Datos en Tiempo Real',
+      tags: ['WebSockets', 'Streaming'],
+      tagColors: ['#52b788', '#4e8cde'],
+      body: 'Conectar WebSockets a brokers o APIs como Alpaca, Interactive Brokers o Polygon.io para actualizar indicadores técnicos y señales en tiempo real sin necesidad de recargar.',
+      impact: 'Alto',
+      effort: 'Alto',
+    },
+    {
+      icon: '🛡️',
+      title: 'Backtesting Automatizado',
+      tags: ['Backtesting', 'Validación'],
+      tagColors: ['#f7a35c', '#52b788'],
+      body: 'Implementar motor de backtesting con Backtrader o VectorBT para validar históricamente las señales de RSI, MACD y Bollinger antes de usarlas en decisiones reales.',
+      impact: 'Alto',
+      effort: 'Medio',
+    },
+    {
+      icon: '📊',
+      title: 'Stress Testing y Escenarios',
+      tags: ['Riesgo', 'Regulatorio'],
+      tagColors: ['#dd5e89', '#9b7fe8'],
+      body: 'Agregar simulaciones de escenarios extremos: crisis 2008, COVID-19, Flash Crash. Permite evaluar cómo respondería el portafolio ante shocks sistémicos similares.',
+      impact: 'Medio',
+      effort: 'Medio',
+    },
+    {
+      icon: '🔔',
+      title: 'Sistema de Alertas Automáticas',
+      tags: ['Notificaciones', 'Automatización'],
+      tagColors: ['#4e8cde', '#f7a35c'],
+      body: 'Enviar alertas por email, Telegram o Slack cuando se activen señales críticas (RSI extremo, cruce MACD, ruptura de bandas de Bollinger) para reacción oportuna.',
+      impact: 'Medio',
+      effort: 'Bajo',
+    },
+    {
+      icon: '🏦',
+      title: 'Más Clases de Activos',
+      tags: ['Diversificación', 'Expansión'],
+      tagColors: ['#52b788', '#dd5e89'],
+      body: 'Extender el análisis a ETFs, bonos, criptomonedas y divisas (Forex). La correlación entre clases de activos distintas puede mejorar la frontera eficiente de Markowitz.',
+      impact: 'Medio',
+      effort: 'Bajo',
+    },
+    {
+      icon: '📱',
+      title: 'Versión Móvil Responsiva',
+      tags: ['UX', 'Accesibilidad'],
+      tagColors: ['#9b7fe8', '#4e8cde'],
+      body: 'Adaptar el dashboard para pantallas pequeñas con diseño mobile-first. Incluir gestos táctiles para navegar entre módulos y visualizaciones optimizadas para móvil.',
+      impact: 'Bajo',
+      effort: 'Medio',
+    },
+  ];
+
+  const impactColor = { 'Alto': C.green, 'Medio': C.orange, 'Bajo': '#9CA3AF' };
+  const effortColor = { 'Alto': C.red, 'Medio': C.orange, 'Bajo': C.green };
+
+  const cardHTML = cards.map(c => `
+    <div class="fw-card">
+      <div style="font-size:2rem;margin-bottom:10px">${c.icon}</div>
+      <h3 style="margin:0 0 8px;font-size:1rem;font-weight:700;color:#1e1b4b">${c.title}</h3>
+      <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:5px">
+        ${c.tags.map((tag, i) => `<span class="fw-tag" style="background:${c.tagColors[i]}20;color:${c.tagColors[i]};border:1px solid ${c.tagColors[i]}40">${tag}</span>`).join('')}
+      </div>
+      <p style="font-size:0.85rem;color:#475569;line-height:1.55;margin:0 0 12px">${c.body}</p>
+      <div style="display:flex;gap:12px;font-size:0.78rem;border-top:1px solid #e2e8f0;padding-top:10px;margin-top:auto">
+        <span>Impacto: <strong style="color:${impactColor[c.impact]}">${c.impact}</strong></span>
+        <span>Esfuerzo: <strong style="color:${effortColor[c.effort]}">${c.effort}</strong></span>
+      </div>
+    </div>`).join('');
+
+  setContent(`
+    <h1 class="header-gradient">M9 — Oportunidades de Mejora</h1>
+    <p class="page-subtitle">Hoja de ruta de mejoras propuestas para evolucionar RiskLab USTA hacia una plataforma de análisis cuantitativo de nivel institucional.</p>
+
+    ${getInsight("¿Por qué mejorar continuamente?", "RiskLab USTA es una plataforma funcional y sólida, pero los mercados financieros evolucionan constantemente. Incorporar machine learning, datos alternativos y backtesting automatizado puede transformar este dashboard de una herramienta de análisis descriptivo a un sistema de soporte de decisiones de inversión con validación estadística rigurosa.", "positive")}
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(290px,1fr));gap:18px;margin-top:20px">
+      ${cardHTML}
+    </div>
+
+    <div class="card" style="margin-top:24px;padding:20px;background:linear-gradient(135deg,#4b164c08,#dd5e8910);border:1px solid #dd5e8930">
+      <h3 style="margin:0 0 10px;font-size:0.95rem;font-weight:700;color:#4b164c">📌 Prioridades Recomendadas</h3>
+      <p style="font-size:0.85rem;color:#475569;margin:0;line-height:1.6">
+        <strong>Corto plazo (1-3 meses):</strong> Alertas automáticas + más clases de activos — alto impacto con esfuerzo moderado.<br>
+        <strong>Mediano plazo (3-6 meses):</strong> Backtesting automatizado + Análisis de sentimiento NLP — requieren arquitectura pero transforman el análisis.<br>
+        <strong>Largo plazo (6-12 meses):</strong> Modelos ML + datos en tiempo real — inversión alta con retorno institucional.
+      </p>
+    </div>
+
+    <div class="footer">RiskLab USTA · M9 Hoja de Ruta Estratégica</div>`);
+}
+
+
+// ─────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (!D) {
+    document.getElementById('gen-info').innerHTML =
+      `⚠️ Sin datos<br><code style="font-size:.62rem;font-family:monospace">python generate_data.py</code>`;
+    noData('Ejecuta generate_data.py primero');
+    return;
+  }
+
+  D.tickers.forEach((t, i) => { TICKER_COLOR[t] = PALETTE[i % PALETTE.length]; });
+  state.activeTickers = [...D.tickers];
+  buildChips();
+
+  // Set today as default max for date inputs
+  const todayStr = new Date().toISOString().slice(0, 10);
+  document.getElementById('p-start').setAttribute('max', todayStr);
+  document.getElementById('p-end').setAttribute('max', todayStr);
+
+  // Check API status asynchronously
+  checkAPIStatus();
+
+  const rf = D.rf_rate != null ? (D.rf_rate*100).toFixed(2)+'%' : 'N/A';
+  document.getElementById('gen-info').innerHTML =
+    `🕐 Generado:<br>${D.generated_at}<br>💵 RF: ${rf} (${D.rf_source||''})<br>
+    <span style="opacity:.6;font-size:.62rem">python generate_data.py<br>para actualizar</span>`;
+
+  renderPage();
+});
+</script>
+</body>
+</html>
