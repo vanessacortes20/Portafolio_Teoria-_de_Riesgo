@@ -7,22 +7,42 @@ from __future__ import annotations
 import json
 import math
 import os
+import secrets
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
+import bcrypt
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+import re as _re
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from scipy import stats as scipy_stats
 from starlette.responses import Response
 
 from api.data import get_historical_data
+from api.database import (
+    create_user,
+    get_all_users,
+    get_reset_token,
+    get_user_by_cedula,
+    get_user_by_email,
+    get_user_by_id,
+    get_user_by_username,
+    init_db,
+    mark_token_used,
+    save_reset_token,
+    seed_demo_users,
+    update_last_login,
+    update_user_password,
+)
 from api.logic import (
     calculate_bollinger_bands,
     calculate_capm,
@@ -36,11 +56,69 @@ from api.logic import (
     fit_garch_models,
     generate_signals,
     get_descriptive_stats,
+    kupiec_test,
     optimize_portfolio,
+    optimize_portfolio_target_return,
     perform_normality_tests,
 )
 
 load_dotenv()
+
+# ── Auth config ──────────────────────────────────────────────────────────────
+_SECRET_KEY = os.getenv("JWT_SECRET", secrets.token_hex(32))
+_ALGORITHM  = "HS256"
+_TOKEN_TTL  = int(os.getenv("JWT_TTL_MINUTES", "60"))
+
+_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+def _hash(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify(plain: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
+
+
+def _create_token(data: dict, expires_minutes: int = _TOKEN_TTL) -> str:
+    payload = data.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    return jwt.encode(payload, _SECRET_KEY, algorithm=_ALGORITHM)
+
+
+def _decode_token(token: str) -> dict:
+    return jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM])
+
+
+def get_current_user(token: str = Depends(_oauth2)) -> dict:
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="No autenticado.", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        payload = _decode_token(token)
+        user_id: int = payload.get("sub")
+        if user_id is None:
+            raise ValueError
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Token inválido o expirado.", headers={"WWW-Authenticate": "Bearer"})
+    user = get_user_by_id(int(user_id))
+    if not user or not user["is_active"]:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo o no encontrado.")
+    return user
+
+
+def require_admin(current: dict = Depends(get_current_user)) -> dict:
+    if current.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol admin.")
+    return current
+
+
+CurrentUser  = Annotated[dict, Depends(get_current_user)]
+AdminUser    = Annotated[dict, Depends(require_admin)]
 
 # ── Importar funciones de cómputo completo desde generate_data.py ─────────────
 _project_root = Path(__file__).parent.parent
@@ -75,6 +153,169 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def _startup():
+    init_db()
+    seed_demo_users(_hash)
+
+
+# ── Auth schemas ──────────────────────────────────────────────────────────────
+
+_PHONE_RE = _re.compile(r"^\+?[\d\s\-\(\)]{7,20}$")
+
+
+class RegisterRequest(BaseModel):
+    full_name:        str      = Field(..., min_length=2, max_length=100)
+    last_name:        str      = Field(..., min_length=2, max_length=100)
+    phone:            str      = Field(..., min_length=7, max_length=20)
+    cedula:           str      = Field(..., min_length=4, max_length=20)
+    email:            EmailStr
+    username:         str      = Field(..., min_length=3, max_length=50,
+                                       pattern=r"^[a-zA-Z0-9_.\-]+$")
+    password:         str      = Field(..., min_length=8)
+    confirm_password: str      = Field(..., min_length=8)
+
+    @field_validator("full_name", "last_name", mode="before")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        v = str(v).strip()
+        if not v:
+            raise ValueError("Este campo no puede estar vacío.")
+        return v
+
+    @field_validator("cedula", mode="before")
+    @classmethod
+    def _strip_cedula(cls, v: str) -> str:
+        return str(v).strip()
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _validate_phone(cls, v: str) -> str:
+        v = str(v).strip()
+        if not _PHONE_RE.match(v):
+            raise ValueError("Formato de teléfono inválido (ej: 3001234567).")
+        return v
+
+    @model_validator(mode="after")
+    def _passwords_match(self) -> "RegisterRequest":
+        if self.password != self.confirm_password:
+            raise ValueError("Las contraseñas no coinciden.")
+        return self
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserProfile(BaseModel):
+    id:         int
+    username:   str
+    email:      str
+    full_name:  str
+    last_name:  str
+    phone:      str
+    cedula:     Optional[str]
+    role:       str
+    is_active:  int
+    created_at: str
+    last_login: Optional[str]
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token:        str
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password:     str = Field(..., min_length=8)
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+@app.post("/auth/register", response_model=TokenResponse, summary="Registro de nuevo usuario")
+def auth_register(body: RegisterRequest):
+    if get_user_by_username(body.username):
+        raise HTTPException(400, "El nombre de usuario ya está en uso.")
+    if get_user_by_email(body.email):
+        raise HTTPException(400, "El correo electrónico ya está registrado.")
+    if get_user_by_cedula(body.cedula):
+        raise HTTPException(400, "La cédula ya está registrada.")
+    user = create_user(
+        username=body.username,
+        email=body.email,
+        hashed_password=_hash(body.password),
+        full_name=body.full_name,
+        last_name=body.last_name,
+        phone=body.phone,
+        cedula=body.cedula,
+    )
+    token = _create_token({"sub": str(user["id"]), "role": user["role"]})
+    return TokenResponse(access_token=token)
+
+
+@app.post("/auth/login", response_model=TokenResponse, summary="Inicio de sesión")
+def auth_login(form: OAuth2PasswordRequestForm = Depends()):
+    user = get_user_by_username(form.username) or get_user_by_email(form.username)
+    if not user or not _verify(form.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user["is_active"]:
+        raise HTTPException(400, "Cuenta inactiva.")
+    update_last_login(user["id"])
+    token = _create_token({"sub": str(user["id"]), "role": user["role"]})
+    return TokenResponse(access_token=token)
+
+
+@app.get("/auth/me", response_model=UserProfile, summary="Perfil del usuario autenticado")
+def auth_me(current: CurrentUser):
+    return {k: v for k, v in current.items() if k != "hashed_password"}
+
+
+@app.post("/auth/change-password", summary="Cambiar contraseña")
+def auth_change_password(body: ChangePasswordRequest, current: CurrentUser):
+    if not _verify(body.current_password, current["hashed_password"]):
+        raise HTTPException(400, "Contraseña actual incorrecta.")
+    update_user_password(current["id"], _hash(body.new_password))
+    return {"message": "Contraseña actualizada correctamente."}
+
+
+@app.post("/auth/reset-password", summary="Solicitar restablecimiento de contraseña")
+def auth_reset_request(body: PasswordResetRequest):
+    user = get_user_by_email(body.email)
+    if not user:
+        return {"message": "Si el correo está registrado, recibirás instrucciones."}
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.utcnow() + timedelta(hours=1)).isoformat(timespec="seconds")
+    save_reset_token(user["id"], token, expires)
+    return {"message": "Token generado. Úsalo en /auth/reset-password/confirm.", "reset_token": token}
+
+
+@app.post("/auth/reset-password/confirm", summary="Confirmar restablecimiento con token")
+def auth_reset_confirm(body: PasswordResetConfirm):
+    record = get_reset_token(body.token)
+    if not record:
+        raise HTTPException(400, "Token inválido o ya utilizado.")
+    if datetime.fromisoformat(record["expires_at"]) < datetime.utcnow():
+        raise HTTPException(400, "Token expirado.")
+    update_user_password(record["user_id"], _hash(body.new_password))
+    mark_token_used(body.token)
+    return {"message": "Contraseña restablecida correctamente."}
+
+
+@app.get("/auth/users", summary="Listar todos los usuarios — solo admin")
+def auth_list_users(_admin: AdminUser):
+    return get_all_users()
+
+
 # ─── Configuración centralizada ───────────────────────────────────────────────
 
 class AppConfig(BaseModel):
@@ -102,8 +343,7 @@ ConfigDep = Annotated[AppConfig, Depends(get_app_config)]
 
 
 # ─── Rango de fechas disponible ───────────────────────────────────────────────
-# Coincide con el período de datos generado en data.js
-DATA_MIN_DATE = date(2024, 4, 17)   # inicio de datos disponibles
+DATA_MIN_DATE = date(2020, 1, 1)   # inicio mínimo — Yahoo Finance tiene datos desde 2020
 DATA_MAX_DATE = date.today()         # no se pueden solicitar datos futuros
 
 
@@ -112,7 +352,7 @@ DATA_MAX_DATE = date.today()         # no se pueden solicitar datos futuros
 def validate_date_range(
     start_date: date | None = Query(
         None,
-        description="Fecha de inicio (YYYY-MM-DD). Mínimo: 2024-04-17.",
+        description="Fecha de inicio (YYYY-MM-DD). Mínimo: 2020-01-01.",
     ),
     end_date: date | None = Query(
         None,
@@ -445,8 +685,8 @@ def get_risk_analysis(
                 }
             return out
 
-        var_95  = _annualize(calculate_var_cvar(ret, confidence=var_p["confidence"],        n_simulations=var_p["n_simulations"]))
-        var_99  = _annualize(calculate_var_cvar(ret, confidence=min(var_p["confidence"] + 0.04, 0.99), n_simulations=var_p["n_simulations"]))
+        var_95  = _annualize(calculate_var_cvar(ret, confidence=var_p["confidence"], n_simulations=var_p["n_simulations"]))
+        var_99  = _annualize(calculate_var_cvar(ret, confidence=0.99,               n_simulations=var_p["n_simulations"]))
 
         return json_response({
             "capm":    _safe_json(capm_stats),
@@ -477,11 +717,100 @@ def get_portfolio_optimization(
             raise HTTPException(500, "No hay suficientes activos con datos disponibles.")
 
         df_rets = pd.DataFrame(all_rets).dropna()
-        return json_response(optimize_portfolio(df_rets))
+        return json_response(optimize_portfolio(df_rets, rf_rate=config.default_rf))
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(500, str(exc))
+
+
+@app.get("/api/v1/risk/{ticker}/backtest", summary="Backtesting VaR — Test de Kupiec — M5")
+def get_var_backtest(
+    ticker: str,
+    dates: DateRangeDep,
+    var_p: VaRParamsDep,
+):
+    try:
+        data = get_historical_data(ticker, **dates)
+        if data is None:
+            raise HTTPException(404, f"No se encontraron datos para '{ticker}'.")
+
+        ret, _ = calculate_returns(data)
+        ret = ret.replace([np.inf, -np.inf], np.nan).dropna()
+        var_result = calculate_var_cvar(ret, confidence=var_p["confidence"], n_simulations=var_p["n_simulations"])
+
+        backtesting = {}
+        for method in ("Historico", "Parametrico", "Montecarlo"):
+            var_val = var_result[method]["VaR"]
+            backtesting[method] = kupiec_test(ret, var_val, var_p["confidence"])
+
+        return json_response({
+            "ticker":        ticker,
+            "confidence":    var_p["confidence"],
+            "backtesting":   backtesting,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/v1/portfolio/target", summary="Portafolio por Rendimiento Objetivo — M6")
+def get_portfolio_target_return(
+    target_return: float = Query(..., ge=-0.5, le=2.0, description="Rendimiento anual objetivo (ej: 0.15 = 15%)"),
+    dates: DateRangeDep = Depends(validate_date_range),
+    config: ConfigDep = Depends(get_app_config),
+):
+    try:
+        all_rets: dict[str, pd.Series] = {}
+        for t in config.tickers:
+            data = get_historical_data(t, **dates)
+            if data is not None:
+                ret, _ = calculate_returns(data)
+                all_rets[t] = ret
+
+        if len(all_rets) < 2:
+            raise HTTPException(500, "No hay suficientes activos con datos disponibles.")
+
+        df_rets = pd.DataFrame(all_rets).dropna()
+        result  = optimize_portfolio_target_return(df_rets, target_return, rf_rate=config.default_rf)
+        return json_response(result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/v1/macro", summary="Indicadores macroeconómicos de contexto — M8")
+def get_macro_indicators():
+    """Devuelve tasa libre de riesgo, rendimiento del Tesoro a 10 años y retorno YTD del S&P 500."""
+    import yfinance as yf
+    result: dict = {"as_of": date.today().isoformat()}
+
+    try:
+        irx_hist = yf.Ticker("^IRX").history(period="5d")
+        result["rf_rate"] = float(irx_hist["Close"].iloc[-1]) / 100 if not irx_hist.empty else 0.04
+        result["rf_source"] = "^IRX T-Bill 13 sem."
+    except Exception:
+        result["rf_rate"] = 0.04
+        result["rf_source"] = "default"
+
+    try:
+        tnx_hist = yf.Ticker("^TNX").history(period="5d")
+        result["treasury_10y"] = float(tnx_hist["Close"].iloc[-1]) / 100 if not tnx_hist.empty else None
+    except Exception:
+        result["treasury_10y"] = None
+
+    try:
+        spy_hist = yf.Ticker("^GSPC").history(period="ytd")
+        if not spy_hist.empty and len(spy_hist) > 1:
+            result["spx_ytd"] = float(spy_hist["Close"].iloc[-1] / spy_hist["Close"].iloc[0] - 1)
+        else:
+            result["spx_ytd"] = None
+    except Exception:
+        result["spx_ytd"] = None
+
+    return json_response(result)
 
 
 @app.get("/api/v1/signals/{ticker}", summary="Señales técnicas automáticas — M7")
