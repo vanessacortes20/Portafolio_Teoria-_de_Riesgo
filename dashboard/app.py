@@ -19,7 +19,7 @@ from scipy import stats as scipy_stats
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 load_dotenv()
-TICKERS  = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,MELI,SONY,XOM,WPM").split(",")]
+TICKERS  = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,AMZN,SONY,XOM,WPM").split(",")]
 API_URL  = "http://localhost:8001/api/v1"
 
 import streamlit as st
@@ -45,10 +45,10 @@ C = {
 # Paleta unificada por activo (familia coherente, distinguible)
 ASSET_COLORS: dict[str, str] = {
     "NU":   "#dd5e89",   # pink  — brand
-    "MELI": "#f7a35c",   # coral orange
+    "AMZN": "#FF9900",   # Amazon Orange
     "SONY": "#4e8cde",   # steel blue
     "XOM":  "#52b788",   # sage green
-    "WPM":  "#9b7fe8",   # lavender
+    "WPM":  "#8B5CF6",   # violet — precious metals
 }
 
 def asset_color(ticker: str) -> str:
@@ -212,12 +212,12 @@ div[data-baseweb="select"] > div {{
 
 /* ── Info / interpretation box ── */
 .interp-box {{
-    background: #fdf4ff; border-left: 4px solid {C["pink"]};
+    background: #f8fafc; border-left: 4px solid #64748b;
     border-radius: 0 10px 10px 0; padding: 12px 16px;
-    font-size: 0.88rem; color: {C["text"]}; margin: 10px 0;
+    font-size: 0.88rem; color: #334155; margin: 10px 0;
     line-height: 1.55;
 }}
-.interp-box b {{ color: {C["sidebar"]}; }}
+.interp-box b {{ color: #1e293b; }}
 .interp-green {{
     background: #f0fdf4; border-left-color: {C["green"]};
 }}
