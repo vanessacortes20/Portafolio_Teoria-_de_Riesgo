@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: risklab-usta
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_TTL_MINUTES
+        value: "60"
+    disk:
+      name: risklab-data
+      mountPath: /app
+      sizeGB: 1
