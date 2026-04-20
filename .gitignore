@@ -6,3 +6,5 @@ venv/
 .streamlit/
 outputs/
 history/
+*.txt
+*.log
