@@ -257,9 +257,229 @@
       .modules-grid { grid-template-columns:repeat(2,1fr); }
       .two-col,.three-col { grid-template-columns:1fr; }
     }
+
+    /* ── Auth overlay ── */
+    #auth-overlay {
+      position:fixed; inset:0; z-index:9999;
+      background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 50%,#0F172A 100%);
+      display:flex; align-items:center; justify-content:center; overflow-y:auto; padding:20px 0;
+    }
+    #auth-overlay.hidden { display:none; }
+    .auth-card {
+      background:#fff; border-radius:20px; padding:36px 36px 32px; width:100%; max-width:440px;
+      box-shadow:0 24px 60px rgba(0,0,0,.45); margin:auto;
+    }
+    .auth-logo { display:flex; align-items:center; gap:12px; margin-bottom:24px; }
+    .auth-logo-icon { background:#2563EB; padding:10px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .auth-logo-text { font-size:1.3rem; font-weight:800; color:#0f172a; font-family:'Outfit',sans-serif; }
+    .auth-logo-sub  { font-size:.73rem; color:#64748b; }
+    .auth-tabs { display:flex; gap:4px; background:#f1f5f9; border-radius:10px; padding:4px; margin-bottom:22px; }
+    .auth-tab {
+      flex:1; padding:8px; border:none; border-radius:7px; font-size:.84rem; font-weight:600;
+      cursor:pointer; transition:all .18s; background:transparent; color:#64748b;
+    }
+    .auth-tab.active { background:#fff; color:#1e3a8a; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+    .auth-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .auth-field { margin-bottom:12px; }
+    .auth-field label { display:block; font-size:.74rem; font-weight:600; color:#374151; margin-bottom:4px; }
+    .auth-field label span { color:#9ca3af; font-weight:400; }
+    .auth-field input {
+      width:100%; padding:9px 11px; border:1.5px solid #e2e8f0; border-radius:9px;
+      font-size:.87rem; font-family:inherit; outline:none; transition:border-color .15s, box-shadow .15s;
+      color:#0f172a;
+    }
+    .auth-field input:focus { border-color:#2563EB; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .auth-field input.invalid { border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.1); }
+    .auth-section-title {
+      font-size:.67rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+      color:#94a3b8; margin:14px 0 8px; padding-bottom:4px; border-bottom:1px solid #f1f5f9;
+    }
+    .auth-submit {
+      width:100%; padding:11px; border:none; border-radius:10px; margin-top:6px;
+      background:linear-gradient(135deg,#2563EB,#0891B2); color:#fff;
+      font-size:.9rem; font-weight:700; font-family:inherit; cursor:pointer;
+      transition:opacity .15s, transform .1s;
+    }
+    .auth-submit:hover { opacity:.9; transform:translateY(-1px); }
+    .auth-submit:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .auth-error {
+      margin-top:10px; padding:9px 12px; background:#fef2f2; border:1px solid #fecaca;
+      border-radius:8px; color:#dc2626; font-size:.78rem; display:none; line-height:1.5;
+    }
+    .auth-success {
+      margin-top:10px; padding:9px 12px; background:#f0fdf4; border:1px solid #bbf7d0;
+      border-radius:8px; color:#15803d; font-size:.78rem; display:none;
+    }
+    .auth-divider { text-align:center; color:#94a3b8; font-size:.75rem; margin:12px 0 6px; }
+    .auth-demo { text-align:center; margin-top:10px; }
+    .auth-demo button {
+      background:none; border:1.5px solid #e2e8f0; border-radius:8px; padding:6px 14px;
+      font-size:.77rem; color:#475569; font-family:inherit; cursor:pointer; transition:all .15s;
+    }
+    .auth-demo button:hover { border-color:#2563EB; color:#2563EB; }
+    /* User chip in sidebar */
+    #user-chip {
+      display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px;
+      background:rgba(255,255,255,.07); margin-top:4px; margin-bottom:4px;
+    }
+    #user-chip .avatar {
+      width:30px; height:30px; border-radius:50%; background:#2563EB;
+      display:flex; align-items:center; justify-content:center;
+      color:#fff; font-weight:700; font-size:.82rem; flex-shrink:0;
+    }
+    #user-chip .uname { color:#f0f0f0; font-size:.8rem; font-weight:600; }
+    #user-chip .urole { color:rgba(255,255,255,.4); font-size:.67rem; }
+    #logout-btn {
+      width:100%; padding:6px; border:none; border-radius:7px; margin-top:2px;
+      background:rgba(239,68,68,.15); color:#fca5a5; font-size:.75rem; font-weight:600;
+      font-family:inherit; cursor:pointer; transition:background .15s;
+    }
+    #logout-btn:hover { background:rgba(239,68,68,.3); }
+    /* Admin users modal */
+    #admin-modal {
+      position:fixed; inset:0; z-index:8000; background:rgba(0,0,0,.6);
+      display:none; align-items:center; justify-content:center; padding:20px;
+    }
+    #admin-modal.open { display:flex; }
+    .admin-modal-box {
+      background:#fff; border-radius:16px; width:100%; max-width:820px;
+      max-height:90vh; display:flex; flex-direction:column; overflow:hidden;
+      box-shadow:0 20px 60px rgba(0,0,0,.4);
+    }
+    .admin-modal-header {
+      padding:18px 24px; border-bottom:1px solid #e5e7eb;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .admin-modal-header h2 { font-size:1rem; font-weight:700; color:#0f172a; }
+    .admin-modal-close { border:none; background:none; font-size:1.2rem; cursor:pointer; color:#6b7280; padding:4px; }
+    .admin-modal-body { overflow-y:auto; padding:16px 24px; }
+    .admin-table { width:100%; border-collapse:collapse; font-size:.8rem; }
+    .admin-table th { text-align:left; padding:8px 10px; background:#f8fafc; color:#475569; font-weight:700; border-bottom:2px solid #e5e7eb; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+    .admin-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; color:#374151; vertical-align:middle; }
+    .admin-table tr:hover td { background:#f8fafc; }
+    .admin-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+    .badge-admin { background:#dbeafe; color:#1e40af; }
+    .badge-user  { background:#f0fdf4; color:#15803d; }
+    .badge-active   { background:#dcfce7; color:#166534; }
+    .badge-inactive { background:#fef2f2; color:#dc2626; }
+    .admin-btn {
+      padding:5px 10px; border:none; border-radius:7px; font-size:.73rem; font-weight:600;
+      font-family:inherit; cursor:pointer; transition:all .15s;
+      background:#EFF6FF; color:#2563EB;
+    }
+    .admin-btn:hover { background:#DBEAFE; }
   </style>
 </head>
 <body>
+
+<!-- ═══ AUTH OVERLAY ═══════════════════════════════════════════════ -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      </div>
+      <div>
+        <div class="auth-logo-text">RiskLab USTA</div>
+        <div class="auth-logo-sub">Plataforma de análisis cuantitativo — USTA</div>
+      </div>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login"    onclick="switchAuthTab('login')">Iniciar sesión</button>
+      <button class="auth-tab"        id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
+    </div>
+
+    <!-- ── LOGIN ── -->
+    <div id="form-login">
+      <div class="auth-field">
+        <label>Usuario o correo electrónico</label>
+        <input type="text" id="login-user" placeholder="admin" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+      <button class="auth-submit" id="login-btn" onclick="doLogin()">Iniciar sesión</button>
+      <div class="auth-divider">— cuentas de demostración —</div>
+      <div class="auth-demo">
+        <button onclick="fillDemo('admin','Admin2025!')">Administrador</button>
+        &nbsp;
+        <button onclick="fillDemo('demo','Demo2025!')">Usuario demo</button>
+      </div>
+      <div class="auth-error" id="login-error"></div>
+    </div>
+
+    <!-- ── REGISTRO ── -->
+    <div id="form-register" style="display:none">
+      <div class="auth-section-title">Datos personales</div>
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Nombres <span>*</span></label>
+          <input type="text" id="reg-fname" placeholder="María Fernanda" autocomplete="given-name" />
+        </div>
+        <div class="auth-field">
+          <label>Apellidos <span>*</span></label>
+          <input type="text" id="reg-lname" placeholder="Gómez Ruiz" autocomplete="family-name" />
+        </div>
+      </div>
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Cédula <span>*</span></label>
+          <input type="text" id="reg-cedula" placeholder="1020304050" maxlength="20" />
+        </div>
+        <div class="auth-field">
+          <label>Teléfono <span>*</span></label>
+          <input type="tel" id="reg-phone" placeholder="3001234567" />
+        </div>
+      </div>
+
+      <div class="auth-section-title">Credenciales de acceso</div>
+      <div class="auth-field">
+        <label>Correo electrónico <span>*</span></label>
+        <input type="email" id="reg-email" placeholder="correo@ejemplo.com" autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label>Usuario <span style="color:#9ca3af;font-weight:400">(solo letras, números, _ . -)</span></label>
+        <input type="text" id="reg-user" placeholder="mi_usuario" autocomplete="username" />
+      </div>
+      <div class="auth-row">
+        <div class="auth-field">
+          <label>Contraseña <span style="color:#9ca3af;font-weight:400">mín. 8 car.</span></label>
+          <input type="password" id="reg-pass" placeholder="••••••••" autocomplete="new-password" />
+        </div>
+        <div class="auth-field">
+          <label>Confirmar contraseña</label>
+          <input type="password" id="reg-pass2" placeholder="••••••••" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter')doRegister()" />
+        </div>
+      </div>
+
+      <button class="auth-submit" id="reg-btn" onclick="doRegister()">Crear cuenta</button>
+      <div class="auth-error"   id="reg-error"></div>
+      <div class="auth-success" id="reg-success"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN MODAL ═══════════════════════════════════════════════ -->
+<div id="admin-modal">
+  <div class="admin-modal-box">
+    <div class="admin-modal-header">
+      <h2>Registro de usuarios</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:.72rem;color:#64748b">users.json se actualiza automáticamente</span>
+        <button class="admin-modal-close" onclick="closeAdminModal()">✕</button>
+      </div>
+    </div>
+    <div class="admin-modal-body">
+      <div id="admin-users-content" style="color:#64748b;font-size:.85rem;text-align:center;padding:30px">
+        Cargando usuarios…
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ SIDEBAR TOGGLE ═══════════════════════════════════════════ -->
 <button id="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar / Ocultar panel lateral">
@@ -311,19 +531,19 @@
     <!-- Rango de fechas -->
     <div style="font-size:.68rem;color:rgba(255,255,255,.55);background:rgba(255,255,255,.07);border-radius:6px;padding:5px 8px;margin-bottom:6px;line-height:1.5;">
       📆 Rango disponible:<br>
-      <span style="color:rgba(255,255,255,.8);font-weight:600;">17/04/2024 – 17/04/2026</span>
+      <span id="sidebar-date-range" style="color:rgba(255,255,255,.8);font-weight:600;">01/01/2020 – hoy</span>
     </div>
     <div class="param-row">
       <label class="param-label">📅 Fecha Inicio</label>
       <input type="date" id="p-start" class="param-input"
-             min="2024-04-17" max="2026-04-17"
-             onchange="onParamChange()" title="Mínimo: 17/04/2024">
+             min="2020-01-01"
+             onchange="onParamChange()" title="Mínimo: 01/01/2020">
     </div>
     <div class="param-row">
       <label class="param-label">📅 Fecha Fin</label>
       <input type="date" id="p-end" class="param-input"
-             min="2024-04-17" max="2026-04-17"
-             onchange="onParamChange()" title="Máximo: 17/04/2026">
+             min="2020-01-01"
+             onchange="onParamChange()" title="Máximo: hoy">
     </div>
 
 
@@ -340,12 +560,280 @@
   </div>
 
   <div id="gen-info"></div>
+
+  <div id="user-chip" style="display:none">
+    <div class="avatar" id="user-avatar">?</div>
+    <div>
+      <div class="uname" id="user-name">—</div>
+      <div class="urole" id="user-role">—</div>
+    </div>
+  </div>
+  <button id="admin-users-btn" style="display:none;width:100%;padding:6px;border:none;border-radius:7px;margin-top:2px;background:rgba(37,99,235,.2);color:#93c5fd;font-size:.75rem;font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s;" onclick="openAdminModal()">
+    Gestionar usuarios
+  </button>
+  <button id="logout-btn" style="display:none" onclick="doLogout()">Cerrar sesión</button>
 </aside>
 
 <!-- ═══ MAIN ═══════════════════════════════════════════════════════ -->
 <main id="main"><div id="content"></div></main>
 
 <script>
+// ─────────────────────────────────────────
+//  AUTH
+// ─────────────────────────────────────────
+const API_BASE  = 'http://localhost:8001';
+const TOKEN_KEY = 'rl_jwt';
+
+function authHeaders() {
+  const t = localStorage.getItem(TOKEN_KEY);
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+function switchAuthTab(tab) {
+  document.getElementById('form-login').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tab-login').classList.toggle('active',    tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  hideAuthMessages();
+}
+
+function fillDemo(user, pass) {
+  document.getElementById('login-user').value = user;
+  document.getElementById('login-pass').value = pass;
+  doLogin();
+}
+
+function showAuthError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // If msg is array (Pydantic errors), format them
+  if (Array.isArray(msg)) {
+    el.innerHTML = msg.map(e => '• ' + (e.msg || e).replace('Value error, ', '')).join('<br>');
+  } else {
+    el.textContent = msg;
+  }
+  el.style.display = 'block';
+}
+
+function showAuthSuccess(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideAuthMessages() {
+  ['login-error','reg-error','reg-success'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+// ── Login ──────────────────────────────────────────────────────────
+
+async function doLogin() {
+  hideAuthMessages();
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!user || !pass) { showAuthError('login-error', 'Completa todos los campos.'); return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Verificando…';
+
+  try {
+    const body = new URLSearchParams({ username: user, password: pass });
+    const res  = await fetch(API_BASE + '/auth/login', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthError('login-error', data.detail || 'Credenciales incorrectas.');
+      return;
+    }
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    await loadAuthUser();
+    document.getElementById('auth-overlay').classList.add('hidden');
+  } catch(e) {
+    showAuthError('login-error', 'No se pudo conectar con la API. Verifica que esté corriendo en el puerto 8001.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Iniciar sesión';
+  }
+}
+
+// ── Registro ───────────────────────────────────────────────────────
+
+function _v(id) { return document.getElementById(id)?.value.trim() || ''; }
+
+function _clientValidate() {
+  const fname  = _v('reg-fname');
+  const lname  = _v('reg-lname');
+  const cedula = _v('reg-cedula');
+  const phone  = _v('reg-phone');
+  const email  = _v('reg-email');
+  const user   = _v('reg-user');
+  const pass   = document.getElementById('reg-pass')?.value  || '';
+  const pass2  = document.getElementById('reg-pass2')?.value || '';
+
+  const errors = [];
+  if (!fname)  errors.push('Los nombres son obligatorios.');
+  if (!lname)  errors.push('Los apellidos son obligatorios.');
+  if (!cedula) errors.push('La cédula es obligatoria.');
+  if (!phone)  errors.push('El teléfono es obligatorio.');
+  if (!email)  errors.push('El correo electrónico es obligatorio.');
+  if (!user || user.length < 3) errors.push('El usuario debe tener al menos 3 caracteres.');
+  if (!/^[a-zA-Z0-9_.\-]+$/.test(user)) errors.push('El usuario solo puede contener letras, números, _ . -');
+  if (pass.length < 8)  errors.push('La contraseña debe tener al menos 8 caracteres.');
+  if (pass !== pass2)   errors.push('Las contraseñas no coinciden.');
+  return { errors, fname, lname, cedula, phone, email, user, pass };
+}
+
+async function doRegister() {
+  hideAuthMessages();
+  const { errors, fname, lname, cedula, phone, email, user, pass } = _clientValidate();
+  if (errors.length) { showAuthError('reg-error', errors); return; }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Creando cuenta…';
+
+  try {
+    const res = await fetch(API_BASE + '/auth/register', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        full_name:        fname,
+        last_name:        lname,
+        cedula:           cedula,
+        phone:            phone,
+        email:            email,
+        username:         user,
+        password:         pass,
+        confirm_password: pass,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      // Pydantic errors come as array or string
+      const detail = data.detail;
+      showAuthError('reg-error', Array.isArray(detail) ? detail : String(detail));
+      return;
+    }
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    showAuthSuccess('reg-success', '¡Cuenta creada! Bienvenido, ' + fname + '.');
+    await loadAuthUser();
+    setTimeout(() => document.getElementById('auth-overlay').classList.add('hidden'), 900);
+  } catch(e) {
+    showAuthError('reg-error', 'No se pudo conectar con la API.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
+}
+
+// ── Perfil y sesión ────────────────────────────────────────────────
+
+async function loadAuthUser() {
+  try {
+    const res = await fetch(API_BASE + '/auth/me', { headers: authHeaders() });
+    if (!res.ok) { doLogout(); return; }
+    const u = await res.json();
+
+    const chip = document.getElementById('user-chip');
+    if (chip) {
+      chip.style.display = 'flex';
+      const initials = ((u.full_name||u.username||'?')[0] + (u.last_name||'')[0]).toUpperCase().trim() || '?';
+      document.getElementById('user-avatar').textContent = initials || u.username[0].toUpperCase();
+      document.getElementById('user-name').textContent   = u.full_name ? u.full_name + ' ' + (u.last_name||'') : u.username;
+      document.getElementById('user-role').textContent   = u.role === 'admin' ? '★ Admin' : 'Usuario';
+      document.getElementById('logout-btn').style.display = '';
+      // Admin-only button
+      const ab = document.getElementById('admin-users-btn');
+      if (ab) ab.style.display = u.role === 'admin' ? '' : 'none';
+    }
+    // Store profile for later use
+    window._authUser = u;
+  } catch(e) {}
+}
+
+function doLogout() {
+  localStorage.removeItem(TOKEN_KEY);
+  window._authUser = null;
+  ['user-chip','admin-users-btn','logout-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('auth-overlay').classList.remove('hidden');
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  hideAuthMessages();
+  switchAuthTab('login');
+}
+
+async function initAuth() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) { return; }   // sin token → overlay queda visible
+  try {
+    const res = await fetch(API_BASE + '/auth/me', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (res.ok) {
+      await loadAuthUser();
+      document.getElementById('auth-overlay').classList.add('hidden');
+    } else {
+      // Token inválido o expirado → limpiar y mostrar login
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  } catch(e) {
+    // API no disponible → limpiar token y pedir que se inicie la API
+    localStorage.removeItem(TOKEN_KEY);
+    showAuthError('login-error',
+      'La API no está disponible. Inicia el servidor antes de continuar:\n' +
+      'uvicorn api.main:app --port 8001');
+  }
+}
+
+// ── Panel admin ────────────────────────────────────────────────────
+
+async function openAdminModal() {
+  document.getElementById('admin-modal').classList.add('open');
+  const content = document.getElementById('admin-users-content');
+  content.innerHTML = '<span style="color:#94a3b8">Cargando usuarios…</span>';
+  try {
+    const res = await fetch(API_BASE + '/auth/users', { headers: authHeaders() });
+    if (!res.ok) { content.innerHTML = '<span style="color:#ef4444">No autorizado.</span>'; return; }
+    const users = await res.json();
+    if (!users.length) { content.innerHTML = '<span style="color:#94a3b8">No hay usuarios registrados.</span>'; return; }
+    const rows = users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td><strong>${u.full_name||''} ${u.last_name||''}</strong><br>
+            <span style="color:#6b7280;font-size:.73rem">@${u.username}</span></td>
+        <td style="font-size:.78rem">${u.email}</td>
+        <td style="font-size:.78rem">${u.cedula||'—'}</td>
+        <td style="font-size:.78rem">${u.phone||'—'}</td>
+        <td><span class="admin-badge ${u.role==='admin'?'badge-admin':'badge-user'}">${u.role}</span></td>
+        <td><span class="admin-badge ${u.is_active?'badge-active':'badge-inactive'}">${u.is_active?'Activo':'Inactivo'}</span></td>
+        <td style="font-size:.73rem;color:#64748b">${(u.created_at||'').slice(0,10)}</td>
+        <td style="font-size:.73rem;color:#64748b">${u.last_login ? u.last_login.slice(0,16).replace('T',' ') : '—'}</td>
+      </tr>`).join('');
+    content.innerHTML = `
+      <p style="margin-bottom:10px;font-size:.78rem;color:#64748b">
+        Total: <strong>${users.length}</strong> usuario(s).
+        El archivo <code>users.json</code> se actualiza automáticamente.
+      </p>
+      <table class="admin-table">
+        <thead><tr>
+          <th>#</th><th>Nombre</th><th>Correo</th><th>Cédula</th>
+          <th>Teléfono</th><th>Rol</th><th>Estado</th><th>Registro</th><th>Último acceso</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch(e) {
+    content.innerHTML = '<span style="color:#ef4444">Error al cargar usuarios. Verifica la API.</span>';
+  }
+}
+
+function closeAdminModal() {
+  document.getElementById('admin-modal').classList.remove('open');
+}
+
+
 // ─────────────────────────────────────────
 //  DATOS Y COLORES
 // ─────────────────────────────────────────
@@ -760,6 +1248,161 @@ async function recalculateM5() {
   }
 }
 
+
+
+// ─────────────────────────────────────────
+//  BACKTESTING M5 — Test de Kupiec
+// ─────────────────────────────────────────
+async function runKupiecBacktest() {
+  const statusEl  = document.getElementById('m5-backtest-status');
+  const resultsEl = document.getElementById('m5-backtest-results');
+  if (!statusEl || !resultsEl) return;
+
+  statusEl.innerText = '⌛ Calculando...';
+  resultsEl.innerHTML = '';
+
+  const conf  = state.params.confidence;
+  const nsims = state.params.nSimulations;
+  const startDate = state.params.startDate || '';
+  const endDate   = state.params.endDate   || '';
+  const dateQS = startDate && endDate ? `&start_date=${startDate}&end_date=${endDate}` : '';
+
+  const methodLabel = { Historico: 'Histórico', Parametrico: 'Paramétrico (Normal)', Montecarlo: 'Monte Carlo' };
+
+  try {
+    const rows = await Promise.all(state.activeTickers.map(async ticker => {
+      const url = `${API_BASE}/api/v1/risk/${ticker}/backtest?confidence=${conf}&n_simulations=${nsims}${dateQS}`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) return { ticker, error: `HTTP ${res.status}` };
+      const data = await res.json();
+      return { ticker, bt: data.backtesting };
+    }));
+
+    let html = `<div style="overflow-x:auto">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Activo</th><th>Método</th>
+            <th>Obs.</th><th>Excepciones</th><th>Esperadas</th>
+            <th>Tasa obs. (%)</th><th>Tasa esp. (%)</th>
+            <th>LR Stat</th><th>p-valor</th><th>Resultado</th>
+          </tr>
+        </thead><tbody>`;
+
+    for (const { ticker, error, bt } of rows) {
+      if (error) {
+        html += `<tr><td style="color:${TICKER_COLOR[ticker]||'#333'};font-weight:700">${ticker}</td><td colspan="9" style="color:#ef4444">${error}</td></tr>`;
+        continue;
+      }
+      for (const [method, r] of Object.entries(bt)) {
+        const passed  = r.passed === true ? '✅ Pasa' : r.passed === false ? '❌ Falla' : '—';
+        const pColor  = r.passed === true ? '#16a34a' : r.passed === false ? '#dc2626' : '#94a3b8';
+        html += `<tr>
+          <td style="color:${TICKER_COLOR[ticker]||'#333'};font-weight:700">${ticker}</td>
+          <td>${methodLabel[method] || method}</td>
+          <td>${r.T}</td>
+          <td><b>${r.N_exceptions}</b></td>
+          <td>${r.expected_exceptions}</td>
+          <td>${r.exception_rate_pct?.toFixed(2) ?? '—'}%</td>
+          <td>${r.expected_rate_pct?.toFixed(2) ?? '—'}%</td>
+          <td>${r.LR_stat != null ? r.LR_stat.toFixed(4) : '—'}</td>
+          <td>${r.p_value != null ? r.p_value.toFixed(4) : '—'}</td>
+          <td style="color:${pColor};font-weight:700">${passed}</td>
+        </tr>`;
+      }
+    }
+    html += `</tbody></table></div>`;
+    html += `<div style="margin-top:12px;font-size:.82rem;color:#64748b;border-left:3px solid #94a3b8;padding:10px 14px;background:#f8fafc;border-radius:0 8px 8px 0;">
+      <b>Interpretación:</b> El test de Kupiec evalúa si las excepciones observadas son estadísticamente consistentes con el nivel de confianza declarado (${(conf*100).toFixed(0)}%).
+      Un p-valor &gt; 0.05 indica que el modelo <b>no se rechaza</b> (✅ correcto). Un p-valor ≤ 0.05 indica que las excepciones son demasiadas o demasiado pocas respecto a lo esperado (❌ el modelo subestima/sobreestima el riesgo).
+    </div>`;
+
+    resultsEl.innerHTML = html;
+    statusEl.innerText = `Completado · confianza ${(conf*100).toFixed(0)}%`;
+  } catch (e) {
+    statusEl.innerText = '';
+    resultsEl.innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`;
+  }
+}
+
+
+// ─────────────────────────────────────────
+//  TARGET RETURN M6 — Rendimiento Objetivo
+// ─────────────────────────────────────────
+async function runTargetReturnOpt() {
+  const statusEl  = document.getElementById('m6-target-status');
+  const resultsEl = document.getElementById('m6-target-results');
+  const inputEl   = document.getElementById('m6-target-input');
+  if (!statusEl || !resultsEl || !inputEl) return;
+
+  const targetPct = parseFloat(inputEl.value);
+  if (isNaN(targetPct) || targetPct < -50 || targetPct > 200) {
+    statusEl.innerText = 'Valor inválido (rango: -50% a 200%)';
+    return;
+  }
+  const targetDecimal = targetPct / 100;
+  statusEl.innerText  = '⌛ Optimizando...';
+  resultsEl.innerHTML = '';
+
+  const startDate = state.params.startDate || '';
+  const endDate   = state.params.endDate   || '';
+  const dateQS    = startDate && endDate ? `&start_date=${startDate}&end_date=${endDate}` : '';
+
+  try {
+    const url = `${API_BASE}/api/v1/portfolio/target?target_return=${targetDecimal}${dateQS}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    const data = await res.json();
+
+    if (!res.ok || data.feasible === false) {
+      resultsEl.innerHTML = `<div style="color:#ef4444;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;">
+        ${data.error || data.detail || 'No se encontró portafolio factible para ese rendimiento objetivo.'}
+        <br><small>Prueba un valor dentro del rango de retornos individuales de los activos.</small>
+      </div>`;
+      statusEl.innerText = '';
+      return;
+    }
+
+    const tickers = Object.keys(data.Weights);
+    const bar = tickers.map(t =>
+      (data.Weights[t] || 0) > 0.005
+        ? `<div style="width:${(data.Weights[t]*100).toFixed(1)}%;height:100%;background:${TICKER_COLOR[t] || '#888'};" title="${t} ${(data.Weights[t]*100).toFixed(1)}%"></div>`
+        : ''
+    ).join('');
+    const labels = tickers.map(t =>
+      (data.Weights[t] || 0) > 0.005
+        ? `<div style="font-size:.78rem"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${TICKER_COLOR[t]||'#888'};margin-right:4px;"></span>${t} ${pct(data.Weights[t],1)}</div>`
+        : ''
+    ).join('');
+
+    resultsEl.innerHTML = `
+      <div class="card" style="padding:16px;max-width:600px">
+        <h3 style="margin:0 0 10px;font-size:1rem;color:#0F172A;">🎯 Portafolio Óptimo — Rendimiento Objetivo: <span style="color:#0891b2">${pct(targetDecimal)}</span></h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;text-align:center;">
+          <div style="background:#f0fdf4;border-radius:8px;padding:10px;">
+            <div style="font-size:.72rem;color:#16a34a;font-weight:700">RETORNO ANUAL</div>
+            <div style="font-size:1.2rem;font-weight:800;color:#16a34a">${pct(data.Return)}</div>
+          </div>
+          <div style="background:#fef2f2;border-radius:8px;padding:10px;">
+            <div style="font-size:.72rem;color:#dc2626;font-weight:700">VOLATILIDAD ANUAL</div>
+            <div style="font-size:1.2rem;font-weight:800;color:#dc2626">${pct(data.Volatility)}</div>
+          </div>
+          <div style="background:#f0f9ff;border-radius:8px;padding:10px;">
+            <div style="font-size:.72rem;color:#0891b2;font-weight:700">SHARPE RATIO</div>
+            <div style="font-size:1.2rem;font-weight:800;color:#0891b2">${fmt(data.Sharpe,3)}</div>
+          </div>
+        </div>
+        <div style="display:flex;height:22px;width:100%;border-radius:4px;overflow:hidden;margin-bottom:8px;">${bar}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">${labels}</div>
+      </div>
+      <div style="margin-top:10px;font-size:.82rem;color:#64748b;border-left:3px solid #0891b2;padding:10px 14px;background:#f8fafc;border-radius:0 8px 8px 0;">
+        <b>Metodología:</b> Optimización cuadrática (SLSQP) sobre la frontera eficiente de Markowitz — minimiza la volatilidad del portafolio sujeto a que el retorno anual esperado sea exactamente ${pct(targetDecimal)} y la suma de pesos sea 100%.
+      </div>`;
+    statusEl.innerText = 'Optimización completada';
+  } catch (e) {
+    statusEl.innerText = '';
+    resultsEl.innerHTML = `<p style="color:#ef4444">Error: ${e.message}</p>`;
+  }
+}
 
 
 // ─────────────────────────────────────────
@@ -2128,6 +2771,7 @@ function renderM5() {
       <button class="tab-btn active" onclick="switchTab('m5','95',this)">🛡️ Confianza 95%</button>
       <button class="tab-btn"        onclick="switchTab('m5','99',this)">🚨 Escenario Extremo 99%</button>
       <button class="tab-btn"        onclick="switchTab('m5','charts',this)">📊 Histogramas por Activo</button>
+      <button class="tab-btn"        onclick="switchTab('m5','backtest',this)">🔍 Backtesting (Kupiec)</button>
     </div>
 
     <div id="m5-tab-95" class="tab-content card active" style="padding:16px;">
@@ -2184,6 +2828,21 @@ function renderM5() {
     </div>
     
     <div id="m5-tab-charts" class="tab-content" style="padding:0"></div>
+
+    <div id="m5-tab-backtest" class="tab-content card" style="padding:16px;">
+      <p style="font-size:.87rem;color:#475569;margin-bottom:14px">
+        El <b>Test de Kupiec (POF)</b> evalúa si el número de excepciones observadas (días en que la pérdida superó el VaR) es estadísticamente consistente con el nivel de confianza declarado.<br>
+        <b>H₀:</b> el modelo es correcto — la tasa de excepciones real coincide con la esperada. Si p-valor &gt; 0.05 → el modelo pasa el test.
+      </p>
+      <div style="margin-bottom:12px;">
+        <button onclick="runKupiecBacktest()" class="recalc-btn" style="margin:0;padding:10px 22px;background:linear-gradient(135deg,#7c3aed,#a855f7);">
+          ⚡ Ejecutar Backtesting
+        </button>
+        <span id="m5-backtest-status" style="margin-left:14px;font-size:.82rem;color:#64748b;"></span>
+      </div>
+      <div id="m5-backtest-results"></div>
+    </div>
+
     <div class="footer">RiskLab USTA · M5 Value at Risk & Expected Shortfall</div>`);
 
   const chartsContainer = document.getElementById('m5-tab-charts');
@@ -2235,21 +2894,14 @@ function renderM6() {
 
   const wMaxS = p.Max_Sharpe; const wMinV = p.Min_Volatility;
 
-  let corrMatrix = ''; const highCorrPairs = []; const negCorrPairs = [];
+  const highCorrPairs = []; const negCorrPairs = [];
   if (p.Correlation) {
     const keys = Object.keys(p.Correlation);
-    const head = `<tr><th>Tensión</th>${keys.map(k=>`<th>${k}</th>`).join('')}</tr>`;
-    const rows = keys.map(k1 => {
-        const cells = keys.map(k2 => {
-            const v = p.Correlation[k1][k2];
-            const cStr = v > 0.6 ? C.red : (v < -0.3 ? C.green : C.text);
-            if (k1 !== k2 && v > 0.6 && !highCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) highCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
-            if (k1 !== k2 && v < -0.1 && !negCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) negCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
-            return `<td style="color:${cStr}">${fmt(v,2)}</td>`;
-        }).join('');
-        return `<tr><th>${k1}</th>${cells}</tr>`;
-    }).join('');
-    corrMatrix = `<table class="compare-table" style="font-size:0.85rem">${head}<tbody>${rows}</tbody></table>`;
+    keys.forEach(k1 => keys.forEach(k2 => {
+      const v = p.Correlation[k1][k2];
+      if (k1 !== k2 && v > 0.6 && !highCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) highCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
+      if (k1 !== k2 && v < -0.1 && !negCorrPairs.includes(`${k2}-${k1} (${fmt(v,2)})`)) negCorrPairs.push(`${k1}-${k2} (${fmt(v,2)})`);
+    }));
   }
 
   const wHTML = (obj, title, logic) => {
@@ -2286,6 +2938,7 @@ function renderM6() {
       <button class="tab-btn active" onclick="switchTab('m6','graf',this)">💎 Frontera Eficiente</button>
       <button class="tab-btn"        onclick="switchTab('m6','pesos',this)">⚖️ Pesos Óptimos</button>
       <button class="tab-btn"        onclick="switchTab('m6','corr',this)">🔗 Correlaciones entre Activos</button>
+      <button class="tab-btn"        onclick="switchTab('m6','target',this)">🎯 Rendimiento Objetivo</button>
     </div>
     <div id="m6-tab-graf"  class="tab-content card active" style="padding:12px">
         <div id="ch-frontier"></div>
@@ -2314,13 +2967,48 @@ function renderM6() {
     </div>
     <div id="m6-tab-corr"  class="tab-content card" style="padding:16px;">
         <p style="font-size:.88rem;color:#475569;margin-bottom:12px"><b>Correlación:</b> va de -1 a +1. Valores cercanos a <b>+1</b> = activos que se mueven juntos. Valores cercanos a <b>-1</b> = activos que se mueven en sentido opuesto. <b>0</b> = sin relación. Para diversificar bien, se buscan correlaciones bajas o negativas entre los activos.</p>
-        <details class="collapsible" open>
-          <summary>📋 Matriz de correlación entre activos</summary>
-          <div class="details-body" style="overflow-x:auto">${corrMatrix}</div>
-        </details>
+        <div id="ch-corr" style="min-height:300px"></div>
         ${getInsight("Interdependencia y Diversificación (Correlación)", `La correlación mide en qué medida dos activos se mueven juntos. Valores cercanos a 1 indican movimiento muy sincronizado: cuando uno sube, el otro tiende a subir también, reduciendo el beneficio de la diversificación. Valores negativos o cercanos a cero indican movimiento independiente o inverso, lo que amplifica el efecto diversificador al combinar ambos activos. En el contexto de Markowitz, mezclar activos con baja correlación entre sí reduce la volatilidad del portafolio total sin sacrificar el retorno esperado proporcional.`, "neutral")}
     </div>
+    <div id="m6-tab-target" class="tab-content card" style="padding:18px;">
+      <p style="font-size:.87rem;color:#475569;margin-bottom:14px">
+        Encuentra la combinación de activos con <b>mínima volatilidad</b> que alcanza exactamente tu rendimiento anual objetivo.
+        Usa optimización cuadrática (SLSQP) sobre la frontera eficiente de Markowitz.
+      </p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#475569;margin-bottom:5px;">RENDIMIENTO ANUAL OBJETIVO (%)</label>
+          <input type="number" id="m6-target-input" value="15" min="-50" max="200" step="1"
+            class="param-input" style="width:130px;height:38px;border:1px solid #cbd5e1;">
+        </div>
+        <div>
+          <button onclick="runTargetReturnOpt()" class="recalc-btn" style="margin:0;padding:10px 22px;background:linear-gradient(135deg,#0891b2,#06b6d4);">
+            🎯 Optimizar
+          </button>
+        </div>
+        <span id="m6-target-status" style="font-size:.82rem;color:#64748b;align-self:center;"></span>
+      </div>
+      <div id="m6-target-results"></div>
+    </div>
+
     <div class="footer">RiskLab USTA · M6 Fronteras de Optimización</div>`);
+
+  // ── Correlation heatmap ───────────────────────────────────────────────────
+  if (p.Correlation && document.getElementById('ch-corr')) {
+    const corrKeys = Object.keys(p.Correlation);
+    const zVals = corrKeys.map(k1 => corrKeys.map(k2 => +(p.Correlation[k1][k2] || 0).toFixed(4)));
+    Plotly.newPlot('ch-corr', [{
+      type: 'heatmap', z: zVals, x: corrKeys, y: corrKeys,
+      colorscale: 'RdBu', reversescale: true, zmin: -1, zmax: 1,
+      text: zVals.map(row => row.map(v => v.toFixed(2))),
+      texttemplate: '%{text}', textfont: { size: 13 },
+      hovertemplate: '%{y} – %{x}: %{z:.3f}<extra></extra>',
+      colorbar: { title: 'ρ', thickness: 14, len: 0.85 },
+    }], { ...PB, height: 380, margin: { t: 40, b: 50, l: 80, r: 20 },
+      title: { text: 'Matriz de Correlación entre Activos', font: { size: 13 } },
+      xaxis: { ...PB.xaxis, title: '' }, yaxis: { ...PB.yaxis, title: '', autorange: 'reversed' },
+    }, PCFG);
+  }
 
   const F = p.Frontier; if (!F) return;
   Plotly.newPlot('ch-frontier', [
@@ -2630,6 +3318,25 @@ function renderM8() {
     <h1 class="header-gradient">M8 — Portafolio vs. Benchmark S&P 500</h1>
     <p class="page-subtitle">Comparación del portafolio óptimo (máximo Sharpe) frente al índice S&P 500 como referencia de mercado.</p>
 
+    <div class="section-title">Contexto Macroeconómico</div>
+    <div class="kpi-grid" style="margin-bottom:20px">
+      <div class="kpi-card-v2">
+        <div class="kpi-label">Tasa Libre de Riesgo (Rf)</div>
+        <div class="kpi-value" id="m8-rf-val">—</div>
+        <div class="kpi-sub" id="m8-rf-src">T-Bill 13 semanas (^IRX)</div>
+      </div>
+      <div class="kpi-card-v2">
+        <div class="kpi-label">Tesoro EE.UU. 10 años</div>
+        <div class="kpi-value" id="m8-t10y-val">—</div>
+        <div class="kpi-sub">Rendimiento largo plazo (^TNX)</div>
+      </div>
+      <div class="kpi-card-v2">
+        <div class="kpi-label">S&amp;P 500 YTD</div>
+        <div class="kpi-value" id="m8-spy-ytd-val">—</div>
+        <div class="kpi-sub">Retorno acumulado año en curso</div>
+      </div>
+    </div>
+
     ${getInsight("Comparativa de Desempeño vs. Mercado", `El S&P 500 actúa como referencia de mercado: representa el costo de oportunidad de indexarse al mercado general en lugar de gestionar activamente. El portafolio óptimo fue construido con la ponderación que maximiza el Sharpe Ratio según la teoría de Markowitz. El Information Ratio mide si el exceso de retorno respecto al benchmark justifica la desviación asumida frente al índice. Un tracking error elevado indica que el portafolio se comporta de forma marcadamente distinta al índice, lo que puede ser favorable o desfavorable según el contexto de mercado.`, "neutral")}
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px,1fr));gap:15px;margin-bottom:20px">
@@ -2712,6 +3419,18 @@ function renderM8() {
     yaxis:{...PB.yaxis, title:'Drawdown (%)', tickformat:'.1%', automargin: true},
     title:{text:'Drawdown: Portafolio Óptimo vs. S&P 500',font:{size:13}}
   });
+
+  // ── Macro KPIs via API ────────────────────────────────────────────────────
+  fetch(`${API_BASE}/api/v1/macro`).then(r => r.ok ? r.json() : null).then(m => {
+    if (!m) return;
+    const rfEl   = document.getElementById('m8-rf-val');
+    const t10El  = document.getElementById('m8-t10y-val');
+    const ytdEl  = document.getElementById('m8-spy-ytd-val');
+    const srcEl  = document.getElementById('m8-rf-src');
+    if (rfEl  && m.rf_rate    != null) { rfEl.textContent  = pct(m.rf_rate, 2); if (srcEl && m.rf_source) srcEl.textContent = m.rf_source; }
+    if (t10El && m.treasury_10y != null) t10El.textContent = pct(m.treasury_10y, 2);
+    if (ytdEl && m.spx_ytd     != null) { ytdEl.textContent = pct(m.spx_ytd, 2); ytdEl.style.color = m.spx_ytd >= 0 ? C.green : C.red; }
+  }).catch(() => {});
 }
 
 
@@ -2721,10 +3440,9 @@ function renderM8() {
 // ─────────────────────────────────────────
 function renderM9() {
   const cards = [
-    // ── CORTO PLAZO ─────────────────────────────────────────────────────────
     {
       icon: '📤',
-      title: 'Exportación de Reportes',
+      title: 'Exportación de Reportes (PDF / Excel)',
       tags: ['Corto plazo', 'PDF · Excel'],
       tagColors: ['#10B981', '#3B82F6'],
       body: 'El dashboard presenta los resultados de M1 a M8 de forma interactiva, pero no permite descargar el análisis. Incorporar exportación a PDF (para reportes ejecutivos o académicos) o a Excel (para tablas de VaR, CAPM y pesos óptimos) convertiría el dashboard en una herramienta de documentación, no solo de visualización. El backend FastAPI existente puede generar estos reportes server-side con librerías como ReportLab o openpyxl.',
@@ -2732,87 +3450,22 @@ function renderM9() {
       effort: 'Bajo',
     },
     {
-      icon: '🔔',
-      title: 'Alertas Automáticas por Señales Técnicas',
-      tags: ['Corto plazo', 'Notificaciones'],
-      tagColors: ['#10B981', '#F59E0B'],
-      body: 'M7 detecta señales técnicas en tiempo de renderizado, pero requiere que el usuario tenga el dashboard activo. Un sistema de notificaciones que envíe alertas por correo o webhook cuando se activen señales críticas (RSI extremo, cruce MACD, ruptura de Bollinger) extendería la utilidad del módulo sin modificar su lógica de detección actual.',
-      impact: 'Medio',
-      effort: 'Bajo',
-    },
-    {
-      icon: '🏦',
-      title: 'Ampliación del Universo de Activos',
-      tags: ['Corto plazo', 'Diversificación'],
-      tagColors: ['#10B981', '#8B5CF6'],
-      body: 'El pipeline acepta cualquier ticker de Yahoo Finance mediante variable de entorno, pero la selección actual se limita a cinco acciones. Incorporar ETFs sectoriales, bonos del Tesoro o índices regionales enriquecería la frontera eficiente de M6, aportaría mayor contexto de correlación entre clases de activos en M2 y ampliaría el análisis de riesgo sistemático en M4.',
-      impact: 'Alto',
-      effort: 'Bajo',
-    },
-    // ── MEDIANO PLAZO ────────────────────────────────────────────────────────
-    {
-      icon: '🛡️',
-      title: 'Backtesting de Señales Técnicas',
-      tags: ['Mediano plazo', 'Validación'],
-      tagColors: ['#3B82F6', '#52b788'],
-      body: 'M7 evalúa señales sobre la última sesión disponible, pero no existe forma de saber si históricamente han sido rentables. Implementar un motor de backtesting sobre la ventana histórica ya almacenada en data.js permitiría calcular la tasa de acierto y el retorno promedio por tipo de señal, añadiendo evidencia empírica al módulo de alertas y evitando confiar en señales que estadísticamente no funcionan.',
-      impact: 'Alto',
-      effort: 'Medio',
-    },
-    {
       icon: '📊',
       title: 'Escenarios de Estrés Histórico',
       tags: ['Mediano plazo', 'Riesgo extremo'],
       tagColors: ['#3B82F6', '#E05580'],
-      body: 'M5 calcula VaR y CVaR sobre el período actual, pero no permite ver cómo habría respondido el portafolio en episodios de shock documentados como la crisis de 2008 o el colapso de marzo de 2020. Incorporar ventanas de estrés predefinidas aplicadas sobre los retornos históricos enriquecería el análisis de cola en M5 sin requerir datos adicionales.',
+      body: 'M5 calcula VaR y CVaR sobre el período actual, pero no permite ver cómo habría respondido el portafolio en episodios de shock documentados como el colapso de marzo de 2020 o la corrección de 2022. Incorporar ventanas de estrés predefinidas aplicadas sobre los retornos históricos enriquecería el análisis de cola en M5 sin requerir datos adicionales, alineándose con las pruebas de estrés regulatorias de Basilea III.',
       impact: 'Alto',
       effort: 'Medio',
     },
-    {
-      icon: '⏱️',
-      title: 'Actualización Automática de Datos',
-      tags: ['Mediano plazo', 'Automatización'],
-      tagColors: ['#3B82F6', '#F59E0B'],
-      body: 'Actualmente, mantener el dashboard actualizado requiere ejecutar generate_data.py manualmente. Programar una tarea periódica (cron o APScheduler en FastAPI) que regenere data.js de forma automática mantendría los indicadores técnicos, los modelos GARCH y las métricas CAPM siempre vigentes, eliminando esa fricción operativa.',
-      impact: 'Medio',
-      effort: 'Medio',
-    },
-    {
-      icon: '🔐',
-      title: 'Control de Acceso con Autenticación',
-      tags: ['Mediano plazo', 'Seguridad'],
-      tagColors: ['#3B82F6', '#64748b'],
-      body: 'El dashboard opera sin ningún mecanismo de autenticación, lo que lo limita a entornos privados o académicos. Implementar autenticación con usuario y contraseña mediante tokens JWT, validación de entradas con Pydantic e inyección de dependencias en FastAPI permitiría restringir el acceso, registrar sesiones y habilitar vistas o portafolios personalizados por perfil de riesgo.',
-      impact: 'Medio',
-      effort: 'Medio',
-    },
-    // ── LARGO PLAZO ──────────────────────────────────────────────────────────
     {
       icon: '📈',
       title: 'Optimización Dinámica con Ventana Móvil',
       tags: ['Largo plazo', 'Markowitz rolling'],
       tagColors: ['#8B5CF6', '#10B981'],
-      body: 'M6 calcula la frontera eficiente sobre el período completo, produciendo un portafolio óptimo estático. Una extensión natural sería aplicar la optimización sobre ventanas móviles para observar cómo evolucionan los pesos óptimos y el Sharpe en el tiempo, revelando qué tan estable es la composición óptima ante cambios de correlación y volatilidad entre activos.',
+      body: 'M6 calcula la frontera eficiente sobre el período completo, produciendo un portafolio óptimo estático. Una extensión natural sería aplicar la optimización sobre ventanas móviles (rolling 252 días) para observar cómo evolucionan los pesos óptimos y el Sharpe en el tiempo, revelando qué tan estable es la composición óptima ante cambios de correlación y volatilidad entre activos a lo largo de distintos regímenes de mercado.',
       impact: 'Alto',
       effort: 'Alto',
-    },
-    {
-      icon: '🤖',
-      title: 'Mejora del Pronóstico de Volatilidad con ML',
-      tags: ['Largo plazo', 'Forecasting'],
-      tagColors: ['#8B5CF6', '#E05580'],
-      body: 'M3 usa GARCH(1,1) para proyectar volatilidad a 10 días, un modelo reactivo que captura persistencia pero no patrones complejos. Modelos supervisados como LSTM o Gradient Boosting entrenados sobre los residuos estandarizados y la historia de volatilidad condicional podrían mejorar la precisión del pronóstico, especialmente en los días inmediatos posteriores a un shock.',
-      impact: 'Alto',
-      effort: 'Alto',
-    },
-    {
-      icon: '📱',
-      title: 'Adaptación Responsiva para Pantallas Pequeñas',
-      tags: ['Largo plazo', 'Accesibilidad'],
-      tagColors: ['#8B5CF6', '#3B82F6'],
-      body: 'El dashboard está optimizado para escritorio. Los gráficos Plotly y la cuadrícula de KPIs no se adaptan bien a resoluciones móviles. Una refactorización con media queries y layouts responsivos mejoraría la accesibilidad sin modificar la lógica de análisis, permitiendo consultar señales y KPIs desde dispositivos móviles.',
-      impact: 'Bajo',
-      effort: 'Medio',
     },
   ];
 
@@ -2837,7 +3490,7 @@ function renderM9() {
     <h1 class="header-gradient">M9 — Oportunidades de Mejora</h1>
     <p class="page-subtitle">Próximos pasos propuestos para evolucionar RiskLab USTA, cada uno justificado en una limitación concreta de la arquitectura actual.</p>
 
-    ${getInsight("Estado Actual y Dirección de Desarrollo", "RiskLab USTA integra ocho módulos de análisis cuantitativo que cubren desde el diagnóstico técnico hasta la optimización de portafolio y la estimación de riesgo extremo. Las mejoras propuestas a continuación parten de limitaciones concretas de la arquitectura actual y representan pasos incrementales coherentes con el diseño ya construido.", "neutral")}
+    ${getInsight("Estado Actual y Dirección de Desarrollo", "RiskLab USTA integra ocho módulos de análisis cuantitativo que cubren desde el diagnóstico técnico (M1–M2), modelado de volatilidad ARCH/GARCH (M3), riesgo sistemático CAPM (M4), VaR/CVaR con backtesting Kupiec (M5), optimización de Markowitz con rendimiento objetivo (M6), señales técnicas automáticas (M7) y comparativa benchmark (M8). Las tres mejoras propuestas parten de limitaciones concretas del diseño actual y representan la siguiente capa lógica de valor sobre la arquitectura construida.", "neutral")}
 
     <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px,1fr));gap:18px;margin-top:20px">
       ${cardHTML}
@@ -2846,9 +3499,9 @@ function renderM9() {
     <div class="card" style="margin-top:24px;padding:20px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE50);border:1px solid #BFDBFE">
       <h3 style="margin:0 0 12px;font-size:0.95rem;font-weight:700;color:#1E40AF">Hoja de Ruta por Horizonte</h3>
       <p style="font-size:0.85rem;color:#475569;margin:0;line-height:1.75">
-        <strong>Corto plazo (1–3 meses):</strong> Exportación de reportes · Alertas automáticas · Ampliación de activos — alto retorno con esfuerzo bajo, sin cambios estructurales.<br>
-        <strong>Mediano plazo (3–6 meses):</strong> Backtesting de señales · Escenarios de estrés · Actualización automática · Control de acceso — consolidan la herramienta y la hacen más robusta y segura.<br>
-        <strong>Largo plazo (6–12 meses):</strong> Optimización dinámica rolling · Pronóstico de volatilidad con ML · Adaptación responsiva — mayor inversión técnica con impacto en capacidad analítica avanzada.
+        <strong>Corto plazo (1–3 meses):</strong> Exportación de reportes a PDF/Excel — alto retorno con esfuerzo bajo, sin cambios estructurales en el backend.<br>
+        <strong>Mediano plazo (3–6 meses):</strong> Escenarios de estrés histórico — complementa directamente el VaR/CVaR de M5 con análisis de cola basado en shocks documentados.<br>
+        <strong>Largo plazo (6–12 meses):</strong> Optimización dinámica con ventana móvil — mayor inversión técnica que revela la estabilidad temporal de la frontera eficiente de M6.
       </p>
     </div>
 
@@ -2859,7 +3512,9 @@ function renderM9() {
 // ─────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await initAuth();   // espera verificación de token antes de continuar
+
   if (!D) {
     document.getElementById('gen-info').innerHTML =
       `⚠️ Sin datos<br><code style="font-size:.62rem;font-family:monospace">python generate_data.py</code>`;
@@ -2875,6 +3530,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('p-start').setAttribute('max', todayStr);
   document.getElementById('p-end').setAttribute('max', todayStr);
+  const todayFmt = new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const sdrEl = document.getElementById('sidebar-date-range');
+  if (sdrEl) sdrEl.textContent = `01/01/2020 – ${todayFmt}`;
 
   // Check API status asynchronously
   checkAPIStatus();
