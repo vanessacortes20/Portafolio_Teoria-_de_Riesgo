@@ -116,7 +116,7 @@ class GeneratorConfig(BaseModel):
 
 
 # ── Configuración ─────────────────────────────────────────────────────────────
-TICKERS   = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,MELI,SONY,XOM,WPM").split(",")]
+TICKERS   = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,AMZN,SONY,XOM,WPM").split(",")]
 BENCHMARK = os.getenv("BENCHMARK_TICKER", "^GSPC")
 OUT_FILE  = ROOT / "data.js"
 
@@ -437,8 +437,8 @@ def compute_benchmark(all_returns: dict, bench_data: pd.DataFrame, rf_annual: fl
         if df.shape[1] < 2:
             return {}
 
-        # Pesos del portafolio Max Sharpe (5000 sims rápidas para velocidad)
-        port_result = optimize_portfolio(df, n_simulations=5000)
+        # Pesos del portafolio Max Sharpe (10000 sims para cumplir requisito Markowitz)
+        port_result = optimize_portfolio(df, n_simulations=10_000)
         weights = np.array(list(port_result["Max_Sharpe"]["Weights"].values()))
         port_ret_series = df.dot(weights)  # retornos diarios del portafolio
 
