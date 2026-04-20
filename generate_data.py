@@ -380,7 +380,7 @@ def compute_portfolio(all_returns: dict, rf_annual: float = 0.045) -> dict:
         return {}
 
     n_sim = 10_000
-    result = clean(optimize_portfolio(df, n_simulations=n_sim))
+    result = clean(optimize_portfolio(df, n_simulations=n_sim, rf_rate=rf_annual))
 
     # Recalcular Sharpe para los portafolios óptimos con RF real
     mean_ret = df.mean()
@@ -438,7 +438,7 @@ def compute_benchmark(all_returns: dict, bench_data: pd.DataFrame, rf_annual: fl
             return {}
 
         # Pesos del portafolio Max Sharpe (10000 sims para cumplir requisito Markowitz)
-        port_result = optimize_portfolio(df, n_simulations=10_000)
+        port_result = optimize_portfolio(df, n_simulations=10_000, rf_rate=rf_annual)
         weights = np.array(list(port_result["Max_Sharpe"]["Weights"].values()))
         port_ret_series = df.dot(weights)  # retornos diarios del portafolio
 
