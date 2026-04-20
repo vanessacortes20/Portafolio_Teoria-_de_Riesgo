@@ -182,6 +182,38 @@ def calculate_var_cvar(
     }
 
 
+def kupiec_test(returns: pd.Series, var_value: float, confidence: float = 0.95) -> dict:
+    """
+    Kupiec Proportional Failure Rate (POF) test for VaR backtesting.
+    var_value: positive VaR magnitude (loss expressed as positive number).
+    LR statistic follows chi-squared(1) under H0 (model is correctly specified).
+    """
+    T = len(returns)
+    p = 1.0 - confidence          # expected daily exception probability
+    N = int((returns < -var_value).sum())
+    p_hat = N / T if T > 0 else 0.0
+
+    if 0 < p_hat < 1:
+        lr_stat = float(-2 * (
+            N * np.log(p / p_hat) + (T - N) * np.log((1 - p) / (1 - p_hat))
+        ))
+        p_value = float(stats.chi2.sf(lr_stat, df=1))
+    else:
+        lr_stat = None
+        p_value = None
+
+    return {
+        "T":                   T,
+        "N_exceptions":        N,
+        "expected_exceptions": round(p * T, 2),
+        "exception_rate_pct":  round(p_hat * 100, 4),
+        "expected_rate_pct":   round(p * 100, 4),
+        "LR_stat":             round(lr_stat, 6) if lr_stat is not None else None,
+        "p_value":             round(p_value, 6) if p_value is not None else None,
+        "passed":              (p_value > 0.05) if p_value is not None else None,
+    }
+
+
 # =============================================================================
 # SECCIÓN 6: OPTIMIZACIÓN DE MARKOWITZ (MÓDULO 6)
 # =============================================================================
@@ -189,6 +221,7 @@ def calculate_var_cvar(
 def optimize_portfolio(
     returns_df: pd.DataFrame,
     n_simulations: int = 10_000,
+    rf_rate: float = 0.04,
 ) -> dict:
     """Random portfolio simulation to trace the efficient frontier."""
     tickers    = returns_df.columns.tolist()
@@ -209,7 +242,7 @@ def optimize_portfolio(
         port_vol = np.sqrt(w @ (cov * 252) @ w)
         ret_arr[i]    = port_ret
         vol_arr[i]    = port_vol
-        sharpe_arr[i] = port_ret / port_vol if port_vol > 0 else 0
+        sharpe_arr[i] = (port_ret - rf_rate) / port_vol if port_vol > 0 else 0
 
     ms_idx  = int(np.argmax(sharpe_arr))
     mv_idx  = int(np.argmin(vol_arr))
@@ -228,6 +261,57 @@ def optimize_portfolio(
             "Weights":    dict(zip(tickers, weights_rec[mv_idx].tolist())),
         },
         "Correlation": returns_df.corr().to_dict(),
+    }
+
+
+def optimize_portfolio_target_return(
+    returns_df: pd.DataFrame,
+    target_return: float,
+    rf_rate: float = 0.04,
+) -> dict:
+    """
+    Find minimum-volatility portfolio that achieves target_return (annualized).
+    Uses SLSQP constrained optimization.
+    """
+    from scipy.optimize import minimize
+
+    tickers  = returns_df.columns.tolist()
+    n        = len(tickers)
+    mean_ann = returns_df.mean() * 252
+    cov_ann  = returns_df.cov()  * 252
+
+    def _vol(w):
+        return float(np.sqrt(w @ cov_ann.values @ w))
+
+    constraints = [
+        {"type": "eq", "fun": lambda w: float(np.sum(w)) - 1.0},
+        {"type": "eq", "fun": lambda w: float(np.dot(w, mean_ann.values)) - target_return},
+    ]
+    bounds = [(0.0, 1.0)] * n
+    w0     = np.ones(n) / n
+
+    res = minimize(
+        _vol, w0, method="SLSQP",
+        bounds=bounds, constraints=constraints,
+        options={"maxiter": 1000, "ftol": 1e-10},
+    )
+
+    if not res.success:
+        return {"feasible": False, "error": "No existe portafolio factible con ese rendimiento objetivo. Prueba un valor dentro del rango de retornos individuales."}
+
+    w       = np.clip(res.x, 0, 1)
+    w      /= w.sum()
+    port_ret = float(np.dot(w, mean_ann.values))
+    port_vol = _vol(w)
+    sharpe   = (port_ret - rf_rate) / port_vol if port_vol > 0 else 0.0
+
+    return {
+        "feasible":      True,
+        "target_return": target_return,
+        "Return":        port_ret,
+        "Volatility":    port_vol,
+        "Sharpe":        sharpe,
+        "Weights":       dict(zip(tickers, w.tolist())),
     }
 
 
