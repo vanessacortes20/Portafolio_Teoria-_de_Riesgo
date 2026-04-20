@@ -188,7 +188,7 @@ def calculate_var_cvar(
 
 def optimize_portfolio(
     returns_df: pd.DataFrame,
-    n_simulations: int = 5_000,
+    n_simulations: int = 10_000,
 ) -> dict:
     """Random portfolio simulation to trace the efficient frontier."""
     tickers    = returns_df.columns.tolist()
