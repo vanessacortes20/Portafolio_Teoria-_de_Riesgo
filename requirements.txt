@@ -10,3 +10,6 @@ statsmodels
 arch
 numpy
 requests
+bcrypt
+python-jose[cryptography]
+email-validator
