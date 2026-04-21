@@ -737,8 +737,10 @@ async function loadAuthUser() {
     const chip = document.getElementById('user-chip');
     if (chip) {
       chip.style.display = 'flex';
-      const initials = ((u.full_name||u.username||'?')[0] + (u.last_name||'')[0]).toUpperCase().trim() || '?';
-      document.getElementById('user-avatar').textContent = initials || u.username[0].toUpperCase();
+      const firstChar = (u.full_name || u.username || '?').charAt(0);
+      const lastChar = u.last_name ? u.last_name.charAt(0) : '';
+      const initials = (firstChar + lastChar).toUpperCase().trim() || '?';
+      document.getElementById('user-avatar').textContent = initials || u.username.charAt(0).toUpperCase();
       document.getElementById('user-name').textContent   = u.full_name ? u.full_name + ' ' + (u.last_name||'') : u.username;
       document.getElementById('user-role').textContent   = u.role === 'admin' ? '★ Admin' : 'Usuario';
       document.getElementById('logout-btn').style.display = '';
@@ -3441,29 +3443,29 @@ function renderM8() {
 function renderM9() {
   const cards = [
     {
-      icon: '📤',
-      title: 'Exportación de Reportes (PDF / Excel)',
-      tags: ['Corto plazo', 'PDF · Excel'],
+      icon: '📱',
+      title: 'Versión Móvil y Acceso Más Fácil',
+      tags: ['Corto plazo', 'UX/UI'],
       tagColors: ['#10B981', '#3B82F6'],
-      body: 'El dashboard presenta los resultados de M1 a M8 de forma interactiva, pero no permite descargar el análisis. Incorporar exportación a PDF (para reportes ejecutivos o académicos) o a Excel (para tablas de VaR, CAPM y pesos óptimos) convertiría el dashboard en una herramienta de documentación, no solo de visualización. El backend FastAPI existente puede generar estos reportes server-side con librerías como ReportLab o openpyxl.',
-      impact: 'Medio',
+      body: 'Adaptar el dashboard para que pueda abrirse y usarse con más comodidad desde celular o tablet, manteniendo la lectura clara de KPIs, gráficos y módulos sin saturación visual.',
+      impact: 'Alto',
       effort: 'Bajo',
     },
     {
-      icon: '📊',
-      title: 'Escenarios de Estrés Histórico',
-      tags: ['Mediano plazo', 'Riesgo extremo'],
+      icon: '🔐',
+      title: 'Fortalecer Autenticación y Gestión de Usuarios',
+      tags: ['Mediano plazo', 'Seguridad'],
       tagColors: ['#3B82F6', '#E05580'],
-      body: 'M5 calcula VaR y CVaR sobre el período actual, pero no permite ver cómo habría respondido el portafolio en episodios de shock documentados como el colapso de marzo de 2020 o la corrección de 2022. Incorporar ventanas de estrés predefinidas aplicadas sobre los retornos históricos enriquecería el análisis de cola en M5 sin requerir datos adicionales, alineándose con las pruebas de estrés regulatorias de Basilea III.',
+      body: 'Mejorar la capa de usuario y contraseña para que el acceso sea más sólido, con mejor administración de cuentas, recuperación de credenciales y control más claro de permisos según el tipo de usuario.',
       impact: 'Alto',
       effort: 'Medio',
     },
     {
-      icon: '📈',
-      title: 'Optimización Dinámica con Ventana Móvil',
-      tags: ['Largo plazo', 'Markowitz rolling'],
+      icon: '🔔',
+      title: 'Sistema de Alertas Más Accionable',
+      tags: ['Largo plazo', 'Notificaciones'],
       tagColors: ['#8B5CF6', '#10B981'],
-      body: 'M6 calcula la frontera eficiente sobre el período completo, produciendo un portafolio óptimo estático. Una extensión natural sería aplicar la optimización sobre ventanas móviles (rolling 252 días) para observar cómo evolucionan los pesos óptimos y el Sharpe en el tiempo, revelando qué tan estable es la composición óptima ante cambios de correlación y volatilidad entre activos a lo largo de distintos regímenes de mercado.',
+      body: 'Llevar las señales del módulo 7 a un siguiente nivel, de modo que no solo muestren estados técnicos dentro del dashboard, sino que también permitan generar avisos más útiles y oportunos para seguimiento del portafolio.',
       impact: 'Alto',
       effort: 'Alto',
     },
@@ -3499,9 +3501,9 @@ function renderM9() {
     <div class="card" style="margin-top:24px;padding:20px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE50);border:1px solid #BFDBFE">
       <h3 style="margin:0 0 12px;font-size:0.95rem;font-weight:700;color:#1E40AF">Hoja de Ruta por Horizonte</h3>
       <p style="font-size:0.85rem;color:#475569;margin:0;line-height:1.75">
-        <strong>Corto plazo (1–3 meses):</strong> Exportación de reportes a PDF/Excel — alto retorno con esfuerzo bajo, sin cambios estructurales en el backend.<br>
-        <strong>Mediano plazo (3–6 meses):</strong> Escenarios de estrés histórico — complementa directamente el VaR/CVaR de M5 con análisis de cola basado en shocks documentados.<br>
-        <strong>Largo plazo (6–12 meses):</strong> Optimización dinámica con ventana móvil — mayor inversión técnica que revela la estabilidad temporal de la frontera eficiente de M6.
+        <strong>Corto plazo (1–3 meses):</strong> Versión móvil y acceso más fácil — alto impacto en usabilidad sin afectar la lectura de módulos.<br>
+        <strong>Mediano plazo (3–6 meses):</strong> Fortalecer autenticación y gestión de usuarios — mejora la gobernanza de accesos y la solidez de la plataforma.<br>
+        <strong>Largo plazo (6–12 meses):</strong> Sistema de alertas más accionable — evolución de las señales de M7 para generar acciones inmediatas y oportunas.
       </p>
     </div>
 
