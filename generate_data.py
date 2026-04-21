@@ -118,7 +118,7 @@ class GeneratorConfig(BaseModel):
 # ── Configuración ─────────────────────────────────────────────────────────────
 TICKERS   = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,AMZN,SONY,XOM,WPM").split(",")]
 BENCHMARK = os.getenv("BENCHMARK_TICKER", "^GSPC")
-OUT_FILE  = ROOT / "data.js"
+OUT_FILE  = ROOT / "dashboard" / "data.js"
 
 
 # ── Utilidades de serialización ───────────────────────────────────────────────

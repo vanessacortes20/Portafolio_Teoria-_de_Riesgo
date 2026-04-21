@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-DB_PATH      = Path(__file__).parent.parent / "risklab_users.db"
-USERS_JSON   = Path(__file__).parent.parent / "users.json"
+DB_PATH      = Path(__file__).parent.parent / "data" / "risklab_users.db"
+USERS_JSON   = Path(__file__).parent.parent / "data" / "users.json"
 
 
 # ── Conexión ─────────────────────────────────────────────────────────────────
