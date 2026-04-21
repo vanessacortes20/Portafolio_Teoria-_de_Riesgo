@@ -408,8 +408,6 @@ RiskLab USTA está diseñada para ser útil en tres contextos distintos:
 
 **Para el estudiante o investigador**: cada módulo es transparente. El código de `logic.py` es directo, sin capas de abstracción innecesarias. Cada función tiene una correspondencia uno a uno con la fórmula teórica, lo que facilita entender cómo los modelos funcionan en la práctica, no solo en papel.
 
-**Para el docente**: la plataforma permite cambiar parámetros (nivel de confianza del VaR, período de análisis, activos del portafolio) y observar en tiempo real cómo cambian los resultados. Esto hace que los conceptos de sensibilidad, calibración de modelos y trade-off retorno/riesgo sean demostrables de forma inmediata.
-
 ---
 
 ## Limitaciones
