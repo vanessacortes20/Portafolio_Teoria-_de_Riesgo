@@ -429,11 +429,11 @@ Toda plataforma tiene supuestos y restricciones que deben conocerse para interpr
 
 Tres extensiones naturales sobre la arquitectura actual, ordenadas por horizonte de implementación:
 
-**Corto plazo — Exportación de reportes (PDF/Excel)**: el backend FastAPI puede generar reportes server-side con librerías como ReportLab u openpyxl, convirtiendo el dashboard en una herramienta de documentación formal, no solo de visualización interactiva.
+**Corto plazo — Versión móvil y acceso más fácil**: Adaptar el dashboard para que pueda abrirse y usarse con más comodidad desde celular o tablet, manteniendo la lectura clara de KPIs, gráficos y módulos sin saturación visual.
 
-**Mediano plazo — Escenarios de estrés histórico**: incorporar ventanas predefinidas de shocks documentados (marzo 2020, 2022 bear market) aplicadas sobre los retornos de M5, alineando la herramienta con las pruebas de estrés regulatorias de Basilea III sin requerir datos adicionales.
+**Mediano plazo — Fortalecer autenticación y gestión de usuarios**: Mejorar la capa de usuario y contraseña para que el acceso sea más sólido, con mejor administración de cuentas, recuperación de credenciales y control más claro de permisos según el tipo de usuario.
 
-**Largo plazo — Optimización dinámica con ventana móvil (rolling Markowitz)**: calcular la frontera eficiente sobre ventanas de 252 días deslizantes para revelar cómo evolucionan los pesos óptimos a lo largo del tiempo y cuán estable es la composición del portafolio ante distintos regímenes de mercado.
+**Largo plazo — Sistema de alertas más accionable**: Llevar las señales del módulo 7 a un siguiente nivel, de modo que no solo muestren estados técnicos dentro del dashboard, sino que también permitan generar avisos más útiles y oportunos para seguimiento del portafolio.
 
 ---
 
