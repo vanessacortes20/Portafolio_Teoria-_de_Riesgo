@@ -757,9 +757,9 @@ def get_var_backtest(
 
 @app.get("/api/v1/portfolio/target", summary="Portafolio por Rendimiento Objetivo — M6")
 def get_portfolio_target_return(
+    dates: DateRangeDep,
+    config: ConfigDep,
     target_return: float = Query(..., ge=-0.5, le=2.0, description="Rendimiento anual objetivo (ej: 0.15 = 15%)"),
-    dates: DateRangeDep = Depends(validate_date_range),
-    config: ConfigDep = Depends(get_app_config),
 ):
     try:
         all_rets: dict[str, pd.Series] = {}
