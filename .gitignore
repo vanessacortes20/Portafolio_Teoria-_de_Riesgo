@@ -1,14 +1,56 @@
+# ── Python ────────────────────────────────────────
 __pycache__/
-.env
-venv/
-.vscode/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Entornos virtuales ────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Variables de entorno y secretos ───────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE y editor ──────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Logs y artefactos efímeros ────────────────────
+*.log
+*.tmp
+*.bak
+
+# ── Bases de datos locales (no versionar) ─────────
+*.db
+*.sqlite
+*.sqlite3
+data/risklab_users.db
+data/users.json
+
+# ── Snippets y artefactos de desarrollo ───────────
+*_snippet.txt
+snippet.txt
+rewrite_msg.py
+
+# ── Memoria y configuración local de IA ───────────
+.claude/
+CLAUDE.md
+
+# ── Streamlit (legacy) ────────────────────────────
 .streamlit/
+
+# ── Otros ─────────────────────────────────────────
 outputs/
 history/
-*.txt
-*.log
-.claude/
-
-# Memoria operativa local — no se sube al repo
-CLAUDE.md
