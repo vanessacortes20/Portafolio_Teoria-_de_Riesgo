@@ -97,18 +97,24 @@ RiskLab sigue una arquitectura de dos capas con un mecanismo de datos híbrido:
 ```
 proyecto_2/
 ├── api/
-│   ├── main.py          # FastAPI — endpoints REST, autenticación JWT, validación
-│   ├── logic.py         # Funciones de cómputo estadístico (M1–M7)
-│   ├── data.py          # Descarga de datos históricos (yfinance)
-│   └── database.py      # SQLite — usuarios, tokens de reset, audit log
-├── dashboard.html        # Frontend completo (HTML + CSS + JS + Plotly.js)
-├── generate_data.py      # Generador del snapshot estático data.js
-├── data.js               # Snapshot estático generado por generate_data.py
-├── requirements.txt      # Dependencias Python
-├── Dockerfile            # Imagen Docker lista para producción
-├── Procfile              # Comando de inicio para Render / Railway / Heroku
-├── render.yaml           # Configuración declarativa para Render.com
-└── .env.example          # Plantilla de variables de entorno requeridas
+│   ├── main.py            # FastAPI — endpoints REST, autenticación JWT, validación
+│   ├── logic.py           # Funciones de cómputo estadístico (M1–M7)
+│   ├── data.py            # Descarga de datos históricos (yfinance)
+│   └── database.py        # SQLite — usuarios, tokens de reset, audit log
+├── dashboard/
+│   ├── dashboard.html     # Frontend completo (HTML + CSS + JS + Plotly.js)
+│   └── data.js            # Snapshot estático generado por generate_data.py
+├── data/
+│   ├── risklab_users.db   # Base de datos SQLite de usuarios
+│   └── users.json         # Auto-export legible de la BD
+├── docs/                  # Documentación del proyecto y guion de sustentación
+├── tests/                 # Tests de smoke (yfinance, etc.)
+├── generate_data.py       # Generador del snapshot estático data.js
+├── requirements.txt       # Dependencias Python
+├── Dockerfile             # Imagen Docker lista para producción
+├── Procfile               # Comando de inicio para Render / Railway / Heroku
+├── render.yaml            # Configuración declarativa para Render.com
+└── .env.example           # Plantilla de variables de entorno requeridas
 ```
 
 ---
@@ -290,8 +296,8 @@ cp .env.example .env
 # 4. Iniciar el backend
 uvicorn api.main:app --port 8001 --reload
 
-# 5. Abrir dashboard.html en el navegador
-# (apertura directa o mediante servidor estático)
+# 5. Abrir dashboard/dashboard.html en el navegador
+# (apertura directa como archivo local o mediante servidor estático)
 ```
 
 ### Generar snapshot estático (opcional)
@@ -449,3 +455,16 @@ El resultado es una plataforma que un analista puede usar hoy, que un estudiante
 
 *Desarrollado con Python 3.11 · FastAPI · Plotly.js · Yahoo Finance*  
 *Universidad Santo Tomás — Proyecto Integrador Riesgo Financiero · 2024–2026*
+
+---
+
+## Nota sobre `CLAUDE.md` (contexto operativo local)
+
+El proyecto incluye un archivo local `CLAUDE.md` (excluido del repositorio vía `.gitignore`) que sirve como **memoria técnica operativa** para asistencia con IA durante el desarrollo. Contiene:
+
+- Estado actual y partes delicadas del proyecto
+- Decisiones de diseño no triviales y reglas para futuras modificaciones
+- Mapa exacto de validadores, dependencias inyectadas y decoradores
+- Justificación de elecciones técnicas (benchmark, Rf, portafolio, stack)
+
+**Sincronización:** `README.md` y `CLAUDE.md` deben mantenerse consistentes. Cuando se realice una modificación importante (nuevo módulo, cambio de arquitectura, nuevas dependencias), ambos archivos deben actualizarse en paralelo. Las reglas vinculantes para futuras modificaciones del proyecto residen en `CLAUDE.md`, sección **"Reglas para futuras actualizaciones"**.

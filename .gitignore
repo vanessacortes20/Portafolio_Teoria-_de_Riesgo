@@ -9,3 +9,6 @@ history/
 *.txt
 *.log
 .claude/
+
+# Memoria operativa local — no se sube al repo
+CLAUDE.md
