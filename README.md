@@ -97,6 +97,7 @@ RiskLab sigue una arquitectura de dos capas con un mecanismo de datos híbrido:
 ```
 proyecto_2/
 ├── api/
+│   ├── __init__.py
 │   ├── main.py            # FastAPI — endpoints REST, autenticación JWT, validación
 │   ├── logic.py           # Funciones de cómputo estadístico (M1–M7)
 │   ├── data.py            # Descarga de datos históricos (yfinance)
@@ -104,18 +105,21 @@ proyecto_2/
 ├── dashboard/
 │   ├── dashboard.html     # Frontend completo (HTML + CSS + JS + Plotly.js)
 │   └── data.js            # Snapshot estático generado por generate_data.py
-├── data/
-│   ├── risklab_users.db   # Base de datos SQLite de usuarios
-│   └── users.json         # Auto-export legible de la BD
-├── docs/                  # Documentación del proyecto y guion de sustentación
-├── tests/                 # Tests de smoke (yfinance, etc.)
+├── docs/
+│   └── instructivo_proyecto_integrador.html   # Instructivo del Proyecto Integrador
+├── tests/
+│   └── test_yf.py         # Smoke test de yfinance
+├── data/                  # (carpeta local — la BD SQLite y users.json se generan al arrancar)
 ├── generate_data.py       # Generador del snapshot estático data.js
 ├── requirements.txt       # Dependencias Python
 ├── Dockerfile             # Imagen Docker lista para producción
 ├── Procfile               # Comando de inicio para Render / Railway / Heroku
 ├── render.yaml            # Configuración declarativa para Render.com
-└── .env.example           # Plantilla de variables de entorno requeridas
+├── .env.example           # Plantilla de variables de entorno requeridas
+└── .gitignore             # Reglas de exclusión del repositorio
 ```
+
+> **Nota sobre `data/`:** la carpeta existe localmente para alojar `risklab_users.db` y `users.json`, pero ambos están excluidos del repositorio en `.gitignore` porque contienen datos de usuarios. Se generan automáticamente al iniciar el backend (`init_db()` y `seed_demo_users()` crean los usuarios demo).
 
 ---
 

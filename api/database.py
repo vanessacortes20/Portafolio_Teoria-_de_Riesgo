@@ -15,6 +15,9 @@ from typing import Optional
 DB_PATH      = Path(__file__).parent.parent / "data" / "risklab_users.db"
 USERS_JSON   = Path(__file__).parent.parent / "data" / "users.json"
 
+# Garantiza que la carpeta data/ exista (la BD y users.json no se versionan)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 
 # ── Conexión ─────────────────────────────────────────────────────────────────
 
