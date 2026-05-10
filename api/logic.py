@@ -96,6 +96,13 @@ def fit_garch_models(returns: pd.Series) -> dict:
     res_garch  = arch_model(scaled, vol="GARCH",  p=1, q=1).fit(disp="off")
     res_egarch = arch_model(scaled, vol="EGARCH", p=1, q=1).fit(disp="off")
 
+    models = {
+        "ARCH(1)":    res_arch.aic,
+        "GARCH(1,1)": res_garch.aic,
+        "EGARCH(1,1)": res_egarch.aic,
+    }
+    best_model = min(models, key=models.get)
+
     return {
         "ARCH(1)": {
             "AIC": res_arch.aic,
@@ -113,6 +120,7 @@ def fit_garch_models(returns: pd.Series) -> dict:
             "BIC": res_egarch.bic,
             "LogL": res_egarch.loglikelihood,
         },
+        "best_model": best_model,
     }
 
 
