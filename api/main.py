@@ -786,25 +786,79 @@ def get_portfolio_target_return(
 
 
 @app.get("/api/v1/macro", summary="Indicadores macroeconómicos de contexto — M8")
-def get_macro_indicators():
-    """Devuelve tasa libre de riesgo, rendimiento del Tesoro a 10 años y retorno YTD del S&P 500."""
+def get_macro_indicators(db = Depends(lambda: None)):
+    """Devuelve tasa libre de riesgo, rendimiento del Tesoro a 10 años y retorno YTD del S&P 500.
+
+    Fuente primaria: FRED (DGS3MO, DGS10, CPIAUCSL) con cache transparente en SQLite.
+    Fallback: yfinance (^IRX, ^TNX, ^GSPC) si FRED no está disponible o falla.
+    Las keys originales (as_of, rf_rate, rf_source, treasury_10y, spx_ytd) se preservan
+    para no romper el dashboard. Se agregan campos opcionales con info de cache.
+    """
     import yfinance as yf
+    from api.database_session import SessionLocal
+    from api.services import fred_service as fred
+
     result: dict = {"as_of": date.today().isoformat()}
+    cache_status = {}
 
-    try:
-        irx_hist = yf.Ticker("^IRX").history(period="5d")
-        result["rf_rate"] = float(irx_hist["Close"].iloc[-1]) / 100 if not irx_hist.empty else 0.04
-        result["rf_source"] = "^IRX T-Bill 13 sem."
-    except Exception:
-        result["rf_rate"] = 0.04
-        result["rf_source"] = "default"
+    # ---- Tasa libre de riesgo (3 meses) ----
+    rf_value = None
+    rf_source = None
+    if fred.is_available():
+        db_local = SessionLocal()
+        try:
+            rf_data = fred.get_rf_rate_3m(db_local)
+            if rf_data and rf_data.get("value_decimal") is not None:
+                rf_value = rf_data["value_decimal"]
+                rf_source = f"FRED.DGS3MO ({rf_data.get('date','')})"
+                cache_status["rf_rate"] = rf_data.get("cache_status")
+        finally:
+            db_local.close()
 
-    try:
-        tnx_hist = yf.Ticker("^TNX").history(period="5d")
-        result["treasury_10y"] = float(tnx_hist["Close"].iloc[-1]) / 100 if not tnx_hist.empty else None
-    except Exception:
-        result["treasury_10y"] = None
+    if rf_value is None:
+        # Fallback yfinance ^IRX
+        try:
+            irx_hist = yf.Ticker("^IRX").history(period="5d")
+            if not irx_hist.empty:
+                rf_value = float(irx_hist["Close"].iloc[-1]) / 100
+                rf_source = "^IRX T-Bill 13 sem."
+            else:
+                rf_value = 0.04
+                rf_source = "default"
+        except Exception:
+            rf_value = 0.04
+            rf_source = "default"
 
+    result["rf_rate"] = rf_value
+    result["rf_source"] = rf_source
+
+    # ---- Treasury 10Y ----
+    t10y_value = None
+    t10y_source = None
+    if fred.is_available():
+        db_local = SessionLocal()
+        try:
+            t10 = fred.get_treasury_10y(db_local)
+            if t10 and t10.get("value_decimal") is not None:
+                t10y_value = t10["value_decimal"]
+                t10y_source = f"FRED.DGS10 ({t10.get('date','')})"
+                cache_status["treasury_10y"] = t10.get("cache_status")
+        finally:
+            db_local.close()
+
+    if t10y_value is None:
+        try:
+            tnx_hist = yf.Ticker("^TNX").history(period="5d")
+            t10y_value = float(tnx_hist["Close"].iloc[-1]) / 100 if not tnx_hist.empty else None
+            t10y_source = "^TNX yfinance"
+        except Exception:
+            t10y_value = None
+            t10y_source = "unavailable"
+
+    result["treasury_10y"] = t10y_value
+    result["treasury_10y_source"] = t10y_source
+
+    # ---- S&P 500 YTD (yfinance, no hay equivalente directo en FRED) ----
     try:
         spy_hist = yf.Ticker("^GSPC").history(period="ytd")
         if not spy_hist.empty and len(spy_hist) > 1:
@@ -813,6 +867,22 @@ def get_macro_indicators():
             result["spx_ytd"] = None
     except Exception:
         result["spx_ytd"] = None
+
+    # ---- Inflación CPI (informativo, opcional) ----
+    if fred.is_available():
+        db_local = SessionLocal()
+        try:
+            cpi = fred.get_inflation_yoy(db_local)
+            if cpi:
+                result["inflation_yoy"] = cpi.get("yoy")
+                cache_status["inflation_yoy"] = cpi.get("cache_status")
+        finally:
+            db_local.close()
+
+    # ---- Metadatos de fuente ----
+    result["fred_enabled"] = fred.is_available()
+    if cache_status:
+        result["cache_status"] = cache_status
 
     return json_response(result)
 

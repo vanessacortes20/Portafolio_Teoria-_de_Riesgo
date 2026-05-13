@@ -34,13 +34,21 @@ CACHE_TTL_HOURS = 24
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 
 
+_PLACEHOLDER_VALUES = {
+    "your_fred_key_here", "your_fred_api_key", "changeme",
+    "tu_api_key_aqui", "xxx", "todo",
+}
+
+
 def _api_key() -> Optional[str]:
     key = os.getenv("FRED_API_KEY", "").strip()
-    return key or None
+    if not key or key.lower() in _PLACEHOLDER_VALUES:
+        return None
+    return key
 
 
 def is_available() -> bool:
-    """Indica si el servicio FRED está configurado (hay API key)."""
+    """Indica si el servicio FRED está configurado con una API key válida."""
     return _api_key() is not None
 
 
