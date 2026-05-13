@@ -133,9 +133,14 @@ Calcula y visualiza los indicadores clásicos de análisis técnico sobre la ser
 
 Calcula retornos simples y logarítmicos diarios. Presenta estadísticas descriptivas completas (media, desviación estándar, asimetría, exceso de curtosis, mínimo, máximo) y aplica dos tests formales de normalidad: Jarque-Bera y Shapiro-Wilk. Incluye gráfico Q-Q para evaluar visualmente las colas de la distribución, y un panel de **hechos estilizados** (fat tails, clustering de volatilidad via Ljung-Box, asimetría negativa) que conecta la distribución empírica con los supuestos del modelo.
 
-### M3 — Modelos de Volatilidad (ARCH/GARCH/EGARCH)
+### M3 — Modelos de Volatilidad (EWMA + ARCH/GARCH/EGARCH)
 
-Ajusta tres modelos de volatilidad condicional: ARCH(1), GARCH(1,1) y EGARCH(1,1). Compara los tres modelos por AIC y BIC para identificar el mejor ajuste. Con el GARCH(1,1) seleccionado, calcula los residuos estandarizados (con su test de normalidad Jarque-Bera) y genera un **pronóstico de volatilidad a 10 días** que cuantifica el riesgo esperado en el horizonte de corto plazo. Los retornos se escalan por 100 para mejorar la convergencia numérica del optimizador.
+Ajusta cuatro enfoques de volatilidad condicional sobre el mismo activo:
+
+- **EWMA (RiskMetrics)** con λ configurable (default 0.94) vía query parameter `lambda_ewma`. Validado por Pydantic (0 < λ < 1). Devuelve la serie completa, el último valor, la media histórica y la volatilidad rodante de 30 días para comparar.
+- **ARCH(1)**, **GARCH(1,1)** y **EGARCH(1,1)** estimados por máxima verosimilitud. Comparados por AIC y BIC para identificar el mejor ajuste.
+
+Con el GARCH(1,1) seleccionado, calcula los residuos estandarizados con dos diagnósticos formales: **Jarque-Bera** (normalidad) y **ARCH-LM (Engle 1982)** sobre 5 lags para detectar heterocedasticidad condicional remanente. Genera un **pronóstico de volatilidad a 10 días** y una **comparación EWMA vs GARCH(1,1)** con interpretación textual sobre el régimen de volatilidad actual. Los retornos se escalan por 100 para mejorar la convergencia numérica del optimizador.
 
 ### M4 — Riesgo Sistemático (CAPM)
 
@@ -150,15 +155,30 @@ Calcula VaR y CVaR bajo tres metodologías:
 
 El VaR se reporta al nivel de confianza configurado por el usuario (80%–99%) y siempre también al 99% como referencia regulatoria fija. El módulo incluye **backtesting con el Test de Kupiec (POF)**: calcula el estadístico de razón de verosimilitud LR sobre las excepciones históricas y determina si el modelo es estadísticamente válido (p-value > 0.05).
 
-### M6 — Optimización de Portafolio (Markowitz)
+### M6 — Optimización de Portafolio (Markowitz por Monte Carlo + QP)
 
-Genera 10,000 portafolios aleatorios con pesos ≥ 0 y Σwᵢ = 1 para trazar la frontera eficiente. Identifica el portafolio de **máximo Sharpe Ratio** (mejor relación retorno/riesgo) y el de **mínima volatilidad**. El Sharpe se calcula correctamente deduciendo la tasa libre de riesgo: SR = (Rₚ − Rƒ)/σₚ.
+Tres niveles de optimización conviven en el mismo módulo:
 
-Incluye una segunda optimización por **rendimiento objetivo**: dada una tasa anual deseada, encuentra la composición de mínima volatilidad que la alcanza exactamente, resolviendo un problema de optimización cuadrática con SLSQP. La matriz de correlación entre activos se visualiza como heatmap interactivo (escala RdBu de −1 a +1).
+1. **Simulación Monte Carlo (10,000 portafolios)** con pesos aleatorios y Σwᵢ = 1, para visualizar el conjunto factible y aproximar la frontera eficiente.
+2. **Programación cuadrática explícita (SLSQP)** que resuelve numéricamente:
+   - **Mínima varianza global**: `min wᵀΣw  s.t. Σwᵢ = 1`
+   - **Máximo Sharpe**: `max (wᵀμ − Rƒ)/√(wᵀΣw)  s.t. Σwᵢ = 1`
+   En **dos versiones**: long-only (wᵢ ≥ 0) y con short-selling permitido (wᵢ ∈ [-1, 1]).
+3. **Comparación interpretativa con/sin no-negatividad**: identifica activos con peso 0 en long-only, posiciones cortas cuando se permiten, y la ganancia de Sharpe que aporta levantar la restricción.
+4. **Rendimiento objetivo** (legacy SLSQP): dada una tasa anual deseada, encuentra la composición de mínima volatilidad que la alcanza exactamente.
 
-### M7 — Señales y Alertas Técnicas
+La matriz de correlación entre activos se visualiza como heatmap interactivo (escala RdBu de −1 a +1).
 
-Evalúa el estado actual de cada indicador (RSI, MACD, Bollinger) sobre la última sesión disponible y genera señales de compra/venta con **explicaciones en lenguaje natural**. Cada señal explica por qué se activa, qué implica económicamente y qué limitaciones tiene. No es un sistema de trading automatizado, sino un panel de diagnóstico que traduce indicadores técnicos en texto interpretable.
+### M7 — Señales y Alertas Técnicas (con persistencia)
+
+Evalúa el estado actual de cada indicador (RSI, MACD, Bollinger) sobre la última sesión disponible y genera señales de compra/venta con **explicaciones en lenguaje natural**. Cada señal explica por qué se activa, qué implica económicamente y qué limitaciones tiene.
+
+**Umbrales configurables vía query parameters** (validados por Pydantic):
+- `rsi_overbought` (50–99, default 70)
+- `rsi_oversold` (1–50, default 30)
+- `bollinger_std` (default 2.0)
+
+**Persistencia en `signals_log`** (SQLAlchemy): cada señal disparada se guarda con timestamp, ticker, regla, valor y nota interpretativa. Se evita duplicar señales del mismo ticker/regla/día. Endpoint adicional `GET /api/v1/signals/{ticker}/history` devuelve el historial ordenado por fecha descendente.
 
 ### M8 — Portafolio vs. Benchmark S&P 500
 
@@ -369,7 +389,8 @@ Con el backend corriendo: `http://localhost:8001/docs`
 | GET | `/api/v1/risk/{ticker}/backtest` | Backtesting Kupiec — M5 |
 | GET | `/api/v1/portfolio/optimize` | Frontera eficiente Markowitz — M6 |
 | GET | `/api/v1/portfolio/target` | Optimización por rendimiento objetivo — M6 |
-| GET | `/api/v1/signals/{ticker}` | Señales técnicas automáticas — M7 |
+| GET | `/api/v1/signals/{ticker}` | Señales técnicas automáticas + persistencia — M7 |
+| GET | `/api/v1/signals/{ticker}/history` | Historial de señales persistidas — M7 |
 | GET | `/api/v1/macro` | Contexto macro (Rf, T10Y, S&P YTD) — M8 |
 | GET | `/api/v1/all` | Todos los módulos en una sola llamada |
 
@@ -382,6 +403,11 @@ Con el backend corriendo: `http://localhost:8001/docs`
 | `confidence` | 0.80 – 0.99 | 0.95 | Nivel de confianza para VaR |
 | `n_simulations` | 1,000 – 100,000 | 10,000 | Iteraciones Monte Carlo |
 | `target_return` | −0.50 – 2.00 | — | Rendimiento anual objetivo para M6 |
+| `lambda_ewma` | 0.0 – 1.0 (excl.) | 0.94 | Factor de decaimiento EWMA en M3 |
+| `include_qp` | bool | `true` | Incluye QP determinista en M6 |
+| `rsi_overbought` | 50 – 99 | 70 | Umbral de sobrecompra RSI en M7 |
+| `rsi_oversold` | 1 – 50 | 30 | Umbral de sobreventa RSI en M7 |
+| `persist` | bool | `true` | Guarda señales disparadas en `signals_log` |
 
 ---
 
