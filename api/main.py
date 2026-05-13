@@ -943,24 +943,154 @@ def get_asset_signals(
     ticker: str,
     dates: DateRangeDep,
     _cfg: ConfigDep,
+    rsi_overbought: int = Query(70, ge=50, le=99,
+        description="Umbral de sobrecompra RSI (default 70)."),
+    rsi_oversold:   int = Query(30, ge=1,  le=50,
+        description="Umbral de sobreventa RSI (default 30)."),
+    bollinger_std:  float = Query(2.0, gt=0.0, le=5.0,
+        description="Desviaciones estándar para Bandas de Bollinger (default 2.0)."),
+    persist: bool = Query(True,
+        description="Guardar las señales disparadas en signals_log."),
 ):
+    """Genera señales técnicas y opcionalmente las persiste en signals_log.
+
+    Evita duplicados: solo persiste señales que no estén ya registradas para
+    el mismo ticker, regla y fecha de hoy.
+    """
     try:
+        from datetime import datetime as _dt
+        from sqlalchemy import and_
+        from api.database_session import SessionLocal
+        from api.db_models import SignalLog
+
         records = _build_technical_records(ticker, **dates)
         if not records or len(records) < 2:
             raise HTTPException(404, f"Datos insuficientes para '{ticker}'.")
 
         last, prev = records[-1], records[-2]
+        rsi_val   = last.get("RSI") or 50
+        macd_h    = last.get("MACD_Hist") or 0
+        close     = last.get("Close") or 0
+        bb_up     = last.get("BB_Upper") or 0
+        bb_low    = last.get("BB_Lower") or 0
+
         signals = generate_signals({
-            "RSI":            last.get("RSI") or 50,
-            "MACD_Hist":      last.get("MACD_Hist") or 0,
+            "RSI":            rsi_val,
+            "MACD_Hist":      macd_h,
             "MACD_Hist_Prev": prev.get("MACD_Hist") or 0,
-            "Close":          last.get("Close") or 0,
-            "BB_Upper":       last.get("BB_Upper") or 0,
-            "BB_Lower":       last.get("BB_Lower") or 0,
+            "Close":          close,
+            "BB_Upper":       bb_up,
+            "BB_Lower":       bb_low,
+            "RSI_Overbought": rsi_overbought,
+            "RSI_Oversold":   rsi_oversold,
         })
-        return {"ticker": ticker, "signals": signals}
+
+        # Reglas adicionales aplicadas con los umbrales configurables del usuario
+        extra: list[dict] = []
+        if rsi_val >= rsi_overbought:
+            extra.append({
+                "id": "RSI_OVERBOUGHT_USER", "type": "sell",
+                "value": float(rsi_val),
+                "msg": f"RSI {rsi_val:.1f} >= umbral configurado ({rsi_overbought})",
+            })
+        if rsi_val <= rsi_oversold:
+            extra.append({
+                "id": "RSI_OVERSOLD_USER", "type": "buy",
+                "value": float(rsi_val),
+                "msg": f"RSI {rsi_val:.1f} <= umbral configurado ({rsi_oversold})",
+            })
+        if bb_up and close >= bb_up:
+            extra.append({
+                "id": "BB_UPPER_BREAK", "type": "sell",
+                "value": float(close),
+                "msg": f"Precio {close:.2f} toca/excede banda superior ({bb_up:.2f})",
+            })
+        if bb_low and close <= bb_low:
+            extra.append({
+                "id": "BB_LOWER_BREAK", "type": "buy",
+                "value": float(close),
+                "msg": f"Precio {close:.2f} toca/cae bajo banda inferior ({bb_low:.2f})",
+            })
+
+        all_signals = signals + extra
+
+        # Persistencia en signals_log evitando duplicados del mismo día
+        persisted = 0
+        if persist:
+            db = SessionLocal()
+            try:
+                today = _dt.utcnow().date()
+                for s in all_signals:
+                    rule = s.get("id") or s.get("type") or "unknown"
+                    exists = db.query(SignalLog).filter(
+                        and_(
+                            SignalLog.ticker == ticker,
+                            SignalLog.rule   == rule,
+                        )
+                    ).filter(SignalLog.timestamp >= _dt(today.year, today.month, today.day)).first()
+                    if exists:
+                        continue
+                    db.add(SignalLog(
+                        ticker=ticker,
+                        rule=rule,
+                        value=float(s.get("value")) if s.get("value") is not None else None,
+                        note=str(s.get("msg") or "")[:255],
+                    ))
+                    persisted += 1
+                if persisted:
+                    db.commit()
+            finally:
+                db.close()
+
+        return {
+            "ticker":        ticker,
+            "signals":       all_signals,
+            "thresholds":    {
+                "rsi_overbought": rsi_overbought,
+                "rsi_oversold":   rsi_oversold,
+                "bollinger_std":  bollinger_std,
+            },
+            "persisted_count": persisted,
+        }
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/v1/signals/{ticker}/history", summary="Historial de señales persistidas — M7")
+def get_signals_history(
+    ticker: str,
+    limit: int = Query(100, ge=1, le=1000, description="Máximo de registros a devolver."),
+):
+    """Devuelve las señales persistidas en signals_log para el ticker dado."""
+    try:
+        from api.database_session import SessionLocal
+        from api.db_models import SignalLog
+
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(SignalLog)
+                .filter(SignalLog.ticker == ticker)
+                .order_by(SignalLog.timestamp.desc())
+                .limit(limit)
+                .all()
+            )
+            history = [
+                {
+                    "id":        r.id,
+                    "timestamp": r.timestamp.isoformat(timespec="seconds"),
+                    "ticker":    r.ticker,
+                    "rule":      r.rule,
+                    "value":     r.value,
+                    "note":      r.note,
+                }
+                for r in rows
+            ]
+            return {"ticker": ticker, "count": len(history), "history": history}
+        finally:
+            db.close()
     except Exception as exc:
         raise HTTPException(500, str(exc))
 
