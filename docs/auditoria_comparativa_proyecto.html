@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auditoría Ejecutiva + Plan de 5 Fases — RiskLab USTA</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0; padding: 0; background: #f8fafc; color: #1e293b; line-height: 1.5;
+  }
+  .container { max-width: 1240px; margin: 0 auto; padding: 32px 28px 80px; }
+
+  /* Header */
+  .hdr {
+    background: linear-gradient(135deg, #3D008D 0%, #ED1E79 100%);
+    color: #fff; padding: 32px 36px; border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(61, 0, 141, 0.18); margin-bottom: 28px;
+  }
+  .hdr h1 { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -0.4px; }
+  .hdr .sub { font-size: 13.5px; opacity: 0.92; margin-bottom: 4px; }
+  .hdr .meta { font-size: 11.5px; opacity: 0.78; margin-top: 12px; }
+
+  /* Sections */
+  section {
+    background: #fff; border-radius: 14px; padding: 26px 30px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05); margin-bottom: 22px;
+    border: 1px solid #e9e4f0;
+  }
+  h2 {
+    font-size: 21px; color: #3D008D; margin: 0 0 16px;
+    padding-bottom: 11px; border-bottom: 2px solid #f3eefa;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .num {
+    background: linear-gradient(135deg, #3D008D, #ED1E79);
+    color: #fff; width: 30px; height: 30px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+  }
+  h3 { font-size: 15px; color: #1e293b; margin: 18px 0 9px; font-weight: 700; }
+  h4 { font-size: 13px; color: #475569; margin: 12px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  p, li { font-size: 13px; color: #334155; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 12.5px; }
+  thead th {
+    background: #f3eefa; color: #3D008D; padding: 9px 11px;
+    text-align: left; font-weight: 700; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    border-bottom: 2px solid #e9e4f0;
+  }
+  tbody td { padding: 9px 11px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tbody tr:hover { background: #faf8fc; }
+
+  /* Badges */
+  .badge {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .b-ok       { background: #dcfce7; color: #166534; }
+  .b-partial  { background: #fef3c7; color: #92400e; }
+  .b-no       { background: #fee2e2; color: #991b1b; }
+  .b-new      { background: #dbeafe; color: #1e40af; }
+  .b-crit     { background: #fce7f3; color: #9d174d; }
+  .b-opt      { background: #e0e7ff; color: #4338ca; }
+  .b-high     { background: #fee2e2; color: #991b1b; }
+  .b-med      { background: #fef3c7; color: #92400e; }
+  .b-low      { background: #ecfdf5; color: #047857; }
+
+  /* Boxes */
+  .box {
+    background: #faf8fc; border-left: 4px solid #3D008D;
+    padding: 13px 17px; border-radius: 0 8px 8px 0; margin: 12px 0;
+  }
+  .box-warn { background: #fffbeb; border-left-color: #f59e0b; }
+  .box-crit { background: #fef2f2; border-left-color: #dc2626; }
+  .box-ok { background: #f0fdf4; border-left-color: #16a34a; }
+  .box-arch { background: linear-gradient(135deg, #f0f9ff 0%, #f5f3ff 100%); border: 2px solid #3D008D; border-radius: 12px; padding: 18px 22px; margin: 14px 0; }
+  .box-arch strong { color: #3D008D; }
+
+  /* TOC */
+  .toc {
+    background: linear-gradient(135deg, #fff 0%, #f8f7fa 100%);
+    border: 1px solid #e9e4f0; border-radius: 12px; padding: 16px 22px;
+    margin-bottom: 24px;
+  }
+  .toc h3 { margin: 0 0 10px; color: #3D008D; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  .toc li { margin: 3px 0; font-size: 12.5px; }
+  .toc a { color: #3D008D; text-decoration: none; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Phase cards */
+  .phase {
+    background: #fff; border: 2px solid #e9e4f0; border-radius: 14px;
+    padding: 0; margin: 20px 0; overflow: hidden;
+  }
+  .phase .ph-hdr {
+    background: linear-gradient(135deg, #3D008D 0%, #ED1E79 100%);
+    color: #fff; padding: 16px 22px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .phase .ph-num {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+  }
+  .phase .ph-title { font-size: 16px; font-weight: 700; flex: 1; }
+  .phase .ph-tag {
+    font-size: 10.5px; padding: 3px 10px;
+    background: rgba(255,255,255,0.22); border-radius: 6px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .phase .ph-body { padding: 18px 24px; }
+  .phase .ph-block { margin: 10px 0 14px; }
+  .phase .ph-block-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #3D008D; font-weight: 700; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .phase .ph-block-title .dot { width: 8px; height: 8px; border-radius: 50%; background: #3D008D; }
+  .phase ul, .phase ol { margin: 4px 0; padding-left: 20px; }
+  .phase li { margin: 3px 0; font-size: 12.5px; }
+  .phase .do-not {
+    background: #fef2f2; border-left: 3px solid #dc2626; padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+  }
+  .phase .do-not .ph-block-title { color: #991b1b; }
+  .phase .do-not .dot { background: #dc2626; }
+  .phase .evidence {
+    background: #f0fdf4; border-left: 3px solid #16a34a; padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+  }
+  .phase .evidence .ph-block-title { color: #166534; }
+  .phase .evidence .dot { background: #16a34a; }
+  .phase .risk {
+    background: #fffbeb; border-left: 3px solid #f59e0b; padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+  }
+  .phase .risk .ph-block-title { color: #92400e; }
+  .phase .risk .dot { background: #f59e0b; }
+
+  code { background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+         font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #be185d; }
+
+  ul, ol { padding-left: 22px; margin: 6px 0; }
+  li { margin: 3px 0; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 10px 0; }
+
+  .summary-card {
+    background: #fff; border: 1px solid #e9e4f0; border-radius: 10px;
+    padding: 14px 16px; text-align: center;
+  }
+  .summary-card .val { font-size: 26px; font-weight: 800; margin: 4px 0; }
+  .summary-card .lbl { font-size: 10.5px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+
+  .verdict-box {
+    background: linear-gradient(135deg, #fff 0%, #fef3c7 100%);
+    border: 2px solid #f59e0b; border-radius: 12px;
+    padding: 16px 20px; margin: 14px 0;
+  }
+  .verdict-box strong { color: #92400e; }
+
+  /* Checklist */
+  .checklist {
+    background: #faf8fc; border: 1px solid #e9e4f0; border-radius: 10px;
+    padding: 14px 18px; margin: 10px 0;
+  }
+  .checklist label {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 0; font-size: 12.5px; cursor: pointer;
+  }
+  .checklist input { margin-top: 3px; accent-color: #3D008D; }
+
+  .footer {
+    text-align: center; color: #64748b; font-size: 11.5px;
+    padding: 22px; border-top: 1px solid #e2e8f0; margin-top: 36px;
+  }
+
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-size: 10.5px; font-weight: 700; background: #e9e4f0; color: #3D008D;
+    margin: 1px 2px;
+  }
+
+  @media print {
+    body { background: #fff; }
+    section, .phase { box-shadow: none; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="hdr">
+    <h1>Auditoría Ejecutiva + Plan de Acción en 5 Fases</h1>
+    <div class="sub">RiskLab USTA — Proyecto Integrador de Riesgo Financiero (Python III)</div>
+    <div class="sub">Documento de planificación: no implementa código, sirve como guía de ejecución verificable.</div>
+    <div class="meta">Generado: 2026-05-12 · Fuente principal: instructivo nuevo · Comparación con instructivo anterior</div>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h3>Contenido</h3>
+    <ol>
+      <li><a href="#s1">Resumen ejecutivo</a></li>
+      <li><a href="#s2">Decisión arquitectónica</a></li>
+      <li><a href="#s3">Estado actual del proyecto</a></li>
+      <li><a href="#s4">Brechas frente al nuevo instructivo</a></li>
+      <li><a href="#s5">Plan de acción en 5 fases</a></li>
+      <li><a href="#s6">Criterios de validación por fase</a></li>
+      <li><a href="#s7">Riesgos técnicos y cómo evitarlos</a></li>
+      <li><a href="#s8">Orden recomendado de ejecución</a></li>
+      <li><a href="#s9">Checklist final de entrega</a></li>
+      <li><a href="#s10">Formato obligatorio de entrega por fase</a></li>
+    </ol>
+  </div>
+
+  <!-- 1. Resumen ejecutivo -->
+  <section id="s1">
+    <h2><span class="num">1</span>Resumen ejecutivo</h2>
+
+    <div class="grid-3">
+      <div class="summary-card">
+        <div class="lbl">Cumplimiento instructivo anterior</div>
+        <div class="val" style="color: #16a34a">~92%</div>
+        <div style="font-size: 11px; color: #64748b">Defendible hoy mismo</div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Cumplimiento instructivo nuevo</div>
+        <div class="val" style="color: #f59e0b">~55%</div>
+        <div style="font-size: 11px; color: #64748b">Falta extender</div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Esfuerzo estimado</div>
+        <div class="val" style="color: #ED1E79">13–16 días</div>
+        <div style="font-size: 11px; color: #64748b">Sin romper lo existente</div>
+      </div>
+    </div>
+
+    <div class="verdict-box">
+      <strong>Veredicto:</strong> El proyecto tiene una base sólida (M1–M8 + autenticación + Pydantic + Plotly) pero el nuevo instructivo no es una versión incremental — añade <strong>4 módulos financieros nuevos</strong> (Renta Fija, Opciones, Stress, ML), exige <strong>SQLAlchemy ORM</strong>, requiere <strong>pytest formal</strong>, <strong>Docker multi-stage</strong>, <strong>CI</strong> y migración de la fuente macro a <strong>FRED</strong>. La estrategia correcta es <strong>extender, no rehacer</strong>: cinco fases bien delimitadas que protegen lo construido y agregan capas verificables.
+    </div>
+
+    <h3>Lo que ya está fuerte</h3>
+    <ul>
+      <li>API FastAPI con 14 endpoints, Pydantic v2 con validators, inyección de dependencias</li>
+      <li>Cálculos M1–M8 completos en <code>api/logic.py</code> con interpretaciones dinámicas</li>
+      <li>Autenticación JWT + BCrypt con roles y reset</li>
+      <li>Dashboard híbrido HTML + Plotly (estático + API)</li>
+      <li>Estructura limpia tras la reorganización reciente</li>
+    </ul>
+
+    <h3>Lo más urgente que falta</h3>
+    <ul>
+      <li>SQLAlchemy ORM con modelos <code>Asset</code>, <code>Price</code>, <code>Portfolio</code>, <code>PredictionLog</code> <span class="badge b-high">10% rúbrica</span></li>
+      <li>Componente ML con Singleton + <code>/predict</code> + logging en BD <span class="badge b-high">7% ★★</span></li>
+      <li>4 módulos financieros nuevos (Renta Fija, Opciones, Stress, ML) <span class="badge b-high">21% rúbrica</span></li>
+      <li>Suite pytest + TestClient con BD en memoria</li>
+      <li>FRED como fuente macro (Rf, inflación, USDCOP) en lugar de yfinance</li>
+      <li>Dockerfile multi-stage + GitHub Actions CI + deploy verificado</li>
+    </ul>
+  </section>
+
+  <!-- 2. Decisión arquitectónica -->
+  <section id="s2">
+    <h2><span class="num">2</span>Decisión arquitectónica</h2>
+
+    <div class="box-arch">
+      <strong>Arquitectura obligatoria — NO negociable:</strong>
+      <p style="margin: 10px 0 4px;"><strong>FastAPI backend + API REST + frontend HTML/JS/Plotly</strong></p>
+      <ul style="margin-top: 8px;">
+        <li><strong>NO migrar</strong> el frontend a Streamlit, Dash, React, Vue, Svelte ni ningún otro framework.</li>
+        <li><strong>NO duplicar</strong> lógica financiera pesada en el frontend.</li>
+        <li>El HTML solo: consume endpoints, grafica con Plotly, muestra tablas, interpreta resultados.</li>
+        <li>El backend hace: cálculos, validaciones, persistencia, ML, todo lo pesado.</li>
+      </ul>
+    </div>
+
+    <h3>Responsabilidades por capa</h3>
+    <table>
+      <thead><tr><th>Capa</th><th>Responsabilidad</th><th>Tecnologías</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Frontend</strong></td><td>Consumir API, graficar con Plotly, interpretar resultados, mostrar formularios y tablas</td><td>HTML5, CSS, JS vanilla, Plotly.js (CDN)</td></tr>
+        <tr><td><strong>API REST</strong></td><td>Exponer endpoints, validar entradas con Pydantic, gestionar autenticación, orquestar servicios</td><td>FastAPI, Pydantic v2, OAuth2, JWT</td></tr>
+        <tr><td><strong>Servicios financieros</strong></td><td>Cálculos puros (VaR, GARCH, Markowitz, Black-Scholes, NS, etc.)</td><td>numpy, pandas, scipy, arch, statsmodels, cvxpy</td></tr>
+        <tr><td><strong>Persistencia</strong></td><td>Modelos ORM, sesiones, queries, cache de datos externos</td><td>SQLAlchemy ORM, SQLite</td></tr>
+        <tr><td><strong>ML</strong></td><td>Pipeline train → joblib → load (Singleton) → predict → log en BD</td><td>scikit-learn, joblib</td></tr>
+        <tr><td><strong>Infraestructura</strong></td><td>Tests, contenedorización, CI, deploy</td><td>pytest, Docker multi-stage, GitHub Actions, Render</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Reglas de oro de la arquitectura</h3>
+    <ol>
+      <li>Toda lógica financiera vive en <code>api/services/</code> o <code>api/logic.py</code> — nunca en JS.</li>
+      <li>Toda entrada del usuario pasa por Pydantic antes de llegar al cálculo.</li>
+      <li>Toda persistencia pasa por SQLAlchemy ORM con sesión inyectada (<code>Depends(get_db)</code>).</li>
+      <li>Todo endpoint nuevo aparece en <code>/docs</code> con response model tipado.</li>
+      <li>Toda llamada a API externa (Yahoo, FRED) pasa por servicio con cache en BD.</li>
+      <li>Endpoints actuales no se borran — se agregan alias cortos si el nuevo instructivo lo prefiere.</li>
+    </ol>
+  </section>
+
+  <!-- 3. Estado actual -->
+  <section id="s3">
+    <h2><span class="num">3</span>Estado actual del proyecto</h2>
+
+    <h3>Backend</h3>
+    <table>
+      <thead><tr><th>Componente</th><th>Estado</th><th>Detalle</th></tr></thead>
+      <tbody>
+        <tr><td>FastAPI app</td><td><span class="badge b-ok">OK</span></td><td><code>api/main.py</code> con 14 endpoints, CORS, startup event</td></tr>
+        <tr><td>Pydantic v2 + validators</td><td><span class="badge b-ok">OK</span></td><td><code>field_validator</code>, <code>model_validator</code>, EmailStr, Field con constraints</td></tr>
+        <tr><td>Inyección de dependencias</td><td><span class="badge b-ok">OK</span></td><td><code>DateRangeDep</code>, <code>VaRParamsDep</code>, <code>ConfigDep</code>, <code>CurrentUser</code>, <code>AdminUser</code></td></tr>
+        <tr><td>Cálculos M1–M8</td><td><span class="badge b-ok">OK</span></td><td><code>api/logic.py</code> con 14+ funciones puras</td></tr>
+        <tr><td>Autenticación JWT</td><td><span class="badge b-ok">OK</span></td><td>HS256 + BCrypt + roles + reset password</td></tr>
+        <tr><td>Persistencia</td><td><span class="badge b-partial">Parcial</span></td><td>SQLite con <code>sqlite3</code> directo (sin ORM)</td></tr>
+        <tr><td>Cache de datos externos</td><td><span class="badge b-no">Falta</span></td><td>Cada request golpea yfinance directamente</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Módulos financieros (M1–M8)</h3>
+    <table>
+      <thead><tr><th>Módulo</th><th>Endpoint actual</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>M1 Análisis técnico</td><td><code>/api/v1/technical/{ticker}</code></td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>M2 Rendimientos</td><td><code>/api/v1/returns/{ticker}</code></td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>M3 Volatilidad</td><td><code>/api/v1/volatility/{ticker}</code></td><td><span class="badge b-partial">Falta EWMA</span></td></tr>
+        <tr><td>M4 CAPM</td><td><code>/api/v1/risk/{ticker}</code> (mezclado con M5)</td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>M5 VaR/CVaR + Kupiec</td><td><code>/api/v1/risk/{ticker}/backtest</code></td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>M6 Markowitz</td><td><code>/api/v1/portfolio/optimize</code> + <code>/target</code></td><td><span class="badge b-partial">Falta QP explícito + sin no-neg</span></td></tr>
+        <tr><td>M7 Señales</td><td><code>/api/v1/signals/{ticker}</code></td><td><span class="badge b-partial">Falta persistencia signals_log</span></td></tr>
+        <tr><td>M8 Benchmark + Macro</td><td><code>/api/v1/macro</code></td><td><span class="badge b-partial">Usa yfinance, no FRED</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Frontend, infraestructura y documentación</h3>
+    <table>
+      <thead><tr><th>Componente</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard HTML + Plotly híbrido (estático + API)</td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>Login overlay + admin modal</td><td><span class="badge b-ok">OK</span></td></tr>
+        <tr><td>Tests pytest + TestClient</td><td><span class="badge b-no">Falta</span> (solo smoke test de yfinance)</td></tr>
+        <tr><td>Dockerfile</td><td><span class="badge b-partial">Single-stage</span></td></tr>
+        <tr><td>docker-compose</td><td><span class="badge b-no">Falta</span></td></tr>
+        <tr><td>GitHub Actions CI</td><td><span class="badge b-no">Falta</span></td></tr>
+        <tr><td>Deploy verificado en Render</td><td><span class="badge b-no">Falta</span></td></tr>
+        <tr><td>README + CLAUDE.md</td><td><span class="badge b-ok">OK</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4. Brechas -->
+  <section id="s4">
+    <h2><span class="num">4</span>Brechas frente al nuevo instructivo</h2>
+
+    <h3>Módulos financieros completamente nuevos</h3>
+    <table>
+      <thead><tr><th>Módulo</th><th>Endpoint requerido</th><th>Peso rúbrica</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>M9 Renta Fija</strong></td><td><code>/curva-rendimiento</code>, <code>/bono/duracion</code></td><td>6%</td><td><span class="badge b-no">No existe</span></td></tr>
+        <tr><td><strong>M10 Opciones</strong></td><td><code>/opcion/precio</code></td><td>5%</td><td><span class="badge b-no">No existe</span></td></tr>
+        <tr><td><strong>M11 Stress Testing</strong></td><td><code>/stress</code></td><td>3%</td><td><span class="badge b-no">No existe</span></td></tr>
+        <tr><td><strong>M12 ML Pipeline</strong></td><td><code>/predict</code></td><td>7% ★★</td><td><span class="badge b-no">No existe</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Capas de infraestructura nuevas</h3>
+    <table>
+      <thead><tr><th>Capa</th><th>Estado actual</th><th>Lo que exige el nuevo instructivo</th></tr></thead>
+      <tbody>
+        <tr><td>SQLAlchemy ORM</td><td><span class="badge b-no">No existe</span></td><td>4 modelos: Asset, Price, Portfolio, PredictionLog. Sesión inyectada con <code>get_db()</code> + <code>Depends</code>. Cache de datos externos.</td></tr>
+        <tr><td>FRED como fuente macro</td><td><span class="badge b-no">Usa yfinance</span></td><td>Rf desde DGS3MO, inflación CPIAUCSL, USDCOP. Cache en SQLite con TTL 24h.</td></tr>
+        <tr><td>EWMA en M3</td><td><span class="badge b-no">Solo GARCH</span></td><td>EWMA con λ=0.94 default + λ configurable + tabla comparativa con GARCH(1,1).</td></tr>
+        <tr><td>Markowitz QP explícito</td><td><span class="badge b-partial">Solo SLSQP por target</span></td><td>QP formulado con cvxpy + comparación con/sin no-negatividad en mismo gráfico.</td></tr>
+        <tr><td>Persistencia de señales</td><td><span class="badge b-no">No existe</span></td><td>Tabla <code>signals_log</code> con timestamp, ticker, regla, valor.</td></tr>
+        <tr><td>Tests pytest</td><td><span class="badge b-partial">Smoke test solo</span></td><td>5 tests mínimos: 3 unit + 2 integración con TestClient + BD en memoria.</td></tr>
+        <tr><td>Docker multi-stage</td><td><span class="badge b-partial">Single-stage</span></td><td>Builder + runtime separados (~150 MB final).</td></tr>
+        <tr><td>GitHub Actions CI</td><td><span class="badge b-no">No existe</span></td><td><code>.github/workflows/ci.yml</code> con pytest en push/PR.</td></tr>
+        <tr><td>Deploy verificado</td><td><span class="badge b-no">render.yaml sin desplegar</span></td><td>URL pública en Render con cold start documentado.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Resumen de brechas por prioridad</h3>
+    <div class="grid-3">
+      <div>
+        <h4 style="color:#991b1b">Alta prioridad</h4>
+        <ul>
+          <li>SQLAlchemy ORM (10%)</li>
+          <li>ML pipeline + Singleton (7% ★★)</li>
+          <li>Renta Fija (6%)</li>
+          <li>Opciones (5%)</li>
+          <li>Tests pytest (3%)</li>
+          <li>EWMA en M3</li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="color:#92400e">Media prioridad</h4>
+        <ul>
+          <li>Stress Testing (3%)</li>
+          <li>Migración macro a FRED</li>
+          <li>QP cvxpy en M6</li>
+          <li>Comparación con/sin no-neg</li>
+          <li>Docker multi-stage (6% ★★)</li>
+          <li>GitHub Actions CI</li>
+          <li>signals_log persistencia</li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="color:#047857">Baja prioridad</h4>
+        <ul>
+          <li>Bonificación TF/Keras</li>
+          <li>Vol implícita Newton-Raphson</li>
+          <li>Reverse stress test</li>
+          <li>Svensson en NS</li>
+          <li>Decorador latencia /predict</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Plan de acción en 5 fases -->
+  <section id="s5">
+    <h2><span class="num">5</span>Plan de acción en 5 fases</h2>
+
+    <p>Cinco fases secuenciales. Cada fase se valida antes de pasar a la siguiente. <strong>Trabajar en rama separada</strong> (<code>feature/instructivo-iii</code>) y mergear solo al validar cada fase.</p>
+
+    <!-- FASE 1 -->
+    <div class="phase">
+      <div class="ph-hdr">
+        <div class="ph-num">1</div>
+        <div class="ph-title">Auditoría inicial, validación de arquitectura y protección de lo existente</div>
+        <div class="ph-tag">1 día</div>
+      </div>
+      <div class="ph-body">
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Objetivo</div>
+          <p>Confirmar el estado real del proyecto, blindar lo que ya funciona, abrir la rama de trabajo y dejar todos los puntos de partida documentados antes de tocar código.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Qué se debe hacer</div>
+          <ul>
+            <li>Crear rama <code>feature/instructivo-iii</code> desde <code>main</code></li>
+            <li>Verificar que <code>uvicorn api.main:app</code> arranca sin errores</li>
+            <li>Verificar que el dashboard carga con <code>data.js</code> estático y con API</li>
+            <li>Verificar que <code>generate_data.py</code> regenera el snapshot sin error</li>
+            <li>Hacer inventario de los 14 endpoints actuales (probar cada uno en <code>/docs</code>)</li>
+            <li>Confirmar que las pruebas existentes (<code>tests/test_yf.py</code>) pasan</li>
+            <li>Crear <code>docs/baseline_endpoints.md</code> con la lista exacta de endpoints + payloads de respuesta como referencia para regresión</li>
+            <li>Actualizar <code>CLAUDE.md</code> con el inicio de la fase</li>
+          </ul>
+        </div>
+
+        <div class="ph-block do-not">
+          <div class="ph-block-title"><span class="dot"></span>Qué NO se debe hacer</div>
+          <ul>
+            <li>NO instalar dependencias nuevas todavía</li>
+            <li>NO modificar endpoints existentes</li>
+            <li>NO tocar el dashboard</li>
+            <li>NO migrar a SQLAlchemy aún</li>
+            <li>NO crear módulos nuevos</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Archivos o áreas involucradas</div>
+          <p><code>docs/baseline_endpoints.md</code> (nuevo) · <code>CLAUDE.md</code> (actualizar) · rama git nueva</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Endpoints esperados</div>
+          <p>Ninguno nuevo. Solo se documentan los 14 actuales como baseline.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Pruebas / validaciones</div>
+          <ul>
+            <li>Smoke test manual: arrancar uvicorn, abrir <code>/docs</code>, verificar todos los endpoints responden</li>
+            <li>Smoke test manual: abrir dashboard, verificar carga estática</li>
+            <li>Smoke test manual: presionar "Recalcular API" y verificar que actualiza datos</li>
+            <li>Login con usuario admin / admin123 funcional</li>
+          </ul>
+        </div>
+
+        <div class="ph-block evidence">
+          <div class="ph-block-title"><span class="dot"></span>Evidencia que debe entregar Claude</div>
+          <ul>
+            <li>Rama git creada y commit inicial</li>
+            <li>Archivo <code>docs/baseline_endpoints.md</code> con 14 endpoints documentados</li>
+            <li>Captura/lista de respuestas exitosas de cada endpoint</li>
+            <li>Confirmación textual: "todo funciona, listo para Fase 2"</li>
+          </ul>
+        </div>
+
+        <div class="ph-block risk">
+          <div class="ph-block-title"><span class="dot"></span>Riesgo principal</div>
+          <p>Saltarse esta fase. Sin baseline documentado no hay forma de detectar regresiones en las fases siguientes.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Criterios del nuevo instructivo cubiertos</div>
+          <p><span class="pill">Buenas prácticas (Git, README) — criterio 15</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FASE 2 -->
+    <div class="phase">
+      <div class="ph-hdr">
+        <div class="ph-num">2</div>
+        <div class="ph-title">Backend base: SQLAlchemy ORM, persistencia, cache y FRED</div>
+        <div class="ph-tag">3 días</div>
+      </div>
+      <div class="ph-body">
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Objetivo</div>
+          <p>Migrar la capa de persistencia de <code>sqlite3</code> directo a <strong>SQLAlchemy ORM</strong> con 4+ modelos, agregar cache transparente para datos externos y reemplazar la fuente macro de yfinance por <strong>FRED</strong> con cache en BD.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Qué se debe hacer</div>
+          <ul>
+            <li>Agregar a <code>requirements.txt</code>: <code>sqlalchemy</code>, <code>fredapi</code> (o <code>requests</code> directo a FRED)</li>
+            <li>Crear <code>api/db_models.py</code> con modelos: <code>Asset</code>, <code>Price</code>, <code>Portfolio</code>, <code>PredictionLog</code>, <code>SignalLog</code>, <code>FredCache</code>, <code>UserORM</code> (migración del User actual)</li>
+            <li>Crear <code>api/database_session.py</code> con <code>engine</code>, <code>SessionLocal</code>, <code>get_db()</code> generator y <code>Base.metadata.create_all()</code> en startup</li>
+            <li>Migrar <code>api/database.py</code> (sqlite3 directo) a queries SQLAlchemy <strong>en paralelo</strong>, manteniendo la capa vieja activa hasta validar la nueva</li>
+            <li>Inyectar <code>db: Session = Depends(get_db)</code> en endpoints relevantes</li>
+            <li>Crear <code>api/services/fred_service.py</code> con cache transparente: si dato existe en <code>FredCache</code> y TTL &lt; 24h, leer de BD; si no, llamar FRED y persistir</li>
+            <li>Reemplazar lógica de Rf en <code>/api/v1/macro</code>: usar FRED DGS3MO en lugar de yfinance ^IRX</li>
+            <li>Agregar a <code>.env.example</code>: <code>FRED_API_KEY</code></li>
+            <li>Mantener fallback a yfinance si FRED falla (no romper si falta API key)</li>
+            <li>Eliminar el código viejo de <code>sqlite3</code> SOLO al final, tras validar la nueva capa</li>
+          </ul>
+        </div>
+
+        <div class="ph-block do-not">
+          <div class="ph-block-title"><span class="dot"></span>Qué NO se debe hacer</div>
+          <ul>
+            <li>NO eliminar <code>api/database.py</code> hasta validar la migración</li>
+            <li>NO romper el login ni la creación de usuarios</li>
+            <li>NO tocar los módulos financieros (eso es Fase 3)</li>
+            <li>NO crear endpoints nuevos en esta fase (excepto cache de FRED)</li>
+            <li>NO usar Alembic — <code>Base.metadata.create_all()</code> es suficiente para el alcance</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Archivos o áreas involucradas</div>
+          <p><code>api/db_models.py</code> (nuevo) · <code>api/database_session.py</code> (nuevo) · <code>api/services/fred_service.py</code> (nuevo) · <code>api/database.py</code> (cohabita) · <code>api/main.py</code> (inyección get_db) · <code>requirements.txt</code> · <code>.env.example</code></p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Endpoints esperados</div>
+          <ul>
+            <li><code>/api/v1/macro</code> (existente, ahora con FRED + cache)</li>
+            <li>Endpoints de auth siguen funcionando (ahora con SQLAlchemy)</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Pruebas / validaciones</div>
+          <ul>
+            <li>Login con usuario admin sigue funcionando</li>
+            <li>Crear usuario nuevo via <code>/auth/register</code> y verificar que aparece en BD</li>
+            <li>Llamar <code>/api/v1/macro</code> y verificar que devuelve datos FRED</li>
+            <li>Llamar <code>/api/v1/macro</code> dos veces seguidas y verificar que la segunda usa cache (más rápida)</li>
+            <li>Verificar tablas creadas en SQLite: <code>SELECT name FROM sqlite_master WHERE type='table'</code></li>
+          </ul>
+        </div>
+
+        <div class="ph-block evidence">
+          <div class="ph-block-title"><span class="dot"></span>Evidencia que debe entregar Claude</div>
+          <ul>
+            <li>Lista de tablas creadas por SQLAlchemy</li>
+            <li>Snippet de código mostrando un endpoint con <code>db: Session = Depends(get_db)</code></li>
+            <li>Captura de respuesta de <code>/api/v1/macro</code> con datos FRED</li>
+            <li>Confirmación de que login + register siguen funcionando</li>
+            <li>Confirmación de que dashboard sigue cargando datos</li>
+          </ul>
+        </div>
+
+        <div class="ph-block risk">
+          <div class="ph-block-title"><span class="dot"></span>Riesgo principal</div>
+          <p>Romper la autenticación al migrar la tabla <code>users</code>. Mitigación: hacer cohabitar las dos capas hasta validar que la nueva funciona idénticamente.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Criterios del nuevo instructivo cubiertos</div>
+          <p><span class="pill">Backend FastAPI + SQLAlchemy — criterio 10 (10%)</span> <span class="pill">Macro / FRED — criterio 4 y 8</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FASE 3 -->
+    <div class="phase">
+      <div class="ph-hdr">
+        <div class="ph-num">3</div>
+        <div class="ph-title">Refuerzo de módulos actuales: EWMA, GARCH, Markowitz QP, señales, VaR/CVaR, CAPM y benchmark</div>
+        <div class="ph-tag">3 días</div>
+      </div>
+      <div class="ph-body">
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Objetivo</div>
+          <p>Llevar los módulos actuales (M1–M8) al nivel exigido por el nuevo instructivo: agregar EWMA al M3, QP explícito en M6, comparación con/sin no-negatividad, persistencia de señales, ARCH-LM en residuos, y refinamientos en CAPM/Benchmark.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Qué se debe hacer</div>
+          <h4>M3 Volatilidad</h4>
+          <ul>
+            <li>Agregar <code>calculate_ewma_volatility(returns, lambda_=0.94)</code> en <code>api/logic.py</code></li>
+            <li>Endpoint <code>/api/v1/volatility/{ticker}</code> acepta query <code>lambda_ewma</code> validado por Pydantic (0 &lt; λ &lt; 1)</li>
+            <li>Agregar test ARCH-LM sobre residuos GARCH</li>
+            <li>Tabla comparativa EWMA vs GARCH(1,1) en respuesta JSON</li>
+          </ul>
+          <h4>M6 Markowitz</h4>
+          <ul>
+            <li>Agregar <code>cvxpy</code> a requirements</li>
+            <li>Función <code>optimize_portfolio_qp(returns, allow_short=False)</code> con QP explícito</li>
+            <li>Endpoint <code>/api/v1/portfolio/optimize</code> retorna ambas fronteras (con y sin no-neg) en un solo response</li>
+            <li>Mantener simulación Monte Carlo como visualización del conjunto factible</li>
+          </ul>
+          <h4>M7 Señales</h4>
+          <ul>
+            <li>Persistir cada señal disparada en tabla <code>signals_log</code> (ya existe gracias a Fase 2)</li>
+            <li>Umbrales configurables vía query: <code>rsi_overbought</code>, <code>rsi_oversold</code>, <code>bollinger_std</code></li>
+            <li>Endpoint <code>/api/v1/signals/{ticker}/history</code> nuevo: retorna historial de señales para un ticker</li>
+          </ul>
+          <h4>M5 VaR/CVaR + Kupiec</h4>
+          <ul>
+            <li>Refinar response Pydantic anidado: <code>parametric</code>, <code>historical</code>, <code>montecarlo</code>, <code>cvar</code>, <code>kupiec_test</code></li>
+            <li>Validar pesos (suma 1) si se agrega endpoint POST /var con pesos</li>
+          </ul>
+          <h4>M8 Benchmark</h4>
+          <ul>
+            <li>Agregar Tracking Error y Information Ratio al response (si no están)</li>
+            <li>Tabla completa: acumulado, anualizado, vol, Sharpe, max drawdown</li>
+          </ul>
+        </div>
+
+        <div class="ph-block do-not">
+          <div class="ph-block-title"><span class="dot"></span>Qué NO se debe hacer</div>
+          <ul>
+            <li>NO eliminar el SLSQP existente — debe coexistir con el cvxpy</li>
+            <li>NO romper la respuesta actual de los endpoints — solo agregar campos</li>
+            <li>NO tocar el dashboard en esta fase (eso es Fase 5)</li>
+            <li>NO migrar a un esquema de URLs corto — agregar alias si se quiere, sin borrar las viejas</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Archivos o áreas involucradas</div>
+          <p><code>api/logic.py</code> (agregar funciones) · <code>api/main.py</code> (refinar endpoints) · <code>api/db_models.py</code> (signals_log) · <code>requirements.txt</code> (cvxpy) · <code>generate_data.py</code> (incluir EWMA en snapshot)</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Endpoints esperados</div>
+          <ul>
+            <li><code>/api/v1/volatility/{ticker}?lambda_ewma=0.94</code> — extendido con EWMA</li>
+            <li><code>/api/v1/portfolio/optimize?allow_short=true</code> — extendido con QP</li>
+            <li><code>/api/v1/signals/{ticker}?rsi_overbought=75</code> — extendido con umbrales</li>
+            <li><code>/api/v1/signals/{ticker}/history</code> — nuevo</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Pruebas / validaciones</div>
+          <ul>
+            <li>Llamar <code>/volatility</code> con λ=0.94 y λ=0.99, verificar que ambas series son distintas</li>
+            <li>Llamar <code>/optimize</code> con y sin <code>allow_short</code> y verificar que las dos fronteras se retornan</li>
+            <li>Llamar <code>/signals</code> con umbrales custom y verificar que se aplican</li>
+            <li>Verificar que <code>signals_log</code> en BD tiene registros tras varias llamadas</li>
+            <li>Validar que tests existentes siguen pasando</li>
+          </ul>
+        </div>
+
+        <div class="ph-block evidence">
+          <div class="ph-block-title"><span class="dot"></span>Evidencia que debe entregar Claude</div>
+          <ul>
+            <li>Snippets de respuestas mostrando EWMA en JSON</li>
+            <li>Comparación de fronteras con/sin no-neg (valores numéricos)</li>
+            <li>Query a <code>signals_log</code> mostrando registros persistidos</li>
+            <li>Confirmación de que el dashboard sigue funcionando con respuestas extendidas</li>
+            <li>Lista de endpoints que aceptan parámetros nuevos</li>
+          </ul>
+        </div>
+
+        <div class="ph-block risk">
+          <div class="ph-block-title"><span class="dot"></span>Riesgo principal</div>
+          <p>Romper la respuesta actual de endpoints al modificar el response model. Mitigación: solo agregar campos, nunca eliminar ni renombrar.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Criterios del nuevo instructivo cubiertos</div>
+          <p><span class="pill">M3 EWMA + GARCH — criterio 3 (6%)</span> <span class="pill">M6 QP + no-neg — criterio 6 (7%)</span> <span class="pill">M5 VaR/Kupiec — criterio 5 (7%)</span> <span class="pill">M7 signals_log — criterio 1 (7%)</span> <span class="pill">M4 + M8 — criterios 4 y 8</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FASE 4 -->
+    <div class="phase">
+      <div class="ph-hdr">
+        <div class="ph-num">4</div>
+        <div class="ph-title">Nuevos módulos financieros y ML: Renta Fija, Opciones, Stress Testing, modelo predictivo, Singleton y /predict</div>
+        <div class="ph-tag">5 días</div>
+      </div>
+      <div class="ph-body">
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Objetivo</div>
+          <p>Construir las cuatro capas financieras nuevas exigidas por el instructivo: <strong>Renta Fija</strong> (curva FRED + Nelson-Siegel + duración + convexidad), <strong>Opciones</strong> (Black-Scholes + 5 Greeks + paridad), <strong>Stress Testing</strong> (3 escenarios + bar chart + heatmap), y <strong>ML Pipeline</strong> (train + Singleton + /predict + logging en PredictionLog).</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Qué se debe hacer</div>
+          <h4>M9 Renta Fija</h4>
+          <ul>
+            <li>Crear <code>api/services/yield_curve.py</code> con clase <code>YieldCurve</code>: <code>fit_nelson_siegel(maturities, yields)</code>, <code>spot_rate(tau)</code></li>
+            <li>Crear <code>api/services/bond.py</code> con clase <code>Bond</code>: <code>macaulay_duration()</code>, <code>modified_duration()</code>, <code>convexity()</code></li>
+            <li>Endpoints: <code>/curva-rendimiento</code>, <code>/bono/duracion</code></li>
+            <li>Integración con FRED para descargar DGS3MO, DGS1, DGS2, DGS5, DGS10, DGS30</li>
+            <li>Sensibilidad de precio ante shocks ±50/±100/±200 pb (3 aproximaciones)</li>
+          </ul>
+          <h4>M10 Opciones</h4>
+          <ul>
+            <li>Crear <code>api/services/options.py</code> con clase <code>OptionPricer</code>: <code>black_scholes()</code>, <code>greeks()</code>, <code>implied_volatility()</code> (Newton-Raphson)</li>
+            <li>Endpoint <code>/opcion/precio</code> con request Pydantic (S, K, T, r, sigma, tipo) + response anidado <code>{price, greeks: {delta, gamma, vega, theta, rho}}</code></li>
+            <li>Verificación numérica de paridad put-call</li>
+          </ul>
+          <h4>M11 Stress Testing</h4>
+          <ul>
+            <li>Crear <code>api/services/stress.py</code> con clase <code>StressTester</code>: <code>apply(scenario)</code></li>
+            <li>Endpoint <code>/stress</code> que recibe portafolio + lista de escenarios tipados</li>
+            <li>3 escenarios obligatorios: shock de tasa, caída de mercado, shock de volatilidad + escenario combinado opcional</li>
+            <li>Response con base_metrics y stressed_metrics por escenario</li>
+          </ul>
+          <h4>M12 ML Pipeline</h4>
+          <ul>
+            <li>Crear <code>api/ml/train.py</code>: features de RSI + MACD + retornos rezagados, target buy/hold/sell</li>
+            <li>RandomForestClassifier con <code>train_test_split(shuffle=False)</code> (respeta orden temporal)</li>
+            <li>Persistir como <code>api/ml/model.joblib</code></li>
+            <li>Crear <code>api/ml/predictor.py</code> con clase <code>ModelPredictor</code> (patrón Singleton via <code>__new__</code>)</li>
+            <li>Crear <code>api/ml/dependencies.py</code> con <code>get_predictor()</code> que retorna la instancia compartida</li>
+            <li>Endpoint <code>/predict</code> con request Pydantic (ticker, features) + logging en <code>PredictionLog</code></li>
+            <li>Decorador propio para medir latencia del endpoint</li>
+            <li>Justificación del problema en README: qué problema, qué features, qué métrica</li>
+          </ul>
+        </div>
+
+        <div class="ph-block do-not">
+          <div class="ph-block-title"><span class="dot"></span>Qué NO se debe hacer</div>
+          <ul>
+            <li>NO duplicar la lógica de cálculo en el frontend</li>
+            <li>NO entrenar el modelo cada vez que arranca el servidor — solo cargar el .joblib</li>
+            <li>NO recargar el modelo en cada request — el Singleton evita esto</li>
+            <li>NO usar TensorFlow en esta fase (es bonificación opcional, no obligatoria)</li>
+            <li>NO mezclar lógica de Renta Fija con Opciones en el mismo módulo</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Archivos o áreas involucradas</div>
+          <p><code>api/services/yield_curve.py</code> · <code>api/services/bond.py</code> · <code>api/services/options.py</code> · <code>api/services/stress.py</code> · <code>api/ml/train.py</code> · <code>api/ml/predictor.py</code> · <code>api/ml/dependencies.py</code> · <code>api/ml/model.joblib</code> · <code>api/main.py</code> (5 endpoints nuevos) · <code>requirements.txt</code> (scikit-learn, joblib)</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Endpoints esperados</div>
+          <ul>
+            <li><code>GET /curva-rendimiento</code> — puntos FRED + ajuste NS</li>
+            <li><code>GET /bono/duracion?coupon=...&maturity=...&face=...</code> — métricas del bono sintético</li>
+            <li><code>POST /opcion/precio</code> — body Pydantic, response con price + greeks</li>
+            <li><code>POST /stress</code> — body con portafolio + escenarios</li>
+            <li><code>POST /predict</code> — body con ticker + features, response con predicción</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Pruebas / validaciones</div>
+          <ul>
+            <li>Verificar que NS ajusta con RMSE bajo sobre la curva FRED</li>
+            <li>Verificar que paridad put-call se cumple numéricamente: |C − P − (S − Ke^(−rT))| &lt; 1e-6</li>
+            <li>Verificar que las 5 Greeks tienen los signos esperados (Delta call &gt; 0, etc.)</li>
+            <li>Verificar que stress aplicado al portafolio óptimo cambia el VaR como esperado</li>
+            <li>Verificar que <code>/predict</code> responde con la predicción y persiste en <code>PredictionLog</code></li>
+            <li>Verificar que el log "modelo cargado" aparece UNA sola vez en stdout (Singleton)</li>
+          </ul>
+        </div>
+
+        <div class="ph-block evidence">
+          <div class="ph-block-title"><span class="dot"></span>Evidencia que debe entregar Claude</div>
+          <ul>
+            <li>Captura de respuesta de cada uno de los 5 endpoints nuevos</li>
+            <li>Verificación numérica de paridad put-call</li>
+            <li>Query a <code>PredictionLog</code> mostrando predicciones registradas</li>
+            <li>Confirmación de que el modelo se carga una sola vez (log de inicio)</li>
+            <li>RMSE del ajuste Nelson-Siegel</li>
+            <li>Heatmap de stress testing (datos en JSON)</li>
+          </ul>
+        </div>
+
+        <div class="ph-block risk">
+          <div class="ph-block-title"><span class="dot"></span>Riesgo principal</div>
+          <p>Tamaño de la imagen Docker al agregar scikit-learn (~30 MB). Mitigación: el multi-stage de Fase 5 minimiza esto.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Criterios del nuevo instructivo cubiertos</div>
+          <p><span class="pill">M9 Renta Fija — criterio 7 (6%)</span> <span class="pill">M10 Opciones — criterio 8 (5%)</span> <span class="pill">M11 Stress — criterio 9 (3%)</span> <span class="pill">M12 ML + Singleton — criterio 11 (7% ★★)</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FASE 5 -->
+    <div class="phase">
+      <div class="ph-hdr">
+        <div class="ph-num">5</div>
+        <div class="ph-title">Frontend HTML, pruebas, Docker, CI, deploy y documentación final</div>
+        <div class="ph-tag">3 días</div>
+      </div>
+      <div class="ph-body">
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Objetivo</div>
+          <p>Cerrar el proyecto: agregar tabs nuevas al dashboard para los módulos de Fase 4, escribir suite pytest con TestClient, reescribir Dockerfile como multi-stage, configurar GitHub Actions, desplegar en Render con URL pública, y actualizar README + CLAUDE.md + guion de sustentación.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Qué se debe hacer</div>
+          <h4>Frontend (HTML + Plotly)</h4>
+          <ul>
+            <li>Agregar tabs nuevas en <code>dashboard/dashboard.html</code>: Renta Fija, Opciones, Stress, ML</li>
+            <li>Cada tab consume su endpoint correspondiente y grafica con Plotly</li>
+            <li>Tab Renta Fija: curva FRED + ajuste NS superpuesto + sensibilidad de precio</li>
+            <li>Tab Opciones: payoff a vencimiento + precio vs spot + delta vs spot por T</li>
+            <li>Tab Stress: bar chart de pérdidas + comparación VaR + heatmap activo×escenario</li>
+            <li>Tab ML: formulario de features + botón "Predecir" + tabla de predicciones recientes</li>
+            <li>Sustituir la tab M9 actual ("Roadmap") con las nuevas tabs reales</li>
+            <li>Agregar EWMA al panel del M3 existente (Plotly comparando curvas)</li>
+          </ul>
+          <h4>Tests pytest</h4>
+          <ul>
+            <li>Crear <code>tests/conftest.py</code> con fixture <code>client</code> usando <code>TestClient</code> + BD en memoria + override de <code>get_db</code></li>
+            <li>5 tests obligatorios: (1) RSI sobre serie conocida, (2) VaR paramétrico vs valor analítico, (3) paridad put-call, (4) GET /precios retorna 200, (5) POST con datos inválidos retorna 422</li>
+            <li>Configurar <code>pytest.ini</code> con paths y opciones</li>
+            <li>Verificar que <code>pytest -v</code> pasa todos los tests</li>
+          </ul>
+          <h4>Docker</h4>
+          <ul>
+            <li>Reescribir <code>Dockerfile</code> como multi-stage (builder + runtime)</li>
+            <li>Crear <code>docker-compose.yml</code> con hot-reload para desarrollo local</li>
+            <li>Verificar que la imagen final pesa &lt; 250 MB</li>
+          </ul>
+          <h4>CI</h4>
+          <ul>
+            <li>Crear <code>.github/workflows/ci.yml</code> con job que corre pytest en push/PR a main</li>
+            <li>Agregar badge de CI al README</li>
+          </ul>
+          <h4>Deploy</h4>
+          <ul>
+            <li>Conectar repo a Render</li>
+            <li>Configurar variables de entorno: JWT_SECRET, FRED_API_KEY, etc.</li>
+            <li>Verificar deploy exitoso, anotar URL pública</li>
+            <li>Documentar cold start (~30s) en README</li>
+          </ul>
+          <h4>Documentación</h4>
+          <ul>
+            <li>Actualizar <code>README.md</code>: nuevos módulos, URL pública, badge CI, instrucciones pytest, justificación ML</li>
+            <li>Actualizar <code>CLAUDE.md</code>: nuevos modelos ORM, nuevas capas, nuevas decisiones</li>
+            <li>Actualizar guion de sustentación con bloques nuevos para Renta Fija, Opciones, Stress, ML</li>
+          </ul>
+        </div>
+
+        <div class="ph-block do-not">
+          <div class="ph-block-title"><span class="dot"></span>Qué NO se debe hacer</div>
+          <ul>
+            <li>NO migrar el dashboard a otro framework (sigue siendo HTML + Plotly)</li>
+            <li>NO duplicar la lógica financiera en JS — el frontend solo consume API</li>
+            <li>NO subir <code>model.joblib</code> al repo si pesa &gt; 100 MB (usar Git LFS o Render storage)</li>
+            <li>NO publicar el JWT_SECRET ni el FRED_API_KEY al repo</li>
+            <li>NO declarar el deploy como hecho sin verificar que <code>/docs</code> responde en la URL pública</li>
+          </ul>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Archivos o áreas involucradas</div>
+          <p><code>dashboard/dashboard.html</code> · <code>tests/conftest.py</code> · <code>tests/test_*.py</code> · <code>pytest.ini</code> · <code>Dockerfile</code> · <code>docker-compose.yml</code> · <code>.github/workflows/ci.yml</code> · <code>README.md</code> · <code>CLAUDE.md</code> · guion de sustentación</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Endpoints esperados</div>
+          <p>No se crean nuevos. Se consumen desde el dashboard los creados en Fases 2–4.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Pruebas / validaciones</div>
+          <ul>
+            <li><code>pytest -v</code> pasa los 5 tests + cualquier extra</li>
+            <li><code>docker build</code> exitoso, imagen &lt; 250 MB</li>
+            <li><code>docker-compose up</code> levanta el servicio en local</li>
+            <li>GitHub Actions corre verde en push</li>
+            <li>URL pública en Render responde a <code>/docs</code></li>
+            <li>Dashboard local muestra las 4 tabs nuevas con datos reales</li>
+            <li>README contiene URL pública + badge CI + instrucciones pytest</li>
+          </ul>
+        </div>
+
+        <div class="ph-block evidence">
+          <div class="ph-block-title"><span class="dot"></span>Evidencia que debe entregar Claude</div>
+          <ul>
+            <li>Output de <code>pytest -v</code> con tests verdes</li>
+            <li>Output de <code>docker build</code> + tamaño de imagen final</li>
+            <li>URL pública del deploy + captura de <code>/docs</code> respondiendo</li>
+            <li>URL del workflow de GitHub Actions con run verde</li>
+            <li>Capturas o GIFs de las 4 tabs nuevas funcionando en el dashboard</li>
+            <li>README + CLAUDE.md + guion actualizados</li>
+          </ul>
+        </div>
+
+        <div class="ph-block risk">
+          <div class="ph-block-title"><span class="dot"></span>Riesgo principal</div>
+          <p>Cold start de 30s en Render free tier durante la sustentación. Mitigación: hacer ping de calentamiento 1 min antes de la demo.</p>
+        </div>
+
+        <div class="ph-block">
+          <div class="ph-block-title"><span class="dot"></span>Criterios del nuevo instructivo cubiertos</div>
+          <p><span class="pill">Tablero — criterio 14 (3%)</span> <span class="pill">Tests — criterio 12 (3% ★)</span> <span class="pill">Docker + CI + deploy — criterio 13 (6% ★★)</span> <span class="pill">Buenas prácticas — criterio 15 (5%)</span> <span class="pill">Sustentación — criterio 16 (15%)</span></p>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- 6. Criterios de validación -->
+  <section id="s6">
+    <h2><span class="num">6</span>Criterios de validación por fase</h2>
+
+    <p>Una fase está completa solo si supera los criterios de validación. Sin esto, no se mergea a <code>main</code> ni se avanza a la siguiente fase.</p>
+
+    <table>
+      <thead><tr><th>Fase</th><th>Validación obligatoria</th><th>Cómo se verifica</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>1</strong></td>
+          <td>Baseline documentado, rama creada, todo lo viejo funciona</td>
+          <td>Ejecutar uvicorn + abrir dashboard + login con admin</td>
+        </tr>
+        <tr>
+          <td><strong>2</strong></td>
+          <td>SQLAlchemy creado, login intacto, FRED responde con cache</td>
+          <td>Crear usuario, login, llamar /macro 2 veces (segunda más rápida)</td>
+        </tr>
+        <tr>
+          <td><strong>3</strong></td>
+          <td>EWMA en M3, QP en M6, signals_log persistente</td>
+          <td>Llamar /volatility con λ, /optimize con allow_short, /signals con umbrales custom, query a signals_log</td>
+        </tr>
+        <tr>
+          <td><strong>4</strong></td>
+          <td>5 endpoints nuevos respondiendo, Singleton verificable, PredictionLog poblado</td>
+          <td>POST /opcion/precio, POST /stress, POST /predict; verificar log "modelo cargado" 1 sola vez; query a PredictionLog</td>
+        </tr>
+        <tr>
+          <td><strong>5</strong></td>
+          <td>pytest verde, Docker build OK, CI verde, URL Render pública, dashboard con 4 tabs nuevas</td>
+          <td>Ejecutar pytest -v, docker build, abrir URL pública, abrir dashboard local con tabs</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 7. Riesgos -->
+  <section id="s7">
+    <h2><span class="num">7</span>Riesgos técnicos y cómo evitarlos</h2>
+
+    <table>
+      <thead><tr><th>Riesgo</th><th>Impacto</th><th>Mitigación</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Migrar mal a SQLAlchemy y romper el login</td>
+          <td><span class="badge b-high">Alto</span></td>
+          <td>Cohabitación de capas durante la transición. Eliminar sqlite3 directo solo al final.</td>
+        </tr>
+        <tr>
+          <td>FRED API key falta o cuota agotada</td>
+          <td><span class="badge b-med">Medio</span></td>
+          <td>Cache obligatorio con TTL 24h. Fallback a yfinance si FRED falla.</td>
+        </tr>
+        <tr>
+          <td>Cambiar URLs y romper el dashboard</td>
+          <td><span class="badge b-high">Alto</span></td>
+          <td>NO cambiar URLs existentes. Solo agregar alias cortos si es necesario.</td>
+        </tr>
+        <tr>
+          <td>Dashboard se rompe al cargar nuevos cómputos pesados</td>
+          <td><span class="badge b-med">Medio</span></td>
+          <td>Mantener data.js funcional siempre. Nuevos módulos cargan vía API en demanda.</td>
+        </tr>
+        <tr>
+          <td>data.js crece &gt; 3 MB con nuevos módulos</td>
+          <td><span class="badge b-med">Medio</span></td>
+          <td>No incluir Renta Fija y Opciones en snapshot estático — solo via API en vivo.</td>
+        </tr>
+        <tr>
+          <td>Imagen Docker grande con sklearn</td>
+          <td><span class="badge b-low">Bajo</span></td>
+          <td>Multi-stage en Fase 5. Usar slim-bookworm.</td>
+        </tr>
+        <tr>
+          <td>Cold start en Render durante sustentación</td>
+          <td><span class="badge b-med">Medio</span></td>
+          <td>Hacer warmup 1 minuto antes de la demo. Documentar en README.</td>
+        </tr>
+        <tr>
+          <td>Tests dependen de datos externos (yfinance / FRED)</td>
+          <td><span class="badge b-med">Medio</span></td>
+          <td>Tests usan BD en memoria + datos sintéticos, no APIs externas.</td>
+        </tr>
+        <tr>
+          <td>Singleton mal implementado (recarga por request)</td>
+          <td><span class="badge b-high">Alto</span></td>
+          <td>Verificar log "modelo cargado" aparece UNA sola vez al arrancar uvicorn.</td>
+        </tr>
+        <tr>
+          <td>JWT_SECRET o FRED_API_KEY filtrado al repo</td>
+          <td><span class="badge b-high">Alto</span></td>
+          <td>Solo .env.example al repo. Nunca el .env real. Configurar en Render via UI.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Decisiones que NO se deben cambiar</h3>
+    <ul>
+      <li>Frontend HTML + Plotly puro (no Streamlit, Dash, React)</li>
+      <li>Arquitectura híbrida estático + API</li>
+      <li>JWT + BCrypt para autenticación</li>
+      <li>Pydantic v2 con validators</li>
+      <li>Inyección de dependencias con <code>Annotated[T, Depends(...)]</code></li>
+      <li>Portafolio NU·AMZN·SONY·XOM·WPM</li>
+      <li>Benchmark <code>^GSPC</code></li>
+      <li>Estructura limpia api/ + dashboard/ + docs/ + tests/ + data/</li>
+    </ul>
+  </section>
+
+  <!-- 8. Orden recomendado -->
+  <section id="s8">
+    <h2><span class="num">8</span>Orden recomendado de ejecución</h2>
+
+    <p>El orden importa. Saltar fases o ejecutar en paralelo aumenta el riesgo de regresiones difíciles de detectar.</p>
+
+    <table>
+      <thead><tr><th>Día</th><th>Fase</th><th>Actividad</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Fase 1</td><td>Auditoría inicial + baseline documentado + rama nueva</td></tr>
+        <tr><td>2</td><td>Fase 2</td><td>SQLAlchemy: modelos ORM + get_db + migración auth</td></tr>
+        <tr><td>3</td><td>Fase 2</td><td>FRED service + cache transparente + reemplazo macro</td></tr>
+        <tr><td>4</td><td>Fase 2</td><td>Validación completa + eliminar sqlite3 directo viejo</td></tr>
+        <tr><td>5</td><td>Fase 3</td><td>EWMA en M3 + ARCH-LM + comparación EWMA vs GARCH</td></tr>
+        <tr><td>6</td><td>Fase 3</td><td>QP cvxpy en M6 + comparación con/sin no-neg</td></tr>
+        <tr><td>7</td><td>Fase 3</td><td>signals_log + umbrales configurables + refinamientos M5/M8</td></tr>
+        <tr><td>8</td><td>Fase 4</td><td>M9 Renta Fija: YieldCurve + Bond + endpoints</td></tr>
+        <tr><td>9</td><td>Fase 4</td><td>M10 Opciones: OptionPricer + Greeks + endpoint</td></tr>
+        <tr><td>10</td><td>Fase 4</td><td>M11 Stress: StressTester + endpoint + escenarios</td></tr>
+        <tr><td>11</td><td>Fase 4</td><td>M12 ML: train.py + Singleton + /predict + logging</td></tr>
+        <tr><td>12</td><td>Fase 4</td><td>Validación cruzada de los 4 módulos nuevos</td></tr>
+        <tr><td>13</td><td>Fase 5</td><td>Tabs nuevas en dashboard (Renta Fija, Opciones, Stress, ML)</td></tr>
+        <tr><td>14</td><td>Fase 5</td><td>Suite pytest + conftest + 5 tests + Dockerfile multi-stage</td></tr>
+        <tr><td>15</td><td>Fase 5</td><td>GitHub Actions CI + deploy Render + documentación final</td></tr>
+        <tr><td>16</td><td>Fase 5</td><td>Validación final + actualización del guion de sustentación</td></tr>
+      </tbody>
+    </table>
+
+    <div class="box box-warn">
+      <strong>Si el equipo es de 2-3 personas</strong>, las fases pueden paralelizarse parcialmente: una persona en Fase 3 (refuerzos) mientras otra avanza con Fase 4 (módulos nuevos). Pero la <strong>Fase 2 (SQLAlchemy) debe completarse antes</strong> que cualquier trabajo de Fase 3 o 4 que dependa de persistencia.
+    </div>
+  </section>
+
+  <!-- 9. Checklist final -->
+  <section id="s9">
+    <h2><span class="num">9</span>Checklist final de entrega</h2>
+
+    <p>El proyecto está listo para sustentar cuando todos estos puntos estén marcados. Imprimir esta sección y revisar uno por uno antes de la demo.</p>
+
+    <div class="checklist">
+      <h4>Backend</h4>
+      <label><input type="checkbox"> 14+ endpoints respondiendo en <code>/docs</code></label>
+      <label><input type="checkbox"> Pydantic v2 con request y response models tipados</label>
+      <label><input type="checkbox"> 2+ <code>@field_validator</code> personalizados</label>
+      <label><input type="checkbox"> SQLAlchemy ORM con 4+ modelos (Asset, Price, Portfolio, PredictionLog)</label>
+      <label><input type="checkbox"> Sesión inyectada con <code>Depends(get_db)</code></label>
+      <label><input type="checkbox"> Cache transparente para datos externos</label>
+      <label><input type="checkbox"> Status codes correctos (400, 404, 422, 503)</label>
+
+      <h4>Módulos financieros</h4>
+      <label><input type="checkbox"> M1 técnico: 6 indicadores + señales con umbrales configurables</label>
+      <label><input type="checkbox"> M2 rendimientos: descriptivos + JB + Shapiro-Wilk + Q-Q + boxplot</label>
+      <label><input type="checkbox"> M3 volatilidad: EWMA + 3 GARCH + ARCH-LM + comparación tabular</label>
+      <label><input type="checkbox"> M4 CAPM: Beta + Alpha + descomposición de varianza</label>
+      <label><input type="checkbox"> M5 VaR: 3 métodos + CVaR + Kupiec en los 3 + interpretación</label>
+      <label><input type="checkbox"> M6 Markowitz: QP explícito + frontera + max Sharpe + min vol + comparación con/sin no-neg</label>
+      <label><input type="checkbox"> M7 señales: persistencia en signals_log + umbrales configurables</label>
+      <label><input type="checkbox"> M8 macro: FRED + Tracking Error + Information Ratio + Drawdown</label>
+      <label><input type="checkbox"> M9 Renta Fija: curva FRED + NS ajustado + duración + convexidad</label>
+      <label><input type="checkbox"> M10 Opciones: BS + 5 Greeks + paridad verificada + vol implícita</label>
+      <label><input type="checkbox"> M11 Stress: 3 escenarios + bar chart + heatmap + comparación VaR</label>
+
+      <h4>Machine Learning</h4>
+      <label><input type="checkbox"> Pipeline train → joblib → load → predict</label>
+      <label><input type="checkbox"> Singleton verificable (log "modelo cargado" 1 sola vez)</label>
+      <label><input type="checkbox"> Endpoint <code>/predict</code> con request/response Pydantic</label>
+      <label><input type="checkbox"> Logging en <code>PredictionLog</code></label>
+      <label><input type="checkbox"> Justificación del problema en README</label>
+
+      <h4>Tests</h4>
+      <label><input type="checkbox"> conftest.py con BD en memoria + override de get_db</label>
+      <label><input type="checkbox"> 5+ tests pasando: 3 unit + 2 integración</label>
+      <label><input type="checkbox"> <code>pytest -v</code> verde en local</label>
+      <label><input type="checkbox"> <code>pytest -v</code> verde en GitHub Actions</label>
+
+      <h4>Frontend</h4>
+      <label><input type="checkbox"> Dashboard HTML + Plotly funcional</label>
+      <label><input type="checkbox"> 12 tabs (M1–M11 + ML)</label>
+      <label><input type="checkbox"> Login overlay obligatorio</label>
+      <label><input type="checkbox"> Modo híbrido estático + API funciona</label>
+
+      <h4>DevOps</h4>
+      <label><input type="checkbox"> Dockerfile multi-stage</label>
+      <label><input type="checkbox"> docker-compose.yml para desarrollo local</label>
+      <label><input type="checkbox"> .github/workflows/ci.yml con pytest</label>
+      <label><input type="checkbox"> Deploy en Render con URL pública</label>
+      <label><input type="checkbox"> Variables de entorno configuradas en Render UI</label>
+
+      <h4>Documentación</h4>
+      <label><input type="checkbox"> README con marco teórico + endpoints + URL deploy + badge CI</label>
+      <label><input type="checkbox"> CLAUDE.md actualizado con arquitectura final</label>
+      <label><input type="checkbox"> Guion de sustentación con bloques nuevos</label>
+      <label><input type="checkbox"> .env.example con todas las variables documentadas</label>
+      <label><input type="checkbox"> .gitignore excluye .env, *.db, model.joblib si &gt; 100 MB</label>
+
+      <h4>Sustentación</h4>
+      <label><input type="checkbox"> Demo previa con todos los módulos funcionando</label>
+      <label><input type="checkbox"> URL pública verificada respondiendo</label>
+      <label><input type="checkbox"> Warmup planificado (1 min antes de la demo)</label>
+      <label><input type="checkbox"> Roles claros: Vanessa = backend, Víctor = teoría</label>
+    </div>
+  </section>
+
+  <!-- 10. Formato de entrega -->
+  <section id="s10">
+    <h2><span class="num">10</span>Formato obligatorio de entrega por fase</h2>
+
+    <p>Al terminar cada fase, Claude debe entregar un reporte en este formato exacto. No se considera la fase completada sin este reporte.</p>
+
+    <div class="box-arch">
+      <h3 style="margin-top: 0;">Plantilla de reporte de fase</h3>
+      <ol>
+        <li><strong>Fase trabajada:</strong> número y nombre de la fase</li>
+        <li><strong>Archivos modificados:</strong> lista exacta con paths relativos</li>
+        <li><strong>Funcionalidad agregada:</strong> bullet list de qué quedó funcionando</li>
+        <li><strong>Endpoints creados o modificados:</strong> URL + método + payload de ejemplo</li>
+        <li><strong>Comandos ejecutados:</strong> bash commands corridos para validar</li>
+        <li><strong>Resultado de pruebas:</strong> output de pytest o capturas de respuestas exitosas</li>
+        <li><strong>Evidencia de que lo anterior sigue funcionando:</strong> capturas o smoke tests del dashboard, login, endpoints viejos</li>
+        <li><strong>Pendientes reales:</strong> lo que se intentó hacer y no se pudo, con motivo claro</li>
+        <li><strong>Próxima fase recomendada:</strong> número de fase + 1-2 puntos de inicio</li>
+      </ol>
+    </div>
+
+    <h3>Ejemplo de reporte</h3>
+    <div class="box">
+<pre style="margin: 0; font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap;">
+# Reporte de Fase 2 — Backend base, SQLAlchemy ORM, persistencia, cache y FRED
+
+## 1. Fase trabajada
+Fase 2: Backend base, SQLAlchemy ORM, persistencia, cache y FRED.
+
+## 2. Archivos modificados
+- api/db_models.py (nuevo)
+- api/database_session.py (nuevo)
+- api/services/fred_service.py (nuevo)
+- api/main.py (inyección get_db en endpoints de auth)
+- requirements.txt (sqlalchemy, fredapi)
+- .env.example (FRED_API_KEY)
+
+## 3. Funcionalidad agregada
+- ORM con 6 modelos: Asset, Price, Portfolio, PredictionLog, SignalLog, FredCache
+- Sesión inyectada con get_db en /auth/* endpoints
+- Cache de FRED con TTL 24h en tabla fred_cache
+- Macro endpoint usa FRED para Rf con fallback a yfinance
+
+## 4. Endpoints creados o modificados
+- GET /api/v1/macro: ahora devuelve {"rf_rate": 0.0521, "source": "FRED.DGS3MO", ...}
+- POST /auth/register: ahora persiste via ORM
+
+## 5. Comandos ejecutados
+$ uvicorn api.main:app --port 8001 --reload
+$ curl http://localhost:8001/api/v1/macro  # 220ms (FRED)
+$ curl http://localhost:8001/api/v1/macro  # 8ms (cache)
+$ sqlite3 data/risklab_users.db ".tables"  # confirma tablas creadas
+
+## 6. Resultado de pruebas
+- Login con admin/admin123: OK
+- Crear usuario nuevo: OK, persistido
+- Macro con cache: 8ms (vs 220ms primera vez)
+
+## 7. Evidencia de que lo anterior sigue funcionando
+- Dashboard carga con data.js: OK
+- Recalcular API actualiza módulos M1-M8: OK
+- /docs muestra los 14 endpoints viejos + macro extendido
+
+## 8. Pendientes reales
+- Ninguno bloqueante. Cache no implementado para precios yfinance (eso es Fase 3).
+
+## 9. Próxima fase recomendada
+Fase 3: empezar por agregar EWMA al M3 (más simple, refuerza criterio 3).
+</pre>
+    </div>
+
+    <div class="box box-warn">
+      <strong>Importante:</strong> sin reporte en este formato exacto, la fase NO se considera entregada. El reporte sirve como auditoría posterior y como referencia para detectar regresiones.
+    </div>
+  </section>
+
+  <div class="footer">
+    Auditoría Ejecutiva + Plan de 5 Fases — RiskLab USTA · Generado 2026-05-12<br>
+    Documento de planificación que NO modifica código del proyecto.
+    Sirve como guía de ejecución verificable para futuras fases de implementación.
+  </div>
+
+</div>
+
+</body>
+</html>
