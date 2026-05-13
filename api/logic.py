@@ -124,6 +124,92 @@ def fit_garch_models(returns: pd.Series) -> dict:
     }
 
 
+def calculate_ewma_volatility(returns: pd.Series, lambda_: float = 0.94) -> dict:
+    """
+    Volatilidad EWMA (RiskMetrics): σ²_t = λ·σ²_{t-1} + (1-λ)·r²_{t-1}.
+
+    lambda_ = factor de decaimiento (0 < λ < 1). Default 0.94 (RiskMetrics estándar).
+    Devuelve la serie de desviación estándar diaria, último valor, y comparación
+    contra la volatilidad muestral rodante.
+    """
+    if not 0 < lambda_ < 1:
+        raise ValueError(f"lambda_ debe estar en (0,1); recibido: {lambda_}")
+
+    r = returns.dropna()
+    # pandas usa alpha = 1 - lambda
+    var_ewma = r.pow(2).ewm(alpha=1 - lambda_, adjust=False).mean()
+    sigma_ewma = var_ewma.pow(0.5)
+
+    rolling_30 = r.rolling(window=30).std().dropna()
+    rolling_30_avg = float(rolling_30.mean()) if len(rolling_30) else None
+
+    return {
+        "lambda":          lambda_,
+        "ewma_volatility": sigma_ewma.tolist(),
+        "ewma_last_value": float(sigma_ewma.iloc[-1]) if len(sigma_ewma) else None,
+        "ewma_mean":       float(sigma_ewma.mean()) if len(sigma_ewma) else None,
+        "rolling_30d_avg": rolling_30_avg,
+        "n_obs":           int(len(r)),
+    }
+
+
+def arch_lm_test(std_residuals: list[float] | pd.Series, nlags: int = 5) -> dict:
+    """
+    Test ARCH-LM (Engle 1982) sobre residuos estandarizados.
+
+    Detecta heterocedasticidad condicional remanente. Bajo H0 (no hay efecto
+    ARCH), el estadístico LM ~ χ²(nlags).
+    p > 0.05 → el modelo capturó adecuadamente la volatilidad condicional.
+    p ≤ 0.05 → quedan efectos ARCH no capturados; conviene un orden mayor.
+    """
+    from statsmodels.stats.diagnostic import het_arch
+    s = pd.Series(std_residuals).dropna()
+    if len(s) < 2 * nlags + 5:
+        return {"lm_stat": None, "lm_pvalue": None, "passed": None,
+                "interpretation": "muestra insuficiente para ARCH-LM"}
+    try:
+        lm_stat, lm_p, _f_stat, _f_p = het_arch(s, nlags=nlags)
+        passed = bool(lm_p > 0.05)
+        interp = (
+            "no se detectan efectos ARCH residuales — el modelo captura bien la heterocedasticidad"
+            if passed else
+            "se detectan efectos ARCH residuales — el modelo deja heterocedasticidad sin capturar"
+        )
+        return {
+            "lm_stat":        round(float(lm_stat), 6),
+            "lm_pvalue":      round(float(lm_p), 6),
+            "nlags":          nlags,
+            "passed":         passed,
+            "interpretation": interp,
+        }
+    except Exception as exc:  # pragma: no cover
+        return {"lm_stat": None, "lm_pvalue": None, "passed": None,
+                "interpretation": f"error en ARCH-LM: {exc}"}
+
+
+def compare_ewma_vs_garch(
+    ewma_last: float | None,
+    garch_last: float | None,
+) -> dict:
+    """Comparación interpretativa entre el último valor EWMA y GARCH(1,1)."""
+    if ewma_last is None or garch_last is None:
+        return {"diff_pct": None, "interpretation": "datos insuficientes"}
+    diff = ewma_last - garch_last
+    diff_pct = round((diff / garch_last) * 100, 3) if garch_last else None
+    if abs(diff_pct or 0) < 5:
+        msg = "EWMA y GARCH(1,1) coinciden — el régimen de volatilidad actual es estable"
+    elif diff_pct and diff_pct > 0:
+        msg = f"EWMA estima volatilidad {abs(diff_pct):.1f}% mayor que GARCH — choque reciente aún pesa en EWMA"
+    else:
+        msg = f"EWMA estima volatilidad {abs(diff_pct):.1f}% menor que GARCH — el shock se está disipando"
+    return {
+        "ewma_last":      round(ewma_last, 6),
+        "garch_last":     round(garch_last, 6),
+        "diff_pct":       diff_pct,
+        "interpretation": msg,
+    }
+
+
 # =============================================================================
 # SECCIÓN 4: CAPM Y RIESGO SISTEMÁTICO (MÓDULO 4)
 # =============================================================================

@@ -44,15 +44,18 @@ from api.database import (
     update_user_password,
 )
 from api.logic import (
+    arch_lm_test,
     calculate_bollinger_bands,
     calculate_capm,
     calculate_ema,
+    calculate_ewma_volatility,
     calculate_macd,
     calculate_returns,
     calculate_rsi,
     calculate_sma,
     calculate_stochastic,
     calculate_var_cvar,
+    compare_ewma_vs_garch,
     fit_garch_models,
     generate_signals,
     get_descriptive_stats,
@@ -586,11 +589,15 @@ def get_returns_analysis(
         raise HTTPException(500, str(exc))
 
 
-@app.get("/api/v1/volatility/{ticker}", summary="Modelos ARCH/GARCH — M3")
+@app.get("/api/v1/volatility/{ticker}", summary="Modelos EWMA + ARCH/GARCH — M3")
 def get_volatility_analysis(
     ticker: str,
     dates: DateRangeDep,
     _cfg: ConfigDep,
+    lambda_ewma: float = Query(
+        0.94, gt=0.0, lt=1.0,
+        description="Factor de decaimiento EWMA (0 < λ < 1). Default 0.94 (RiskMetrics).",
+    ),
 ):
     try:
         data = get_historical_data(ticker, **dates)
@@ -600,7 +607,7 @@ def get_volatility_analysis(
 
         result = fit_garch_models(log_ret)
 
-        # Residuos estandarizados y pronóstico a 10 días
+        # Residuos estandarizados, pronóstico a 10 días y diagnóstico ARCH-LM
         try:
             from arch import arch_model  # type: ignore
             scaled = log_ret * 100
@@ -615,8 +622,27 @@ def get_volatility_analysis(
                 "JB_Stat":       _sv(float(scipy_stats.jarque_bera(std_resid)[0])),
                 "JB_Pvalue":     _sv(float(scipy_stats.jarque_bera(std_resid)[1])),
                 "Normal":        bool(scipy_stats.jarque_bera(std_resid)[1] > 0.05),
+                "ARCH_LM":       _safe_json(arch_lm_test(std_resid, nlags=5)),
             }
             result["Forecast_10d"] = _safe_json(vol_forecast)
+        except Exception:
+            pass
+
+        # EWMA y comparación contra GARCH(1,1)
+        try:
+            ewma = calculate_ewma_volatility(log_ret, lambda_=lambda_ewma)
+            garch_vol = result.get("GARCH(1,1)", {}).get("Volatility", [])
+            garch_last = float(garch_vol[-1]) if garch_vol else None
+            comparison = compare_ewma_vs_garch(ewma.get("ewma_last_value"), garch_last)
+            result["EWMA"] = _safe_json({
+                "lambda":          ewma["lambda"],
+                "ewma_volatility": ewma["ewma_volatility"][-500:],
+                "ewma_last_value": ewma["ewma_last_value"],
+                "ewma_mean":       ewma["ewma_mean"],
+                "rolling_30d_avg": ewma["rolling_30d_avg"],
+            })
+            result["comparison_ewma_garch"] = _safe_json(comparison)
+            result["interpretation"] = comparison.get("interpretation")
         except Exception:
             pass
 
