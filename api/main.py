@@ -155,8 +155,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup():
+    # Capa sqlite3 directa (legacy, conservada en Fase 2)
     init_db()
     seed_demo_users(_hash)
+    # Capa SQLAlchemy ORM (nueva en Fase 2 — convive con la anterior)
+    from api.database_session import init_orm_tables
+    init_orm_tables()
 
 
 # ── Auth schemas ──────────────────────────────────────────────────────────────
