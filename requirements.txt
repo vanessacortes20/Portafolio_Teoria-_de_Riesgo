@@ -13,3 +13,4 @@ requests
 bcrypt
 python-jose[cryptography]
 email-validator
+sqlalchemy>=2.0

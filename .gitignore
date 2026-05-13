@@ -38,6 +38,7 @@ Thumbs.db
 *.sqlite3
 data/risklab_users.db
 data/users.json
+data/backups/
 
 # ── Snippets y artefactos de desarrollo ───────────
 *_snippet.txt
