@@ -268,8 +268,40 @@ El sistema implementa un ciclo de autenticación completo, productivo y seguro:
 
 | Usuario | Contraseña | Rol |
 |---------|-----------|-----|
-| `admin` | `admin123` | admin |
-| `demo` | `demo1234` | user |
+| `admin` | `Admin2025!` | admin |
+| `demo` | `Demo2025!` | user |
+
+---
+
+## Persistencia (SQLAlchemy ORM + sqlite3 directo)
+
+A partir de la Fase 2 del plan de instrucciones III, la persistencia tiene **dos capas conviviendo en la misma base SQLite** (`data/risklab_users.db`):
+
+- **`api/database.py` (sqlite3 directo)**: gestiona usuarios y tokens de reset (tablas `users`, `reset_tokens`). Soporta el flujo de autenticación completo y se conserva intacto.
+- **`api/db_models.py` + `api/database_session.py` (SQLAlchemy 2.0 ORM)**: introduce 6 modelos nuevos sin tocar las tablas anteriores:
+  - `Asset` — catálogo de activos
+  - `Price` — cache de precios OHLCV
+  - `Portfolio` — portafolios definidos por el usuario
+  - `PredictionLog` — registro de predicciones del modelo ML (Fase 4)
+  - `SignalLog` — persistencia de señales técnicas del M7 (Fase 3)
+  - `FredCache` — cache transparente de series FRED con TTL de 24h
+
+La sesión ORM se inyecta vía `Depends(get_db)` en endpoints que la requieran. La función `init_orm_tables()` se llama en el evento `startup` de FastAPI y es idempotente.
+
+---
+
+## Datos macroeconómicos (FRED + fallback yfinance)
+
+El endpoint `/api/v1/macro` consulta **FRED (Federal Reserve Economic Data)** como fuente primaria para:
+
+| Indicador | Serie FRED | Default fallback |
+|-----------|-----------|------------------|
+| Tasa libre de riesgo (3 meses) | `DGS3MO` | yfinance `^IRX` |
+| Tesoro EE.UU. 10 años          | `DGS10`  | yfinance `^TNX` |
+| Inflación CPI YoY (informativo) | `CPIAUCSL` | _(no fallback — campo opcional)_ |
+| S&P 500 YTD                    | _(no soportado en FRED)_ | yfinance `^GSPC` |
+
+El servicio `api/services/fred_service.py` cachea las respuestas en la tabla `fred_cache` con TTL de 24 horas. Si FRED falla (sin key, key inválida, error de red), el endpoint hace fallback a yfinance automáticamente sin romper el dashboard. El response preserva las keys originales (`as_of`, `rf_rate`, `rf_source`, `treasury_10y`, `spx_ytd`) y agrega campos opcionales (`treasury_10y_source`, `fred_enabled`, `cache_status`, `inflation_yoy`).
 
 ---
 
@@ -362,6 +394,7 @@ Con el backend corriendo: `http://localhost:8001/docs`
 | `PORTFOLIO_TICKERS` | Tickers del portafolio (separados por coma) | `NU,AMZN,SONY,XOM,WPM` |
 | `BENCHMARK_TICKER` | Ticker del benchmark | `^GSPC` |
 | `RISK_FREE_RATE` | Tasa libre de riesgo anual (fallback) | `0.04` |
+| `FRED_API_KEY` | Clave gratuita de FRED para macro (opcional). Solicitar en https://fred.stlouisfed.org/docs/api/api_key.html. Si está ausente o es placeholder, `/api/v1/macro` usa yfinance como fallback. | _(vacío → usa fallback)_ |
 
 ---
 
