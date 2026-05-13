@@ -938,6 +938,36 @@ def get_macro_indicators(db = Depends(lambda: None)):
     return json_response(result)
 
 
+class OptionRequest(BaseModel):
+    S:           float = Field(..., gt=0,  description="Precio spot del subyacente.")
+    K:           float = Field(..., gt=0,  description="Strike de la opción.")
+    T:           float = Field(..., gt=0,  le=30, description="Tiempo a vencimiento en años.")
+    r:           float = Field(..., ge=-0.05, le=1, description="Tasa libre de riesgo anual decimal.")
+    sigma:       float = Field(..., gt=0,  le=5,   description="Volatilidad anual decimal.")
+    option_type: str   = Field("call", description="'call' o 'put'.")
+
+    @field_validator("option_type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        v = v.lower().strip()
+        if v not in ("call", "put"):
+            raise ValueError("option_type debe ser 'call' o 'put'")
+        return v
+
+
+@app.post("/api/v1/opcion/precio", summary="Black-Scholes + Greeks + paridad put-call — M10")
+def post_option_price(req: OptionRequest):
+    """Valoración Black-Scholes para opción europea con sus Greeks."""
+    from api.services.options import OptionPricer
+    try:
+        pricer = OptionPricer(S=req.S, K=req.K, T=req.T, r=req.r, sigma=req.sigma)
+        return json_response(pricer.summary(req.option_type))  # type: ignore[arg-type]
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error valorando opción: {exc}")
+
+
 class BondRequest(BaseModel):
     face_value:     float = Field(..., gt=0, description="Valor nominal del bono.")
     coupon_rate:    float = Field(..., ge=0, le=1, description="Tasa cupón anual decimal (0.05 = 5%).")
