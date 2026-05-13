@@ -409,6 +409,121 @@ def optimize_portfolio_target_return(
     }
 
 
+def optimize_portfolio_qp(
+    returns_df: pd.DataFrame,
+    allow_short: bool = False,
+    rf_rate: float = 0.04,
+) -> dict:
+    """
+    Optimización Markowitz por programación cuadrática (QP) explícita usando SLSQP.
+
+    Resuelve dos problemas con las mismas restricciones excepto las cotas de pesos:
+      • Mínima varianza global:   min wᵀΣw      s.t. Σwᵢ = 1
+      • Máximo Sharpe:            max (wᵀμ - rf)/√(wᵀΣw)   s.t. Σwᵢ = 1
+
+    Si allow_short=False (long-only) los pesos están en [0, 1].
+    Si allow_short=True (short-selling permitido) los pesos están en [-1, 1].
+
+    Devuelve los pesos, retorno, volatilidad y Sharpe de cada portafolio óptimo.
+    """
+    from scipy.optimize import minimize
+
+    tickers  = returns_df.columns.tolist()
+    n        = len(tickers)
+    mean_ann = returns_df.mean() * 252
+    cov_ann  = returns_df.cov()  * 252
+
+    bounds = [(-1.0, 1.0)] * n if allow_short else [(0.0, 1.0)] * n
+    cons   = [{"type": "eq", "fun": lambda w: float(np.sum(w)) - 1.0}]
+    w0     = np.ones(n) / n
+
+    def _portfolio_vol(w):
+        return float(np.sqrt(w @ cov_ann.values @ w))
+
+    def _neg_sharpe(w):
+        port_ret = float(np.dot(w, mean_ann.values))
+        port_vol = _portfolio_vol(w)
+        if port_vol <= 0:
+            return 1e10
+        return -(port_ret - rf_rate) / port_vol
+
+    # ── Mínima varianza ────────────────────────────────────────────────────
+    res_min = minimize(_portfolio_vol, w0, method="SLSQP",
+                       bounds=bounds, constraints=cons,
+                       options={"maxiter": 1000, "ftol": 1e-10})
+    w_min   = res_min.x if res_min.success else w0
+    ret_min = float(np.dot(w_min, mean_ann.values))
+    vol_min = _portfolio_vol(w_min)
+    shp_min = (ret_min - rf_rate) / vol_min if vol_min > 0 else 0.0
+
+    # ── Máximo Sharpe ──────────────────────────────────────────────────────
+    res_max = minimize(_neg_sharpe, w0, method="SLSQP",
+                       bounds=bounds, constraints=cons,
+                       options={"maxiter": 1000, "ftol": 1e-10})
+    w_max   = res_max.x if res_max.success else w0
+    ret_max = float(np.dot(w_max, mean_ann.values))
+    vol_max = _portfolio_vol(w_max)
+    shp_max = (ret_max - rf_rate) / vol_max if vol_max > 0 else 0.0
+
+    def _pack(w, ret, vol, shp, success):
+        return {
+            "Weights":    dict(zip(tickers, [float(x) for x in w])),
+            "Return":     ret,
+            "Volatility": vol,
+            "Sharpe":     shp,
+            "converged":  bool(success),
+        }
+
+    return {
+        "allow_short":   allow_short,
+        "min_variance":  _pack(w_min, ret_min, vol_min, shp_min, res_min.success),
+        "max_sharpe":    _pack(w_max, ret_max, vol_max, shp_max, res_max.success),
+    }
+
+
+def compare_qp_long_only_vs_short(
+    returns_df: pd.DataFrame,
+    rf_rate: float = 0.04,
+) -> dict:
+    """
+    Resuelve QP en las dos versiones (con y sin no-negatividad) y devuelve
+    una comparación interpretativa: qué cambia cuando se permiten ventas en corto,
+    qué activos quedan en cero, y si el portafolio se vuelve más agresivo.
+    """
+    long_only = optimize_portfolio_qp(returns_df, allow_short=False, rf_rate=rf_rate)
+    with_short = optimize_portfolio_qp(returns_df, allow_short=True,  rf_rate=rf_rate)
+
+    # Activos con peso ~0 en long-only (esquina del conjunto factible)
+    zero_threshold = 1e-3
+    zero_assets = [t for t, w in long_only["max_sharpe"]["Weights"].items()
+                   if abs(w) < zero_threshold]
+    short_assets = [t for t, w in with_short["max_sharpe"]["Weights"].items()
+                    if w < -zero_threshold]
+
+    sharpe_lo = long_only["max_sharpe"]["Sharpe"]
+    sharpe_sh = with_short["max_sharpe"]["Sharpe"]
+    sharpe_gain = round(sharpe_sh - sharpe_lo, 4)
+
+    if sharpe_gain > 0.05:
+        msg = ("Permitir short-selling mejora notablemente el Sharpe — el modelo aprovecha "
+               "ventas en corto para reducir volatilidad. Trade-off: mayor complejidad operativa.")
+    elif sharpe_gain > 0.0:
+        msg = ("Permitir short-selling mejora marginalmente el Sharpe. El portafolio long-only "
+               "ya está cerca del óptimo no restringido.")
+    else:
+        msg = ("Long-only iguala o supera al portafolio con short — la restricción de no-negatividad "
+               "no es vinculante en este conjunto de activos.")
+
+    return {
+        "long_only":            long_only,
+        "with_short":           with_short,
+        "sharpe_gain_with_short": sharpe_gain,
+        "zero_weight_in_long_only": zero_assets,
+        "short_positions_when_allowed": short_assets,
+        "interpretation":       msg,
+    }
+
+
 # =============================================================================
 # SECCIÓN 7: SEÑALES Y ALERTAS (MÓDULO 7)
 # =============================================================================

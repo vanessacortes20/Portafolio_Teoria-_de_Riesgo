@@ -56,11 +56,13 @@ from api.logic import (
     calculate_stochastic,
     calculate_var_cvar,
     compare_ewma_vs_garch,
+    compare_qp_long_only_vs_short,
     fit_garch_models,
     generate_signals,
     get_descriptive_stats,
     kupiec_test,
     optimize_portfolio,
+    optimize_portfolio_qp,
     optimize_portfolio_target_return,
     perform_normality_tests,
 )
@@ -734,6 +736,10 @@ def get_risk_analysis(
 def get_portfolio_optimization(
     dates: DateRangeDep,
     config: ConfigDep,
+    include_qp: bool = Query(
+        True,
+        description="Incluye optimización QP determinista (long-only y con short permitido).",
+    ),
 ):
     try:
         all_rets: dict[str, pd.Series] = {}
@@ -747,7 +753,26 @@ def get_portfolio_optimization(
             raise HTTPException(500, "No hay suficientes activos con datos disponibles.")
 
         df_rets = pd.DataFrame(all_rets).dropna()
-        return json_response(optimize_portfolio(df_rets, rf_rate=config.default_rf))
+        result = optimize_portfolio(df_rets, rf_rate=config.default_rf)
+
+        if include_qp:
+            try:
+                qp = compare_qp_long_only_vs_short(df_rets, rf_rate=config.default_rf)
+                # Campos nuevos sin remover los existentes (Max_Sharpe, Min_Volatility, Correlation)
+                result["qp_min_variance"]               = qp["long_only"]["min_variance"]
+                result["qp_max_sharpe"]                 = qp["long_only"]["max_sharpe"]
+                result["allow_short_false_result"]      = qp["long_only"]
+                result["allow_short_true_result"]       = qp["with_short"]
+                result["comparison_long_only_vs_short_allowed"] = {
+                    "sharpe_gain_with_short":         qp["sharpe_gain_with_short"],
+                    "zero_weight_in_long_only":       qp["zero_weight_in_long_only"],
+                    "short_positions_when_allowed":   qp["short_positions_when_allowed"],
+                    "interpretation":                 qp["interpretation"],
+                }
+            except Exception as exc:  # pragma: no cover
+                result["qp_error"] = str(exc)
+
+        return json_response(result)
     except HTTPException:
         raise
     except Exception as exc:
