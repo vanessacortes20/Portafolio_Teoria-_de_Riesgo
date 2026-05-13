@@ -938,6 +938,40 @@ def get_macro_indicators(db = Depends(lambda: None)):
     return json_response(result)
 
 
+class BondRequest(BaseModel):
+    face_value:     float = Field(..., gt=0, description="Valor nominal del bono.")
+    coupon_rate:    float = Field(..., ge=0, le=1, description="Tasa cupón anual decimal (0.05 = 5%).")
+    maturity_years: float = Field(..., gt=0, le=100, description="Vencimiento en años.")
+    yield_rate:     float = Field(..., ge=0, le=1, description="Yield anual decimal.")
+    frequency:      int   = Field(2, description="Pagos por año: 1, 2, 4 o 12.")
+
+    @field_validator("frequency")
+    @classmethod
+    def _valid_freq(cls, v: int) -> int:
+        if v not in (1, 2, 4, 12):
+            raise ValueError("frequency debe ser 1, 2, 4 o 12")
+        return v
+
+
+@app.post("/api/v1/bono/duracion", summary="Bono sintético: precio, duración, convexidad — M9")
+def post_bond_duration(req: BondRequest):
+    """Calcula precio, duración Macaulay/modificada, convexidad y sensibilidad ante shocks."""
+    from api.services.bond import Bond
+    try:
+        bond = Bond(
+            face_value=req.face_value,
+            coupon_rate=req.coupon_rate,
+            maturity_years=req.maturity_years,
+            yield_rate=req.yield_rate,
+            frequency=req.frequency,
+        )
+        return json_response(bond.summary())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error calculando bono: {exc}")
+
+
 @app.get("/api/v1/curva-rendimiento", summary="Curva de rendimiento Tesoro EE.UU. + Nelson-Siegel — M9")
 def get_yield_curve():
     """Curva spot del Tesoro EE.UU. desde FRED + ajuste Nelson-Siegel.
