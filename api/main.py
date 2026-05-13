@@ -938,6 +938,26 @@ def get_macro_indicators(db = Depends(lambda: None)):
     return json_response(result)
 
 
+@app.get("/api/v1/curva-rendimiento", summary="Curva de rendimiento Tesoro EE.UU. + Nelson-Siegel — M9")
+def get_yield_curve():
+    """Curva spot del Tesoro EE.UU. desde FRED + ajuste Nelson-Siegel.
+
+    Si FRED_API_KEY no está configurada, usa una curva DEMO ilustrativa
+    marcada como `source: fallback_demo`.
+    """
+    from api.database_session import SessionLocal
+    from api.services.yield_curve import YieldCurve
+
+    db = SessionLocal()
+    try:
+        yc = YieldCurve(db)
+        return json_response(yc.to_response())
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error construyendo la curva: {exc}")
+    finally:
+        db.close()
+
+
 @app.get("/api/v1/signals/{ticker}", summary="Señales técnicas automáticas — M7")
 def get_asset_signals(
     ticker: str,
