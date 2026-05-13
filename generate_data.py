@@ -58,6 +58,8 @@ from api.logic import (
     calculate_returns, get_descriptive_stats, perform_normality_tests,
     fit_garch_models, calculate_capm, calculate_var_cvar,
     optimize_portfolio, generate_signals,
+    calculate_ewma_volatility, arch_lm_test, compare_ewma_vs_garch,
+    compare_qp_long_only_vs_short,
 )
 
 # ── Modelo Pydantic: validación de parámetros CLI ─────────────────────────────
@@ -243,7 +245,7 @@ def compute_volatility(data: pd.DataFrame) -> dict:
     _, log = calculate_returns(data)
     result = clean(fit_garch_models(log))
 
-    # Extraer residuos estandarizados y pronóstico de GARCH(1,1)
+    # Extraer residuos estandarizados, pronóstico GARCH(1,1) y diagnóstico ARCH-LM
     try:
         from arch import arch_model
         scaled = log * 100
@@ -263,10 +265,29 @@ def compute_volatility(data: pd.DataFrame) -> dict:
             "JB_Stat":       clean(float(jb_stat)),
             "JB_Pvalue":     clean(float(jb_p)),
             "Normal":        bool(jb_p > 0.05),
+            "ARCH_LM":       clean(arch_lm_test(std_resid, nlags=5)),
         }
         result["Forecast_10d"] = clean(vol_forecast)
     except Exception as e:
         print(f"        ! Residuals/forecast: {e}", flush=True)
+
+    # EWMA y comparación con GARCH
+    try:
+        ewma = calculate_ewma_volatility(log, lambda_=0.94)
+        garch_vol = result.get("GARCH(1,1)", {}).get("Volatility", [])
+        garch_last = float(garch_vol[-1]) if garch_vol else None
+        comp = compare_ewma_vs_garch(ewma.get("ewma_last_value"), garch_last)
+        result["EWMA"] = clean({
+            "lambda":          ewma["lambda"],
+            "ewma_volatility": ewma["ewma_volatility"][-500:],
+            "ewma_last_value": ewma["ewma_last_value"],
+            "ewma_mean":       ewma["ewma_mean"],
+            "rolling_30d_avg": ewma["rolling_30d_avg"],
+        })
+        result["comparison_ewma_garch"] = clean(comp)
+        result["interpretation"]        = comp.get("interpretation")
+    except Exception as e:
+        print(f"        ! EWMA: {e}", flush=True)
 
     return result
 
@@ -400,6 +421,22 @@ def compute_portfolio(all_returns: dict, rf_annual: float = 0.045) -> dict:
             result[key]["Return"]     = clean(p_ret)
             result[key]["Volatility"] = clean(p_vol)
             result[key]["Sharpe"]     = clean(sharpe)
+
+    # QP determinista: long-only y con short permitido + comparación
+    try:
+        qp = compare_qp_long_only_vs_short(df, rf_rate=rf_annual)
+        result["qp_min_variance"]               = clean(qp["long_only"]["min_variance"])
+        result["qp_max_sharpe"]                 = clean(qp["long_only"]["max_sharpe"])
+        result["allow_short_false_result"]      = clean(qp["long_only"])
+        result["allow_short_true_result"]       = clean(qp["with_short"])
+        result["comparison_long_only_vs_short_allowed"] = clean({
+            "sharpe_gain_with_short":         qp["sharpe_gain_with_short"],
+            "zero_weight_in_long_only":       qp["zero_weight_in_long_only"],
+            "short_positions_when_allowed":   qp["short_positions_when_allowed"],
+            "interpretation":                 qp["interpretation"],
+        })
+    except Exception as e:
+        print(f"        ! QP: {e}", flush=True)
 
     # Frontera eficiente: muestra de 2000 portafolios simulados
     n_assets = df.shape[1]
