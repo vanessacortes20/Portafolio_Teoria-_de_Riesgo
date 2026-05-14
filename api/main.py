@@ -1102,7 +1102,83 @@ class OptionRequest(BaseModel):
         return v
 
 
-@app.post("/api/v1/opcion/precio", summary="Black-Scholes + Greeks + paridad put-call — M10")
+@app.get("/api/v1/opcion/precio/{ticker}",
+         summary="Black-Scholes sobre un activo del portafolio (S y σ obtenidos automáticamente) — M10")
+def get_option_price_for_ticker(
+    ticker: str,
+    K_pct:        float = Query(1.0, gt=0,    description="Strike como fracción del spot (1.0 = ATM)."),
+    T:            float = Query(0.25, gt=0, le=10, description="Tiempo a vencimiento en años."),
+    option_type:  str   = Query("call", description="'call' o 'put'."),
+    sigma_window: int   = Query(60, ge=20, le=252, description="Días para σ histórica anualizada."),
+):
+    """Valoración Black-Scholes usando el spot real y σ histórica del activo.
+
+    Obtiene precios desde el cache SQLAlchemy (descarga si falta), calcula σ
+    como std de log-retornos × √252, toma Rf desde /api/v1/macro y devuelve
+    el precio + Greeks + paridad. Cumple el requisito del instructivo:
+    *las opciones se valoran sobre los mismos activos del portafolio*.
+    """
+    from api.database_session import SessionLocal
+    from api.services.options import OptionPricer
+    from api.services.price_service import get_prices
+    from api.services import fred_service as fred
+    import yfinance as yf
+    import numpy as np
+
+    if option_type not in ("call", "put"):
+        raise HTTPException(422, "option_type debe ser 'call' o 'put'")
+
+    db = SessionLocal()
+    try:
+        df, meta = get_prices(db, ticker, period="1y")
+        # Si el cache no tiene suficiente histórico, fuerza descarga fresca de 1 año
+        if df.empty or len(df) < sigma_window + 1:
+            df, meta = get_prices(db, ticker, period="1y", fresh=True)
+        if df.empty or len(df) < sigma_window + 1:
+            raise HTTPException(
+                404,
+                f"Datos insuficientes para '{ticker}' (necesita >{sigma_window} cierres, hay {len(df)}).",
+            )
+
+        closes = df["Close"].dropna().tail(sigma_window + 1).values
+        if len(closes) < 5:
+            raise HTTPException(404, f"Cierres insuficientes para σ histórica.")
+        S = float(closes[-1])
+        log_rets = np.diff(np.log(closes))
+        sigma_ann = float(np.std(log_rets, ddof=1) * np.sqrt(252))
+
+        # Rf: prioriza FRED, fallback a yfinance ^IRX
+        r = None
+        if fred.is_available():
+            rf = fred.get_rf_rate_3m(db)
+            if rf and rf.get("value_decimal") is not None:
+                r = rf["value_decimal"]
+        if r is None:
+            try:
+                irx_hist = yf.Ticker("^IRX").history(period="5d")
+                r = float(irx_hist["Close"].iloc[-1]) / 100 if not irx_hist.empty else 0.04
+            except Exception:
+                r = 0.04
+
+        K = S * K_pct
+        pricer = OptionPricer(S=S, K=K, T=T, r=r, sigma=sigma_ann)
+        result = pricer.summary(option_type)  # type: ignore[arg-type]
+        result["ticker"]            = ticker
+        result["spot_used"]         = round(S, 6)
+        result["strike_pct_of_spot"] = K_pct
+        result["sigma_source"]      = f"historical_{sigma_window}d"
+        result["rf_source"]         = "FRED.DGS3MO" if fred.is_available() else "yfinance.^IRX or default"
+        result["price_cache_meta"]  = meta
+        return json_response(result)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error valorando opción sobre {ticker}: {exc}")
+    finally:
+        db.close()
+
+
+@app.post("/api/v1/opcion/precio", summary="Black-Scholes + Greeks + paridad put-call (parámetros libres) — M10")
 def post_option_price(req: OptionRequest):
     """Valoración Black-Scholes para opción europea con sus Greeks."""
     from api.services.options import OptionPricer
