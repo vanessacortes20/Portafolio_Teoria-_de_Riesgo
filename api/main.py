@@ -1149,6 +1149,51 @@ def post_bond_duration(req: BondRequest):
         raise HTTPException(500, f"Error calculando bono: {exc}")
 
 
+@app.get("/api/v1/precios/cache", summary="Estado del cache de precios en SQLAlchemy")
+def get_prices_cache():
+    """Reporta cuántos activos y precios están cacheados en SQLite."""
+    from api.database_session import SessionLocal
+    from api.services.price_service import cache_summary
+    db = SessionLocal()
+    try:
+        return json_response(cache_summary(db))
+    finally:
+        db.close()
+
+
+@app.get("/api/v1/precios/{ticker}", summary="Precios OHLCV con cache transparente en SQLite")
+def get_prices_with_cache(
+    ticker: str,
+    period: str = Query("2y", description="Período si no se especifican fechas (yfinance format)."),
+    fresh:  bool = Query(False, description="Forzar descarga aunque haya cache fresco."),
+):
+    """Devuelve precios OHLCV de yfinance con cache transparente.
+
+    - Si el cache tiene datos del último día, retorna cache (`cache_status: hit`).
+    - Si no, descarga de yfinance con reintentos y persiste (`cache_status: miss`).
+    - Si yfinance falla y hay cache vencido, lo reutiliza (`cache_status: stale_used`).
+    """
+    from api.database_session import SessionLocal
+    from api.services.price_service import get_prices
+    db = SessionLocal()
+    try:
+        df, meta = get_prices(db, ticker, period=period, fresh=fresh)
+        if df.empty:
+            raise HTTPException(404, f"Sin datos para '{ticker}' (cache_status={meta['cache_status']}).")
+        return json_response({
+            "ticker":   ticker,
+            "n_rows":   len(df),
+            "meta":     meta,
+            "data":     df.assign(Date=lambda d: d["Date"].astype(str)).to_dict(orient="records"),
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error consultando precios: {exc}")
+    finally:
+        db.close()
+
+
 @app.get("/api/v1/curva-rendimiento", summary="Curva de rendimiento Tesoro EE.UU. + Nelson-Siegel — M9")
 def get_yield_curve():
     """Curva spot del Tesoro EE.UU. desde FRED + ajuste Nelson-Siegel.
