@@ -13,6 +13,19 @@
 
 ---
 
+## 1.5. Marco conceptual de riesgo financiero (M-I-1, 1 min)
+
+> "Antes de los indicadores, definamos el lenguaje. **Riesgo financiero** es la probabilidad de pérdida económica por incertidumbre futura. Se descompone en cuatro categorías:
+>
+> - **Riesgo de mercado** — pérdidas por movimientos adversos en precios. Es el foco central: lo cuantificamos con VaR/CVaR (M5), GARCH (M3), Beta CAPM (M4) y stress (M11).
+> - **Riesgo de crédito** — incumplimiento de pago de una contraparte. Aparece indirectamente en M9: la curva de tesoros EE.UU. asume emisor libre de crédito.
+> - **Riesgo de liquidez** — incapacidad de cerrar posición a precio razonable. Lo reconocemos como limitación: el VaR no incorpora bid-ask ni profundidad.
+> - **Riesgo operativo** — fallos en personas, procesos o sistemas. Se mitiga a nivel de plataforma con JWT, validación Pydantic y persistencia ORM.
+>
+> Cada uno de los 12 módulos responde cuantitativamente a una o varias de estas categorías."
+
+---
+
 ## 2. Arquitectura (2 min)
 
 ```

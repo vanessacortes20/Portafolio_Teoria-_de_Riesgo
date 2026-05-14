@@ -158,6 +158,21 @@ proyecto_2/
 
 ---
 
+## Marco conceptual de riesgo financiero (M-I-1)
+
+> Antes de los indicadores, el proyecto se apoya en estas definiciones canónicas. Sirven como hilo conductor de toda la plataforma.
+
+**Riesgo financiero** es la probabilidad de pérdida económica derivada de la incertidumbre sobre el comportamiento futuro de variables del mercado, contrapartes o procesos internos. Se descompone en cuatro categorías principales:
+
+- **Riesgo de mercado** — pérdidas por movimientos adversos en precios, tasas, tipos de cambio o índices. Es el riesgo central que cuantifica este proyecto (VaR/CVaR en M5, GARCH en M3, Beta en M4, Stress en M11).
+- **Riesgo de crédito** — pérdidas por incumplimiento de pago de una contraparte o emisor. En este proyecto aparece de forma indirecta: la curva de tesoros del M9 asume riesgo soberano EE.UU. ≈ libre de crédito.
+- **Riesgo de liquidez** — incapacidad de cerrar una posición a precio razonable. Se reconoce como limitación reconocida del modelo: VaR/CVaR no incorpora costos de bid-ask ni profundidad de mercado.
+- **Riesgo operativo** — pérdidas por fallos en personas, procesos o sistemas. La autenticación JWT, validación Pydantic y persistencia ORM mitigan esta categoría a nivel de plataforma.
+
+Cada módulo del dashboard (M1–M13) implementa una respuesta cuantitativa a uno o más de estos riesgos.
+
+---
+
 ## Módulos de Análisis
 
 ### M1 — Análisis Técnico
