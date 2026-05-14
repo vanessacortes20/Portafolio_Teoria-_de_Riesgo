@@ -32,6 +32,9 @@ SERIES = {
 
 CACHE_TTL_HOURS = 24
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+MAX_RETRIES = 3
+RETRY_BACKOFF_SEC = 1.5
+HTTP_TIMEOUT_SEC = 15
 
 
 _PLACEHOLDER_VALUES = {
@@ -53,24 +56,41 @@ def is_available() -> bool:
 
 
 def _fetch_remote(series_id: str) -> Optional[dict]:
-    """Llama al endpoint de FRED. Retorna None si falla o no hay key."""
+    """Llama al endpoint de FRED con reintentos exponenciales.
+
+    Reintenta hasta MAX_RETRIES veces ante fallos de red o respuestas 5xx.
+    No reintenta ante 4xx (key inválida, serie inexistente). Retorna None si
+    no hay key configurada o si todos los intentos fallan.
+    """
+    import time
     key = _api_key()
     if not key:
         return None
-    try:
-        params = {
-            "series_id":         series_id,
-            "api_key":           key,
-            "file_type":         "json",
-            "sort_order":        "desc",
-            "limit":             100,
-        }
-        r = requests.get(FRED_BASE, params=params, timeout=15)
-        if r.status_code != 200:
-            return None
-        return r.json()
-    except Exception:
-        return None
+    params = {
+        "series_id":  series_id,
+        "api_key":    key,
+        "file_type":  "json",
+        "sort_order": "desc",
+        "limit":      100,
+    }
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            r = requests.get(FRED_BASE, params=params, timeout=HTTP_TIMEOUT_SEC)
+            if r.status_code == 200:
+                return r.json()
+            if 400 <= r.status_code < 500:
+                # 4xx: error del cliente — no tiene sentido reintentar
+                return None
+            last_error = f"HTTP {r.status_code}"
+        except requests.RequestException as exc:
+            last_error = str(exc)
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_BACKOFF_SEC * attempt)
+    if last_error:
+        # Solo log; el caller maneja el None devuelto
+        print(f"[fred_service] fallo descargando {series_id} tras {MAX_RETRIES} intentos: {last_error}")
+    return None
 
 
 def _extract_last_value(payload: dict) -> tuple[Optional[float], Optional[str]]:
