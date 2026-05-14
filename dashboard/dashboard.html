@@ -523,6 +523,10 @@
   <button class="nav-btn" data-page="m7" onclick="navigate('m7')">🔔 M7 — Señales y Alertas</button>
   <button class="nav-btn" data-page="m8" onclick="navigate('m8')">🌍 M8 — Benchmark</button>
   <button class="nav-btn" data-page="m9" onclick="navigate('m9')">🚀 M9 — Oportunidades</button>
+  <button class="nav-btn" data-page="m10" onclick="navigate('m10')">📜 M10 — Renta Fija</button>
+  <button class="nav-btn" data-page="m11" onclick="navigate('m11')">⚖️ M11 — Opciones (BS)</button>
+  <button class="nav-btn" data-page="m12" onclick="navigate('m12')">⚠️ M12 — Stress Testing</button>
+  <button class="nav-btn" data-page="m13" onclick="navigate('m13')">🤖 M13 — Predicción ML</button>
 
   <hr />
   <div class="nav-label">⚙️ Parámetros de Análisis</div>
@@ -1544,8 +1548,12 @@ function navigate(page) {
 }
 
 function renderPage() {
-  if (!D) { noData(); return; }
-  if (!state.activeTickers.length) { noTickers(); return; }
+  // Las tabs M10–M13 consumen API en vivo; no dependen de data.js ni de tickers activos
+  const independentPages = new Set(['m10', 'm11', 'm12', 'm13']);
+  if (!independentPages.has(state.page)) {
+    if (!D) { noData(); return; }
+    if (!state.activeTickers.length) { noTickers(); return; }
+  }
   switch(state.page) {
     case 'home':   renderHome();   break;
     case 'gauss':  renderGauss();  break;
@@ -1559,6 +1567,10 @@ function renderPage() {
     case 'm7':     renderM7();     break;
     case 'm8':     renderM8();     break;
     case 'm9':     renderM9();     break;
+    case 'm10':    renderM10();    break;
+    case 'm11':    renderM11();    break;
+    case 'm12':    renderM12();    break;
+    case 'm13':    renderM13();    break;
     default:       renderHome();
   }
 }
@@ -3514,6 +3526,360 @@ function renderM9() {
     <div class="footer">RiskLab USTA · M9 Hoja de Ruta Estratégica</div>`);
 }
 
+
+// ═══════════════════════════════════════════
+//  M10 — RENTA FIJA (curva + Nelson-Siegel + bono)
+// ═══════════════════════════════════════════
+async function renderM10() {
+  setContent(`
+    <h1 class="header-gradient">M10 — Renta Fija</h1>
+    <p class="page-subtitle">Curva de rendimiento del Tesoro EE.UU. desde FRED, ajuste Nelson-Siegel y bono sintético con duración y convexidad.</p>
+
+    <div class="section-title">Curva de rendimiento + Nelson-Siegel</div>
+    <div id="m10-curve-status" style="font-size:.85rem;color:#64748b;margin-bottom:10px">Cargando curva…</div>
+    <div id="m10-curve-meta"   style="font-size:.78rem;color:#475569;margin-bottom:8px"></div>
+    <div id="m10-curve-chart"  style="min-height:340px"></div>
+    <div id="m10-curve-params" style="margin-top:14px"></div>
+
+    <div class="section-title" style="margin-top:30px">Calculadora de bono sintético</div>
+    <div class="card" style="padding:18px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px">
+        <label>Valor nominal<input type="number" id="m10-bond-face" value="1000" step="100" class="input"></label>
+        <label>Cupón anual (decimal)<input type="number" id="m10-bond-coupon" value="0.05" step="0.005" class="input"></label>
+        <label>Vencimiento (años)<input type="number" id="m10-bond-mat" value="10" step="0.5" class="input"></label>
+        <label>Yield anual (decimal)<input type="number" id="m10-bond-yield" value="0.05" step="0.005" class="input"></label>
+        <label>Frecuencia<select id="m10-bond-freq" class="input"><option value="1">Anual</option><option value="2" selected>Semestral</option><option value="4">Trimestral</option><option value="12">Mensual</option></select></label>
+      </div>
+      <button onclick="runBondCalc()" class="recalc-btn" style="margin:0;padding:10px 22px;background:linear-gradient(135deg,#3D008D,#ED1E79)">⚡ Calcular bono</button>
+      <span id="m10-bond-status" style="margin-left:14px;font-size:.82rem;color:#64748b"></span>
+      <div id="m10-bond-result" style="margin-top:18px"></div>
+    </div>
+
+    <style>.input{display:block;width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-top:4px;font-size:.85rem}label{font-size:.78rem;color:#475569}</style>
+  `);
+
+  // Cargar curva + NS desde la API
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/curva-rendimiento`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    document.getElementById('m10-curve-status').innerText = `Source: ${d.source} · As of ${d.as_of}`;
+    const obs = d.points || [];
+    const ns = d.nelson_siegel || {};
+    const xs = obs.map(p => p.maturity);
+    const ys = obs.map(p => p.yield_pct);
+    const traces = [{
+      type:'scatter', mode:'markers+lines', name:'Curva observada',
+      x: xs, y: ys, line:{color:'#3D008D',width:2}, marker:{size:9},
+    }];
+    if (ns.fitted) {
+      traces.push({
+        type:'scatter', mode:'lines', name:'Nelson-Siegel',
+        x: ns.maturities || xs, y: ns.fitted_yields || [],
+        line:{color:'#ED1E79',width:2,dash:'dash'},
+      });
+    }
+    Plotly.newPlot('m10-curve-chart', traces, {
+      ...PB, height:340,
+      xaxis:{...PB.xaxis, title:'Maturity (años)'},
+      yaxis:{...PB.yaxis, title:'Yield (%)'},
+      legend:{...PB.legend, orientation:'h', y:-0.18},
+    }, PCFG);
+
+    if (ns.fitted) {
+      document.getElementById('m10-curve-params').innerHTML = `
+        <div class="card" style="padding:14px;background:#faf8fc">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;font-size:.85rem">
+            <div><b>β₀ (nivel)</b><br>${ns.beta0.toFixed(4)}</div>
+            <div><b>β₁ (pendiente)</b><br>${ns.beta1.toFixed(4)}</div>
+            <div><b>β₂ (curvatura)</b><br>${ns.beta2.toFixed(4)}</div>
+            <div><b>τ (decay)</b><br>${ns.tau.toFixed(4)}</div>
+            <div><b>RMSE</b><br>${ns.rmse.toFixed(6)}</div>
+          </div>
+          <p style="font-size:.82rem;color:#475569;margin:10px 0 0;line-height:1.5">
+            <b>Interpretación:</b> ${ns.interpretation || ''}
+          </p>
+        </div>`;
+    }
+  } catch (e) {
+    document.getElementById('m10-curve-status').innerHTML = `<span style="color:#dc2626">Error: ${e.message}</span>`;
+  }
+}
+
+async function runBondCalc() {
+  const status = document.getElementById('m10-bond-status');
+  const out = document.getElementById('m10-bond-result');
+  status.innerText = '⌛ Calculando...';
+  out.innerHTML = '';
+  const body = {
+    face_value:     parseFloat(document.getElementById('m10-bond-face').value),
+    coupon_rate:    parseFloat(document.getElementById('m10-bond-coupon').value),
+    maturity_years: parseFloat(document.getElementById('m10-bond-mat').value),
+    yield_rate:     parseFloat(document.getElementById('m10-bond-yield').value),
+    frequency:      parseInt(document.getElementById('m10-bond-freq').value),
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/bono/duracion`, {
+      method:'POST', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    status.innerText = '✓ OK';
+    const sh = data.shock_sensitivity || [];
+    const shockRows = sh.map(s => `<tr><td>${s.shock_bp>0?'+':''}${s.shock_bp} bp</td><td>${(s.duration_only_pct*100).toFixed(3)}%</td><td>${(s.duration_convex_pct*100).toFixed(3)}%</td><td>${(s.exact_pct*100).toFixed(3)}%</td><td>${s.new_price.toFixed(2)}</td></tr>`).join('');
+    out.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">
+        <div class="kpi-card-v2"><div class="kpi-label">Precio</div><div class="kpi-value">${data.bond_price.toFixed(2)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Duración Macaulay</div><div class="kpi-value">${data.macaulay_duration.toFixed(3)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Duración Modificada</div><div class="kpi-value">${data.modified_duration.toFixed(3)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Convexidad</div><div class="kpi-value">${data.convexity.toFixed(2)}</div></div>
+      </div>
+      <table class="compare-table" style="font-size:.82rem">
+        <thead><tr><th>Shock</th><th>Solo duración</th><th>Duración + convexidad</th><th>Reprice exacto</th><th>Nuevo precio</th></tr></thead>
+        <tbody>${shockRows}</tbody>
+      </table>
+      <p style="font-size:.82rem;color:#475569;margin-top:10px">${data.interpretation || ''}</p>`;
+  } catch (e) {
+    status.innerHTML = `<span style="color:#dc2626">${e.message}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  M11 — OPCIONES (Black-Scholes + Greeks)
+// ═══════════════════════════════════════════
+function renderM11() {
+  setContent(`
+    <h1 class="header-gradient">M11 — Opciones Europeas (Black-Scholes)</h1>
+    <p class="page-subtitle">Valoración Black-Scholes con las cinco Greeks y verificación numérica de paridad put-call.</p>
+
+    <div class="card" style="padding:18px;margin-bottom:18px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:14px">
+        <label>Spot (S)<input type="number" id="m11-S" value="100" step="1" class="input"></label>
+        <label>Strike (K)<input type="number" id="m11-K" value="100" step="1" class="input"></label>
+        <label>T (años)<input type="number" id="m11-T" value="1" step="0.1" class="input"></label>
+        <label>r (decimal)<input type="number" id="m11-r" value="0.05" step="0.005" class="input"></label>
+        <label>σ (decimal)<input type="number" id="m11-sigma" value="0.20" step="0.01" class="input"></label>
+        <label>Tipo<select id="m11-type" class="input"><option value="call">Call</option><option value="put">Put</option></select></label>
+      </div>
+      <button onclick="runOptionPrice()" class="recalc-btn" style="margin:0;padding:10px 22px;background:linear-gradient(135deg,#3D008D,#ED1E79)">⚡ Valorar opción</button>
+      <span id="m11-status" style="margin-left:14px;font-size:.82rem;color:#64748b"></span>
+    </div>
+
+    <div id="m11-result"></div>
+  `);
+  // Carga inicial automática
+  runOptionPrice();
+}
+
+async function runOptionPrice() {
+  const status = document.getElementById('m11-status');
+  const out = document.getElementById('m11-result');
+  status.innerText = '⌛ Valorando...';
+  const body = {
+    S: parseFloat(document.getElementById('m11-S').value),
+    K: parseFloat(document.getElementById('m11-K').value),
+    T: parseFloat(document.getElementById('m11-T').value),
+    r: parseFloat(document.getElementById('m11-r').value),
+    sigma: parseFloat(document.getElementById('m11-sigma').value),
+    option_type: document.getElementById('m11-type').value,
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/opcion/precio`, {
+      method:'POST', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    status.innerText = '✓ OK';
+    const g = data.greeks || {};
+    const par = data.put_call_parity_check || {};
+    out.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px">
+        <div class="kpi-card-v2"><div class="kpi-label">Precio</div><div class="kpi-value">${data.price.toFixed(4)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Delta (Δ)</div><div class="kpi-value">${g.delta.toFixed(4)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Gamma (Γ)</div><div class="kpi-value">${g.gamma.toFixed(4)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Vega (ν)</div><div class="kpi-value">${g.vega.toFixed(4)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Theta (Θ)</div><div class="kpi-value">${g.theta.toFixed(4)}</div></div>
+        <div class="kpi-card-v2"><div class="kpi-label">Rho (ρ)</div><div class="kpi-value">${g.rho.toFixed(4)}</div></div>
+      </div>
+      <div class="card" style="padding:14px;background:${par.satisfied?'#f0fdf4':'#fef2f2'};border-left:4px solid ${par.satisfied?'#16a34a':'#dc2626'}">
+        <b>Paridad put-call:</b> ${par.satisfied ? '✅ satisfecha' : '❌ rota'}
+        — C - P = ${par.lhs?.toFixed(6)}, S - K·e^(-rT) = ${par.rhs?.toFixed(6)}, |diff| = ${par.abs_diff}
+      </div>
+      <p style="font-size:.85rem;color:#475569;margin-top:10px;line-height:1.55">${data.interpretation || ''}</p>`;
+  } catch (e) {
+    status.innerHTML = `<span style="color:#dc2626">${e.message}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  M12 — STRESS TESTING
+// ═══════════════════════════════════════════
+function renderM12() {
+  // Pesos por defecto: usa portafolio igual-ponderado de los tickers activos
+  const tickers = (state.activeTickers && state.activeTickers.length) ? state.activeTickers : ['AMZN','XOM','NU','SONY','WPM'];
+  const w = (1.0 / tickers.length).toFixed(4);
+  const defaults = tickers.map(t => `${t}:${w}`).join(', ');
+  const prices   = tickers.map(t => `${t}:100`).join(', ');
+
+  setContent(`
+    <h1 class="header-gradient">M12 — Stress Testing</h1>
+    <p class="page-subtitle">Aplica escenarios extremos sobre el portafolio (mercado, tasa, volatilidad, combinado) y mide la pérdida potencial.</p>
+
+    <div class="card" style="padding:18px;margin-bottom:18px">
+      <label style="font-size:.78rem;color:#475569">Pesos (formato ticker:peso, separados por coma — deben sumar 1)
+        <input type="text" id="m12-weights" value="${defaults}" class="input">
+      </label>
+      <label style="font-size:.78rem;color:#475569;margin-top:8px;display:block">Precios (formato ticker:precio)
+        <input type="text" id="m12-prices" value="${prices}" class="input">
+      </label>
+      <button onclick="runStress()" class="recalc-btn" style="margin:14px 0 0;padding:10px 22px;background:linear-gradient(135deg,#3D008D,#ED1E79)">⚡ Correr 6 escenarios</button>
+      <span id="m12-status" style="margin-left:14px;font-size:.82rem;color:#64748b"></span>
+    </div>
+
+    <div id="m12-result"></div>
+  `);
+}
+
+function _parseKV(str) {
+  const out = {};
+  str.split(',').forEach(p => {
+    const [k, v] = p.split(':').map(s => s.trim());
+    if (k && v != null) out[k] = parseFloat(v);
+  });
+  return out;
+}
+
+async function runStress() {
+  const status = document.getElementById('m12-status');
+  const out = document.getElementById('m12-result');
+  status.innerText = '⌛ Aplicando escenarios...';
+  out.innerHTML = '';
+  const body = {
+    weights: _parseKV(document.getElementById('m12-weights').value),
+    prices:  _parseKV(document.getElementById('m12-prices').value),
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/stress`, {
+      method:'POST', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(data.detail) || `HTTP ${res.status}`);
+    status.innerText = '✓ OK';
+    const summary = data.scenario_summary || [];
+    const names = summary.map(s => s.scenario_name);
+    const losses = summary.map(s => s.percentage_loss * 100);
+    Plotly.newPlot(out, [{
+      type:'bar', x:names, y:losses,
+      marker:{color: losses.map(l => l<0?'#dc2626':'#16a34a')},
+      text: losses.map(l => `${l.toFixed(2)}%`), textposition:'outside',
+    }], {
+      ...PB, height:380,
+      title:{text:`Pérdida % por escenario · base = ${data.base_portfolio_value.toFixed(2)}`,font:{size:13}},
+      yaxis:{...PB.yaxis, title:'Pérdida (%)', ticksuffix:'%'},
+      xaxis:{...PB.xaxis, tickangle:-15},
+    }, PCFG);
+    const extra = document.createElement('div');
+    extra.style.marginTop = '14px';
+    extra.innerHTML = `
+      <div class="card" style="padding:14px;background:#fffbeb;border-left:4px solid #f59e0b">
+        <b>Peor escenario:</b> ${data.worst_scenario} (${(data.worst_loss_pct*100).toFixed(2)}%)<br>
+        <b>Interpretación:</b> ${data.risk_interpretation}
+      </div>`;
+    out.appendChild(extra);
+  } catch (e) {
+    status.innerHTML = `<span style="color:#dc2626">${e.message}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════
+//  M13 — MACHINE LEARNING (predicción)
+// ═══════════════════════════════════════════
+async function renderM13() {
+  setContent(`
+    <h1 class="header-gradient">M13 — Predicción ML (Random Forest)</h1>
+    <p class="page-subtitle">Pipeline train → load → predict con patrón Singleton. El modelo se carga UNA sola vez y persiste cada predicción en PredictionLog.</p>
+
+    <div class="card" style="padding:14px;background:#fffbeb;border-left:4px solid #f59e0b;margin-bottom:18px;font-size:.85rem">
+      ⚠️ <b>Modelo académico de demostración.</b> NO constituye recomendación financiera ni garantiza rentabilidad.
+      Las predicciones son probabilísticas y no consideran costos de transacción ni cambios de régimen.
+    </div>
+
+    <div id="m13-info" class="card" style="padding:14px;margin-bottom:18px">Cargando metadata del modelo…</div>
+
+    <div class="card" style="padding:18px;margin-bottom:18px">
+      <label style="font-size:.78rem;color:#475569">Ticker
+        <input type="text" id="m13-ticker" value="AMZN" class="input" maxlength="10">
+      </label>
+      <div id="m13-features-form" style="margin-top:14px"></div>
+      <button onclick="runPredict()" class="recalc-btn" style="margin:14px 0 0;padding:10px 22px;background:linear-gradient(135deg,#3D008D,#ED1E79)">⚡ Predecir dirección</button>
+      <span id="m13-status" style="margin-left:14px;font-size:.82rem;color:#64748b"></span>
+    </div>
+
+    <div id="m13-result"></div>
+  `);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/predict/info`, { headers: authHeaders() });
+    const info = await res.json();
+    if (!info.is_ready) {
+      document.getElementById('m13-info').innerHTML = `<span style="color:#dc2626">Modelo no disponible. Ejecuta <code>python -m api.ml.train</code> y reinicia el backend.</span>`;
+      return;
+    }
+    document.getElementById('m13-info').innerHTML = `
+      <b>Modelo:</b> ${info.model_version}
+      · <b>Test accuracy:</b> ${(info.metadata.test_accuracy*100).toFixed(2)}%
+      · <b>Features:</b> ${info.feature_cols.length}
+      · <b>Labels:</b> 0=sell, 1=hold, 2=buy`;
+
+    // Genera inputs por feature (con valores de ejemplo razonables)
+    const examples = {ret_lag_1:0.005, ret_lag_2:-0.002, ret_lag_3:0.001, rsi:55.0, macd_hist:0.0001, vol_5:0.012, vol_20:0.018};
+    const inputs = info.feature_cols.map(c => `
+      <label style="font-size:.78rem;color:#475569">${c}
+        <input type="number" id="m13-feat-${c}" value="${examples[c] ?? 0}" step="0.001" class="input">
+      </label>`).join('');
+    document.getElementById('m13-features-form').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">${inputs}</div>`;
+  } catch (e) {
+    document.getElementById('m13-info').innerHTML = `<span style="color:#dc2626">Error cargando metadata: ${e.message}</span>`;
+  }
+}
+
+async function runPredict() {
+  const status = document.getElementById('m13-status');
+  const out = document.getElementById('m13-result');
+  status.innerText = '⌛ Prediciendo...';
+  out.innerHTML = '';
+  const ticker = document.getElementById('m13-ticker').value.trim().toUpperCase();
+  const inputs = document.querySelectorAll('[id^="m13-feat-"]');
+  const features = Array.from(inputs).map(el => parseFloat(el.value) || 0);
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/predict`, {
+      method:'POST', headers:{...authHeaders(),'Content-Type':'application/json'},
+      body: JSON.stringify({ ticker, features }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    status.innerText = '✓ OK';
+    const labelColor = data.prediction === 2 ? '#16a34a' : data.prediction === 0 ? '#dc2626' : '#f59e0b';
+    const probsRow = data.probability ? data.probability.map((p,i) => {
+      const lbl = ['sell','hold','buy'][i];
+      return `<div style="text-align:center"><div style="font-size:.7rem;color:#64748b;text-transform:uppercase">${lbl}</div><div style="font-size:1.05rem;font-weight:700">${(p*100).toFixed(1)}%</div></div>`;
+    }).join('') : '';
+    out.innerHTML = `
+      <div class="card" style="padding:18px;border-left:6px solid ${labelColor}">
+        <div style="font-size:.82rem;color:#64748b;text-transform:uppercase">Predicción para ${data.ticker}</div>
+        <div style="font-size:2rem;font-weight:800;color:${labelColor};margin:6px 0">${(data.prediction_label||'').toUpperCase()}</div>
+        ${data.probability ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:10px 0;padding:10px;background:#faf8fc;border-radius:8px">${probsRow}</div>` : ''}
+        <div style="font-size:.78rem;color:#475569;margin-top:10px">
+          <b>model_version:</b> ${data.model_version} · <b>log_id:</b> ${data.log_id}
+        </div>
+        <p style="font-size:.85rem;color:#475569;margin-top:10px;line-height:1.55">${data.interpretation}</p>
+        <div style="font-size:.75rem;color:#92400e;background:#fffbeb;padding:8px 12px;border-radius:6px;margin-top:10px">⚠️ ${data.warning}</div>
+      </div>`;
+  } catch (e) {
+    status.innerHTML = `<span style="color:#dc2626">${e.message}</span>`;
+  }
+}
 
 // ─────────────────────────────────────────
 //  INIT
