@@ -330,6 +330,21 @@ A partir de la Fase 2 del plan de instrucciones III, la persistencia tiene **dos
 
 La sesión ORM se inyecta vía `Depends(get_db)` en endpoints que la requieran. La función `init_orm_tables()` se llama en el evento `startup` de FastAPI y es idempotente.
 
+### Cache transparente de precios (Yahoo Finance → SQLite)
+
+`api/services/price_service.py` implementa la estrategia recomendada por el instructivo:
+
+> *"si el dato existe en BD y la fecha es reciente, leer de BD; si no, llamar a la API externa y persistir el resultado antes de retornarlo"*
+
+Estados posibles del cache (`cache_status`):
+- `hit` — datos frescos en BD (TTL: 1 día)
+- `miss` — descarga + persiste por primera vez
+- `refresh` — fuerza descarga (`?fresh=true`)
+- `stale_used` — yfinance falla, se reutiliza cache aunque vencido
+- `unavailable` — no hay cache ni respuesta de yfinance
+
+El cliente HTTP de yfinance tiene **3 reintentos con backoff exponencial** (1.5s, 3.0s) ante fallos de red. El cliente FRED implementa el mismo patrón.
+
 ---
 
 ## Datos macroeconómicos (FRED + fallback yfinance)
@@ -452,6 +467,9 @@ No requiere `FRED_API_KEY` real — los tests usan datos sintéticos y fallback 
 | POST | `/api/v1/stress` | Stress testing del portafolio — M11 |
 | POST | `/api/v1/predict` | Predicción ML direccional con logging — M12 |
 | GET | `/api/v1/predict/info` | Metadata del modelo ML cargado — M12 |
+| GET | `/api/v1/precios/{ticker}` | Precios OHLCV con cache transparente en SQLAlchemy |
+| GET | `/api/v1/precios/cache` | Resumen del cache de precios (n_assets, n_prices) |
+| GET | `/api/v1/opcion/precio/{ticker}` | Opción sobre un activo del portafolio (S y σ obtenidos automáticamente) |
 | GET | `/api/v1/macro` | Contexto macro (Rf, T10Y, S&P YTD) — M8 |
 | GET | `/api/v1/all` | Todos los módulos en una sola llamada |
 
