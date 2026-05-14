@@ -938,6 +938,108 @@ def get_macro_indicators(db = Depends(lambda: None)):
     return json_response(result)
 
 
+class PredictRequest(BaseModel):
+    ticker:   str = Field(..., min_length=1, max_length=15)
+    features: list[float] = Field(..., min_length=1, max_length=20,
+        description="Vector de features (debe coincidir con el orden documentado del modelo).")
+    horizon:  Optional[int] = Field(1, ge=1, le=30,
+        description="Horizonte de predicción en días (informativo).")
+
+    @field_validator("features")
+    @classmethod
+    def _features_finite(cls, v: list[float]) -> list[float]:
+        for x in v:
+            if not isinstance(x, (int, float)):
+                raise ValueError("Todas las features deben ser numéricas")
+            if x != x or x in (float("inf"), float("-inf")):  # NaN o inf
+                raise ValueError("Las features no pueden ser NaN ni infinito")
+        return v
+
+
+@app.post("/api/v1/predict", summary="Predicción ML direccional buy/hold/sell — M12")
+def post_predict(req: PredictRequest):
+    """Predice dirección del retorno usando el modelo Singleton.
+
+    El modelo se carga UNA sola vez al primer request (patrón Singleton).
+    Cada predicción se persiste en PredictionLog.
+    """
+    from api.database_session import SessionLocal
+    from api.db_models import PredictionLog
+    from api.ml.predictor import get_predictor
+
+    predictor = get_predictor()
+    if not predictor.is_ready:
+        raise HTTPException(503, "Modelo ML no disponible. Ejecuta `python -m api.ml.train` para generarlo.")
+
+    expected = predictor.feature_columns()
+    if expected and len(req.features) != len(expected):
+        raise HTTPException(
+            422,
+            f"Se esperaban {len(expected)} features ({expected}); recibidas {len(req.features)}.",
+        )
+
+    try:
+        label_int, probs = predictor.predict(np.asarray(req.features))
+    except Exception as exc:
+        raise HTTPException(500, f"Error en la predicción: {exc}")
+
+    label_map = predictor.labels()
+    label_str = label_map.get(str(label_int), str(label_int))
+
+    # Persistencia en PredictionLog
+    db = SessionLocal()
+    try:
+        log = PredictionLog(
+            model_version=predictor.model_version,
+            ticker=req.ticker,
+            input_features={
+                "values": req.features,
+                "names":  expected,
+                "horizon": req.horizon,
+            },
+            prediction=float(label_int),
+        )
+        db.add(log)
+        db.commit()
+        log_id = log.id
+    finally:
+        db.close()
+
+    interp = (
+        f"Predicción para {req.ticker}: {label_str.upper()}. "
+        "Esta señal es probabilística y no constituye recomendación financiera. "
+        "No incluye costos de transacción, slippage ni cambios de régimen."
+    )
+
+    return json_response({
+        "ticker":           req.ticker,
+        "prediction":       label_int,
+        "prediction_label": label_str,
+        "probability":      probs,
+        "model_version":    predictor.model_version,
+        "features_used":    expected,
+        "horizon":          req.horizon,
+        "log_id":           log_id,
+        "interpretation":   interp,
+        "warning":          ("Modelo académico — NO constituye recomendación de inversión "
+                             "ni garantiza rentabilidad. Use con criterio profesional."),
+    })
+
+
+@app.get("/api/v1/predict/info", summary="Metadata del modelo ML cargado")
+def get_predict_info():
+    """Devuelve metadata del modelo, sin requerir input. Útil para docs/dashboard."""
+    from api.ml.predictor import get_predictor
+    predictor = get_predictor()
+    return json_response({
+        "is_ready":       predictor.is_ready,
+        "model_version":  predictor.model_version,
+        "feature_cols":   predictor.feature_columns(),
+        "labels":         predictor.labels(),
+        "metadata":       predictor.metadata,
+    })
+
+
 class StressScenario(BaseModel):
     name:            str   = Field(..., min_length=1, max_length=80)
     market_drop_pct: Optional[float] = Field(None, ge=-1.0, le=1.0,
