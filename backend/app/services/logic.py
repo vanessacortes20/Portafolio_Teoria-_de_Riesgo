@@ -220,20 +220,69 @@ def calculate_capm(
     rf_rate: float = 0.04,
 ) -> dict:
     """
-    rf_rate is annualized; converted to daily for CAPM.
+    CAPM por regresión OLS de retornos del activo contra retornos del benchmark.
+
+    rf_rate es anualizado (decimal). Se convierte a diario internamente.
+
+    Devuelve:
+    - Beta, Alpha, R_Squared (regresión MCO)
+    - Expected_Return_Daily / _Annual según CAPM: E[R] = Rf + β·(E[Rm] - Rf)
+    - Classification: agresivo (β>1.05), defensivo (β<0.95), neutro (β≈1)
+    - Variance_Decomposition: sistemática (β²·σ²_m) vs idiosincrática (σ²_ε)
     """
     rf_daily = (1 + rf_rate) ** (1 / 252) - 1
-    slope, intercept, r_value, _, _ = stats.linregress(bench_returns, returns)
-    expected_return = rf_daily + slope * (bench_returns.mean() - rf_daily)
+    slope, intercept, r_value, _, std_err = stats.linregress(bench_returns, returns)
+    market_mean_daily = float(bench_returns.mean())
+    market_premium    = market_mean_daily - rf_daily
+    expected_return   = rf_daily + slope * market_premium
+
+    # ── Descomposición de varianza ──────────────────────────────────────────
+    var_market = float(bench_returns.var())
+    var_total  = float(returns.var())
+    var_systematic    = float((slope ** 2) * var_market)
+    var_idiosyncratic = float(max(var_total - var_systematic, 0.0))
+    sys_share = float(var_systematic / var_total) if var_total > 0 else None
+
+    # Clasificación con tolerancia ±5% alrededor de β=1
+    if slope > 1.05:
+        classification = "Agresivo"
+        class_note = (
+            f"β={slope:.3f} > 1.05 → amplifica los movimientos del mercado. "
+            "Riesgo sistemático mayor que el promedio."
+        )
+    elif slope < 0.95:
+        classification = "Defensivo"
+        class_note = (
+            f"β={slope:.3f} < 0.95 → menos sensible al mercado. "
+            "Útil como diversificador en caídas sistémicas."
+        )
+    else:
+        classification = "Neutro"
+        class_note = f"β≈1 ({slope:.3f}) → se mueve aproximadamente como el mercado."
+
     return {
         "Beta": slope,
         "Alpha": intercept,
         "R_Squared": r_value ** 2,
+        "Beta_StdErr": float(std_err) if std_err is not None else None,
+        "Rf_Annual_Used":  rf_rate,
+        "Rf_Daily_Used":   rf_daily,
+        "Market_Mean_Daily":    market_mean_daily,
+        "Market_Premium_Daily": market_premium,
         "Expected_Return_Daily": expected_return,
         "Expected_Return_Annual": (1 + expected_return) ** 252 - 1,
-        "Classification": (
-            "Agresivo" if slope > 1.2 else ("Defensivo" if slope < 0.8 else "Neutro")
-        ),
+        "Classification": classification,
+        "Classification_Note": class_note,
+        "Variance_Decomposition": {
+            "var_total":         var_total,
+            "var_systematic":    var_systematic,
+            "var_idiosyncratic": var_idiosyncratic,
+            "systematic_share":  sys_share,
+            "interpretation":    (
+                f"{(sys_share or 0)*100:.1f}% de la varianza viene del mercado (riesgo sistemático no diversificable). "
+                f"El restante {100 - (sys_share or 0)*100:.1f}% es riesgo idiosincrático: se reduce al combinar con activos descorrelacionados."
+            ),
+        },
     }
 
 
