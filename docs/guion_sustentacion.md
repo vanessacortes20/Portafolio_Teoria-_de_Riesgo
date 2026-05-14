@@ -56,6 +56,16 @@ Servicio en `api/services/fred_service.py` con cache transparente en `FredCache`
 
 ---
 
+## 4.5 Rendimientos y log-rendimientos (M2, 1 min)
+
+> "Para el M2 calculamos retornos simples y logarítmicos. Usamos log-rendimientos como base estadística por tres razones: son **aditivos en el tiempo** (la suma de log-rets diarios es el log-ret acumulado), son **simétricos** (una caída del 50% seguida de una subida del 100% se anula), y se aproximan a los simples cuando son pequeños. Esto los hace ideales para tests paramétricos."
+>
+> "El endpoint `/rendimientos/{ticker}` expone media, desviación, asimetría y curtosis para ambas series; pruebas Jarque-Bera y Shapiro-Wilk con interpretación textual del p-valor; histograma con curva normal superpuesta; Q-Q; boxplot con cuartiles y outliers; y un panel de hechos estilizados con detección automática de **colas pesadas** (curtosis exc. > 1), **agrupamiento de volatilidad** (Ljung-Box sobre r²) y **efecto apalancamiento** (correlación entre |r_(t-1)| y r_t)."
+>
+> "En la práctica vemos que los 5 activos rechazan normalidad — eso justifica usar VaR histórico y Monte Carlo en M5 y modelos GARCH en M3, en vez de confiar solo en el supuesto normal."
+
+---
+
 ## 5. EWMA vs GARCH (M3, 2 min)
 
 **EWMA RiskMetrics:** σ²ₜ = λσ²ₜ₋₁ + (1-λ)r²ₜ₋₁, λ=0.94 default, configurable vía `?lambda_ewma=`. **GARCH(1,1):** σ²ₜ = ω + αε²ₜ₋₁ + βσ²ₜ₋₁ con tres parámetros estimados. La tabla comparativa muestra que GARCH tiene reversión a la media y captura asimetría (vía EGARCH); EWMA es más simple pero no tiene varianza incondicional. El test **ARCH-LM** (Engle 1982) sobre residuos GARCH confirma si quedan efectos heterocedásticos sin capturar.

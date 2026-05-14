@@ -181,7 +181,31 @@ Calcula y visualiza los indicadores clásicos de análisis técnico sobre la ser
 
 ### M2 — Distribución de Rendimientos
 
-Calcula retornos simples y logarítmicos diarios. Presenta estadísticas descriptivas completas (media, desviación estándar, asimetría, exceso de curtosis, mínimo, máximo) y aplica dos tests formales de normalidad: Jarque-Bera y Shapiro-Wilk. Incluye gráfico Q-Q para evaluar visualmente las colas de la distribución, y un panel de **hechos estilizados** (fat tails, clustering de volatilidad via Ljung-Box, asimetría negativa) que conecta la distribución empírica con los supuestos del modelo.
+Calcula retornos simples y logarítmicos diarios. Presenta estadísticas descriptivas completas (media, desviación estándar, asimetría, exceso de curtosis, mínimo, máximo) **tanto para rendimientos simples como logarítmicos**, y aplica dos tests formales de normalidad: Jarque-Bera y Shapiro-Wilk. Cada prueba devuelve `stat`, `p_value`, `rejects_normal` (boolean) e `interpretation` textual con la regla de decisión: si p < 0.05 se rechaza la normalidad; si p ≥ 0.05 no se rechaza (lo que **no implica** que sí lo sea).
+
+**Datos disponibles para visualización:**
+- Histograma de rendimientos + **curva normal superpuesta** (200 puntos precomputados con μ y σ empíricos)
+- Gráfico Q-Q empírico vs cuantiles teóricos N(0,1)
+- **Boxplot stats**: cuartiles Q1/median/Q3, IQR, whiskers (regla 1.5·IQR), número de outliers
+- Series temporales de rendimientos simples y log
+
+**Hechos estilizados detectados automáticamente:**
+- Colas pesadas (curtosis exc. > 1)
+- Asimetría negativa (skewness < 0)
+- Agrupamiento de volatilidad (Ljung-Box sobre r² con p < 0.05)
+- **Efecto apalancamiento**: correlación entre |r_(t-1)| y r_t (negativa significativa indica el clásico efecto de Black 1976)
+
+Cada bloque incluye `interpretation` textual que explica qué significa el resultado.
+
+#### Por qué log-rendimientos
+
+El proyecto usa **log-rendimientos** como base estadística por tres razones:
+
+1. **Aditividad temporal:** la suma de log-retornos diarios es exactamente el log-retorno acumulado del período. Los retornos simples no son aditivos (hay que multiplicar `(1+r_t)` y restar 1).
+2. **Simetría:** una caída del 50% seguida de una subida del 100% se anula con log-retornos (`-0.693 + 0.693 = 0`); con retornos simples queda un sesgo (`-0.5 × 2.0 - 1 = 0`, pero las medias se distorsionan).
+3. **Aproximación a la normal:** para retornos pequeños (|r| < 5%) los log-retornos ≈ retornos simples, y se prestan mejor a tests paramétricos como Jarque-Bera.
+
+Esta justificación también aparece en el response del endpoint bajo la clave `log_returns_justification`.
 
 ### M3 — Modelos de Volatilidad (EWMA + ARCH/GARCH/EGARCH)
 
