@@ -96,28 +96,63 @@ RiskLab sigue una arquitectura de dos capas con un mecanismo de datos híbrido:
 
 ```
 proyecto_2/
-├── api/
+├── backend/
 │   ├── __init__.py
-│   ├── main.py            # FastAPI — endpoints REST, autenticación JWT, validación
-│   ├── logic.py           # Funciones de cómputo estadístico (M1–M7)
-│   ├── data.py            # Descarga de datos históricos (yfinance)
-│   └── database.py        # SQLite — usuarios, tokens de reset, audit log
-├── dashboard/
-│   ├── dashboard.html     # Frontend completo (HTML + CSS + JS + Plotly.js)
-│   └── data.js            # Snapshot estático generado por generate_data.py
-├── docs/
-│   └── instructivo_proyecto_integrador.html   # Instructivo del Proyecto Integrador
-├── tests/
-│   └── test_yf.py         # Smoke test de yfinance
-├── data/                  # (carpeta local — la BD SQLite y users.json se generan al arrancar)
-├── generate_data.py       # Generador del snapshot estático data.js
-├── requirements.txt       # Dependencias Python
-├── Dockerfile             # Imagen Docker lista para producción
-├── Procfile               # Comando de inicio para Render / Railway / Heroku
-├── render.yaml            # Configuración declarativa para Render.com
-├── .env.example           # Plantilla de variables de entorno requeridas
-└── .gitignore             # Reglas de exclusión del repositorio
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py              # FastAPI — endpoints REST, alias cortos
+│   │   ├── config.py            # Settings(BaseSettings) cargando .env
+│   │   ├── dependencies.py      # Depends() para BD, ML, FRED, config
+│   │   ├── database.py          # SQLAlchemy engine + SessionLocal + get_db
+│   │   ├── auth_db.py           # sqlite3 directo (auth — capa legacy intacta)
+│   │   ├── data_yf.py           # Descarga directa de yfinance (legacy)
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── db_models.py     # 6 modelos ORM: Asset, Price, Portfolio, etc.
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── logic.py         # Funciones puras M1–M8 (riesgo + portafolio)
+│   │   │   ├── fred_service.py  # FRED con cache y reintentos
+│   │   │   ├── price_service.py # Cache transparente Yahoo → SQLite
+│   │   │   ├── yield_curve.py   # Curva FRED + Nelson-Siegel
+│   │   │   ├── bond.py          # Bono sintético (duración, convexidad)
+│   │   │   ├── options.py       # Black-Scholes + 5 Greeks
+│   │   │   └── stress.py        # Stress testing
+│   │   ├── ml/
+│   │   │   ├── __init__.py
+│   │   │   ├── train.py         # Entrenamiento offline RandomForest
+│   │   │   ├── predictor.py     # Singleton + ModelPredictor
+│   │   │   └── model.joblib     # Modelo serializado
+│   │   └── routers/
+│   │       ├── __init__.py
+│   │       └── aliases.py       # /activos, /portafolios (CRUD)
+│   └── tests/
+│       ├── conftest.py          # Fixtures con BD SQLite en memoria
+│       ├── test_logic.py        # Tests unitarios (RSI, VaR, paridad)
+│       ├── test_endpoints.py    # Tests integración con TestClient
+│       └── test_yf.py           # Smoke test de yfinance (no en CI)
+├── frontend/
+│   ├── dashboard.html           # Frontend HTML + JS + Plotly (consume API)
+│   └── data.js                  # Snapshot estático generado por generate_data.py
+├── docs/                        # Instructivos, auditorías, guion de sustentación
+├── data/                        # (local) BD SQLite, users.json, backups
+├── .github/workflows/ci.yml     # GitHub Actions con pytest
+├── generate_data.py             # Generador del snapshot estático data.js
+├── requirements.txt             # Dependencias con versiones fijas
+├── Dockerfile                   # Imagen multi-stage
+├── docker-compose.yml           # Hot-reload para desarrollo local
+├── Procfile                     # Comando de inicio Heroku/Railway
+├── render.yaml                  # Configuración declarativa para Render
+├── pytest.ini                   # Config pytest
+├── .env.example                 # Plantilla de variables de entorno
+├── .dockerignore                # Excluye .env, BD, tests del contexto Docker
+└── .gitignore
 ```
+
+> **Comando para arrancar el backend tras la reorganización:**
+> ```bash
+> python -m uvicorn backend.app.main:app --port 8001 --reload
+> ```
 
 > **Nota sobre `data/`:** la carpeta existe localmente para alojar `risklab_users.db` y `users.json`, pero ambos están excluidos del repositorio en `.gitignore` porque contienen datos de usuarios. Se generan automáticamente al iniciar el backend (`init_db()` y `seed_demo_users()` crean los usuarios demo).
 
@@ -387,9 +422,9 @@ cp .env.example .env
 # Editar .env — cambiar JWT_SECRET por un valor aleatorio seguro
 
 # 4. Iniciar el backend
-uvicorn api.main:app --port 8001 --reload
+python -m uvicorn backend.app.main:app --port 8001 --reload
 
-# 5. Abrir dashboard/dashboard.html en el navegador
+# 5. Abrir frontend/dashboard.html en el navegador
 # (apertura directa como archivo local o mediante servidor estático)
 ```
 
