@@ -180,6 +180,28 @@ Evalúa el estado actual de cada indicador (RSI, MACD, Bollinger) sobre la últi
 
 **Persistencia en `signals_log`** (SQLAlchemy): cada señal disparada se guarda con timestamp, ticker, regla, valor y nota interpretativa. Se evita duplicar señales del mismo ticker/regla/día. Endpoint adicional `GET /api/v1/signals/{ticker}/history` devuelve el historial ordenado por fecha descendente.
 
+### M9 — Renta Fija (Curva de Rendimiento + Nelson-Siegel + Bono)
+
+Combina dos servicios financieros del mercado de tasas:
+
+- **Curva de rendimiento** del Tesoro EE.UU. construida desde 6 series FRED (DGS3MO, DGS1, DGS2, DGS5, DGS10, DGS30) con cache transparente de 24h. Si `FRED_API_KEY` no está configurada, devuelve una curva DEMO marcada como `source: fallback_demo`.
+- **Ajuste Nelson-Siegel** por mínimos cuadrados no lineales (scipy.optimize.least_squares) con bounds en λ. Devuelve β₀ (nivel), β₁ (pendiente), β₂ (curvatura), λ (decay), `fitted_yields`, `rmse` e interpretación cualitativa de la forma de la curva.
+- **Bono sintético** (clase `Bond`) con cálculo analítico de precio, duración Macaulay/modificada, convexidad y batería de shocks (±50/±100/±200 bp) comparando aproximación lineal con duración, segundo orden con convexidad y reprice exacto.
+
+### M10 — Opciones Europeas (Black-Scholes + Greeks)
+
+Implementa la fórmula de Black-Scholes para call/put con sus cinco Greeks (Delta, Gamma, Vega, Theta, Rho), verificación numérica de paridad put-call y cálculo de volatilidad implícita por Newton-Raphson. Validado contra valores de referencia (call ATM S=K=100, T=1, r=5%, σ=20% → 10.4506).
+
+### M11 — Stress Testing
+
+Aplica escenarios extremos sobre un portafolio (mercado, tasa, volatilidad y combinado "tormenta perfecta"). Cada escenario propaga el shock por activo según Beta y σ, retornando pérdida estimada absoluta y porcentual, impacto desagregado y un peor caso identificado con interpretación.
+
+### M12 — Predicción ML (Random Forest + Singleton)
+
+Pipeline completo `train → joblib → load → predict` con clasificación direccional (`buy`/`hold`/`sell`) sobre features técnicas (retornos rezagados, RSI, MACD, volatilidad rodante). El predictor implementa el **patrón Singleton** (carga del modelo una sola vez al primer request) y persiste cada predicción en `PredictionLog` para auditoría.
+
+> ⚠️ **El módulo ML es una herramienta analítica académica.** No constituye recomendación financiera ni garantía de rentabilidad. Las predicciones son probabilísticas y no consideran costos de transacción, liquidez ni cambios de régimen.
+
 ### M8 — Portafolio vs. Benchmark S&P 500
 
 Compara el portafolio óptimo (pesos del máximo Sharpe) frente al S&P 500 con retorno acumulado base 100, curvas de drawdown máximo, Alpha de Jensen anualizado, Beta del portafolio, Tracking Error, Information Ratio y R². Incorpora un panel de **contexto macroeconómico** con datos en tiempo real: tasa libre de riesgo (^IRX), rendimiento del Tesoro EE.UU. a 10 años (^TNX) y retorno YTD del S&P 500. Estas tres métricas macro contextualizan los resultados del portafolio dentro del entorno de tasas y mercado vigente.
@@ -391,6 +413,12 @@ Con el backend corriendo: `http://localhost:8001/docs`
 | GET | `/api/v1/portfolio/target` | Optimización por rendimiento objetivo — M6 |
 | GET | `/api/v1/signals/{ticker}` | Señales técnicas automáticas + persistencia — M7 |
 | GET | `/api/v1/signals/{ticker}/history` | Historial de señales persistidas — M7 |
+| GET | `/api/v1/curva-rendimiento` | Curva FRED + ajuste Nelson-Siegel — M9 |
+| POST | `/api/v1/bono/duracion` | Bono sintético: precio, duración, convexidad — M9 |
+| POST | `/api/v1/opcion/precio` | Black-Scholes + Greeks + paridad put-call — M10 |
+| POST | `/api/v1/stress` | Stress testing del portafolio — M11 |
+| POST | `/api/v1/predict` | Predicción ML direccional con logging — M12 |
+| GET | `/api/v1/predict/info` | Metadata del modelo ML cargado — M12 |
 | GET | `/api/v1/macro` | Contexto macro (Rf, T10Y, S&P YTD) — M8 |
 | GET | `/api/v1/all` | Todos los módulos en una sola llamada |
 
