@@ -569,6 +569,7 @@ def get_returns_analysis(
 
         simple_ret, log_ret = calculate_returns(data)
         clean_ret = simple_ret.replace([np.inf, -np.inf], np.nan).dropna()
+        clean_log = log_ret.replace([np.inf, -np.inf], np.nan).dropna()
 
         # ── Q-Q data ──────────────────────────────────────────────────────────
         sorted_ret = np.sort(clean_ret.values)
@@ -576,6 +577,19 @@ def get_returns_analysis(
         probs = np.linspace(0.01, 0.99, n)
         theoretical_q = scipy_stats.norm.ppf(probs)
         empirical_q   = np.interp(probs, np.linspace(0, 1, n), sorted_ret)
+
+        # ── Curva normal superpuesta para el histograma ──────────────────────
+        mu_emp    = float(clean_ret.mean())
+        sigma_emp = float(clean_ret.std())
+        x_range   = np.linspace(clean_ret.min(), clean_ret.max(), 200)
+        normal_y  = scipy_stats.norm.pdf(x_range, mu_emp, sigma_emp)
+
+        # ── Boxplot: cuartiles + outliers IQR ────────────────────────────────
+        q1, med, q3 = np.percentile(clean_ret, [25, 50, 75])
+        iqr         = q3 - q1
+        lower_w     = float(max(clean_ret.min(), q1 - 1.5 * iqr))
+        upper_w     = float(min(clean_ret.max(), q3 + 1.5 * iqr))
+        outliers    = clean_ret[(clean_ret < lower_w) | (clean_ret > upper_w)]
 
         # ── Stylized facts ────────────────────────────────────────────────────
         skew_val = _sv(float(clean_ret.skew()))
@@ -591,18 +605,91 @@ def get_returns_analysis(
         except Exception:
             pass
 
+        # Efecto apalancamiento (proxy): correlación entre |r_{t-1}| y r_t.
+        # Si es negativa, las caídas anteriores se asocian con más volatilidad
+        # (clásico leverage de Black 1976).
+        leverage_corr: Optional[float] = None
+        leverage_present: Optional[bool] = None
+        try:
+            shifted_abs = clean_ret.abs().shift(1)
+            corr_df = pd.concat([shifted_abs, clean_ret], axis=1).dropna()
+            leverage_corr = _sv(float(corr_df.iloc[:, 0].corr(corr_df.iloc[:, 1])))
+            leverage_present = bool(leverage_corr is not None and leverage_corr < -0.05)
+        except Exception:
+            pass
+
+        # ── Pruebas de normalidad CON interpretación textual ─────────────────
+        normality_raw = perform_normality_tests(simple_ret)
+        def _interp_p(p: Optional[float]) -> str:
+            if p is None:
+                return "no disponible"
+            if p < 0.05:
+                return f"p={p:.4g} < 0.05 → se rechaza H0 de normalidad"
+            return f"p={p:.4g} ≥ 0.05 → no se rechaza la normalidad (no implica que sí lo sea)"
+
+        normality_full = {}
+        for test_name, vals in normality_raw.items():
+            p_val = vals.get("p_value")
+            normality_full[test_name] = {
+                "stat":           _sv(vals.get("stat")),
+                "p_value":        _sv(p_val),
+                "rejects_normal": bool(p_val is not None and p_val < 0.05),
+                "interpretation": _interp_p(p_val),
+            }
+
+        # Interpretación de hechos estilizados
+        notes: list[str] = []
+        if kurt_val is not None and kurt_val > 1.0:
+            notes.append(f"Curtosis exc. = {kurt_val:.2f} indica colas pesadas (eventos extremos más frecuentes que normal).")
+        if skew_val is not None and abs(skew_val) > 0.2:
+            sign = "negativa (cola izquierda más pesada — caídas más frecuentes)" if skew_val < 0 else "positiva (cola derecha más pesada)"
+            notes.append(f"Asimetría {sign}: {skew_val:.3f}.")
+        if vol_clustering:
+            notes.append("Ljung-Box sobre r² rechaza independencia → agrupamiento de volatilidad presente (justifica modelar con GARCH en M3).")
+        if leverage_present:
+            notes.append(f"Efecto apalancamiento detectado: corr(|r_(t-1)|, r_t) = {leverage_corr:.3f} (caídas anteriores asocian con mayor volatilidad).")
+
+        # Estadísticas también para log-rendimientos (la imagen lo prefiere)
+        log_stats = get_descriptive_stats(clean_log) if len(clean_log) else {}
+
         payload = {
             "ticker":    ticker,
-            "stats":     get_descriptive_stats(simple_ret),
-            "normality": perform_normality_tests(simple_ret),
+            "n_obs":     int(len(clean_ret)),
+            "log_returns_justification": (
+                "Se usan log-rendimientos como base estadística por su aditividad temporal "
+                "(la suma de log-retornos diarios es el log-retorno acumulado), su simetría "
+                "frente a subidas y caídas equivalentes, y su buena aproximación a los "
+                "retornos simples cuando son pequeños (|r|<5%)."
+            ),
+            "stats":           get_descriptive_stats(simple_ret),
+            "stats_log":       log_stats,
+            "normality":       normality_full,
+            "normality_legacy": normality_raw,   # compatibilidad hacia atrás
             "plot_data": {
                 "Simple_Returns": _safe_json(clean_ret.fillna(0).tolist()),
                 "Log_Returns":    _safe_json(log_ret.replace([np.inf, -np.inf], np.nan).fillna(0).tolist()),
                 "Dates":          data["Date"].iloc[1:].dt.strftime("%Y-%m-%d").tolist(),
             },
+            "normal_curve": {
+                "x":     _safe_json(x_range.tolist()),
+                "y":     _safe_json(normal_y.tolist()),
+                "mu":    _sv(mu_emp),
+                "sigma": _sv(sigma_emp),
+            },
             "qq_data": {
                 "Theoretical": _safe_json(theoretical_q.tolist()),
                 "Empirical":   _safe_json(empirical_q.tolist()),
+            },
+            "boxplot_stats": {
+                "min":            _sv(float(clean_ret.min())),
+                "q1":             _sv(float(q1)),
+                "median":         _sv(float(med)),
+                "q3":             _sv(float(q3)),
+                "max":            _sv(float(clean_ret.max())),
+                "iqr":            _sv(float(iqr)),
+                "lower_whisker":  _sv(lower_w),
+                "upper_whisker":  _sv(upper_w),
+                "n_outliers":     int(len(outliers)),
             },
             "stylized_facts": {
                 "Skewness":        skew_val,
@@ -612,6 +699,9 @@ def get_returns_analysis(
                 "Vol_Clustering":  vol_clustering,
                 "Neg_Skew":        bool(skew_val is not None and skew_val < 0),
                 "Fat_Tails":       bool(kurt_val is not None and kurt_val > 1.0),
+                "Leverage_Corr":   leverage_corr,
+                "Leverage_Effect": leverage_present,
+                "interpretation":  " ".join(notes) if notes else "Sin desviaciones marcadas frente a la normal.",
             },
         }
         return json_response(payload)
