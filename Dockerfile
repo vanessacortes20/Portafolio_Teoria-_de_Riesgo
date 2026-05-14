@@ -24,12 +24,12 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Copia solo lo estrictamente necesario para correr el backend
-COPY api/             ./api/
+COPY backend/         ./backend/
 COPY generate_data.py ./generate_data.py
 
-# data/ se crea automáticamente al importar api.database
+# data/ se crea automáticamente al importar backend.app.database
 RUN mkdir -p /app/data
 
 EXPOSE 8001
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8001"]

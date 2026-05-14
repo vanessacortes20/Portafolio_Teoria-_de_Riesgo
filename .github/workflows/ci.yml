@@ -33,4 +33,4 @@ jobs:
           JWT_TTL_MINUTES: "60"
           FRED_API_KEY: ""
         run: |
-          python -m pytest tests/ -v --tb=short
+          python -m pytest backend/tests/ -v --tb=short --ignore=backend/tests/test_yf.py

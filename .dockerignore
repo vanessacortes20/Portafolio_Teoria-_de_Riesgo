@@ -40,10 +40,11 @@ env/
 docs/
 
 # Tests (no se incluyen en producción)
-tests/
+backend/tests/
 pytest.ini
 
 # Frontend (se sirve aparte)
+frontend/
 dashboard/
 
 # Logs

@@ -14,10 +14,10 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
-      # Hot-reload: cualquier cambio en api/ se refleja sin reconstruir
-      - ./api:/app/api
+      # Hot-reload: cualquier cambio en backend/ se refleja sin reconstruir
+      - ./backend:/app/backend
       - ./generate_data.py:/app/generate_data.py
       # data/ se mantiene como volumen persistente local
       - ./data:/app/data
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     restart: unless-stopped
