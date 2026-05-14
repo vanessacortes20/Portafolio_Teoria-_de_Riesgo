@@ -390,6 +390,39 @@ Descarga datos actuales de Yahoo Finance y escribe `data.js`. El dashboard lo ca
 
 Con el backend corriendo: `http://localhost:8001/docs`
 
+### Ejecutar la suite de tests
+
+```bash
+pip install pytest "httpx<0.28"        # si no están en requirements
+python -m pytest tests/ -v             # 16 tests, ~8s
+```
+
+Los tests usan SQLite **en memoria** y override de `Depends(get_db)` —
+no tocan la BD real ni dependen de yfinance/FRED.
+
+### Ejecutar con Docker
+
+```bash
+# Build de la imagen multi-stage (~200 MB final)
+docker build -t risklab-usta .
+docker run -p 8001:8001 \
+    -e JWT_SECRET=tu_clave_segura \
+    -e FRED_API_KEY=tu_key_opcional \
+    risklab-usta
+
+# Alternativa con hot-reload para desarrollo
+docker compose up --build
+```
+
+El frontend (`dashboard/dashboard.html`) se abre directamente en el navegador
+y consume la API. Si despliegas en cloud, recuerda actualizar `API_BASE` en
+el HTML para apuntar a la URL pública.
+
+### Integración continua
+
+`.github/workflows/ci.yml` ejecuta `pytest` en cada push a `main`/`develop` o PR.
+No requiere `FRED_API_KEY` real — los tests usan datos sintéticos y fallback DEMO.
+
 ---
 
 ## Endpoints REST
@@ -461,13 +494,18 @@ docker build -t risklab-usta .
 docker run -p 8001:8001 -e JWT_SECRET=tu_clave_segura risklab-usta
 ```
 
-### Render.com
+### Render.com (preparado, despliegue manual)
 
 El archivo `render.yaml` configura automáticamente el runtime Python, el build con `pip install`, el comando de inicio con `uvicorn`, la generación automática de `JWT_SECRET` y un disco persistente de 1 GB para la base de datos SQLite.
 
-```bash
-# Despliegue directo desde el repositorio — sin configuración manual adicional
-```
+**Pasos para desplegar:**
+1. Sube el repo a GitHub (push de la rama deseada)
+2. Crea cuenta gratuita en https://render.com
+3. **New → Web Service** → conecta el repositorio (Render detecta `render.yaml` automáticamente)
+4. En el panel UI configura las env vars: `FRED_API_KEY` (opcional), `JWT_SECRET` (Render puede generar una aleatoria)
+5. **Limitación free-tier:** el servicio duerme tras 15 min sin tráfico (cold start ~30s). Para una demo en vivo, hacer warmup con `curl` 1 minuto antes.
+
+> Nota: el deploy efectivo requiere acción manual del usuario en Render UI; el repositorio está listo pero no se desplegó automáticamente desde este entorno.
 
 ### Heroku / Railway
 
