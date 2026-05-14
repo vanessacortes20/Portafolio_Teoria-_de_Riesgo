@@ -258,7 +258,50 @@ Los retornos se escalan por 100 antes del fit para mejorar la convergencia numé
 
 ### M4 — Riesgo Sistemático (CAPM)
 
-Estima el modelo CAPM por regresión OLS entre los retornos del activo y los del benchmark (S&P 500). Produce Beta (sensibilidad al mercado), Alpha de Jensen (retorno diferencial ajustado por riesgo sistemático), R² (proporción de varianza explicada por el mercado) y retorno esperado anualizado. Clasifica el activo como agresivo (β > 1.2), neutro o defensivo (β < 0.8). El scatter plot retorno-activo vs. retorno-benchmark incluye la recta de regresión.
+Estima el modelo CAPM por regresión OLS entre los retornos del activo y los del benchmark (S&P 500).
+
+**Endpoints:**
+- `GET /capm/{ticker}` — análisis CAPM detallado de un solo activo (con scatter, VaR, etc.)
+- `GET /capm` — **tabla resumen consolidada** de los 5 activos del portafolio: Beta, Alpha, R², rendimiento esperado anual, descomposición de varianza, clasificación. Usa Rf real obtenida automáticamente.
+
+**Tasa libre de riesgo automática:** la Rf usada por CAPM se obtiene en este orden:
+1. **FRED** (DGS3MO) si `FRED_API_KEY` está configurada — con cache transparente en SQLite
+2. **yfinance ^IRX** como fallback si FRED no está disponible
+3. **`config.default_rf` del .env** como último recurso
+
+El response devuelve `rf_source` indicando cuál se usó (ej: `"FRED.DGS3MO (2026-05-12)"` o `"yfinance.^IRX"`).
+
+**Cálculos por activo:**
+- **Beta** por regresión MCO (`scipy.stats.linregress`) sobre retornos diarios alineados por fecha
+- **Alpha de Jensen** = intercepto de la regresión
+- **R²** = proporción de varianza del activo explicada por el mercado
+- **Beta_StdErr** = error estándar del coeficiente Beta
+- **E[R] anual** = Rf + β · (E[Rm] − Rf), formulación CAPM clásica
+- **Clasificación:**
+  - **Agresivo** si β > 1.05 (amplifica al mercado)
+  - **Defensivo** si β < 0.95 (menos sensible)
+  - **Neutro** si β ≈ 1 (entre 0.95 y 1.05)
+
+**Descomposición de varianza** (clave para diversificación):
+- `var_systematic` = β² · σ²_m (riesgo sistemático no diversificable)
+- `var_idiosyncratic` = σ²_total − σ²_systematic (riesgo específico del activo)
+- `systematic_share` = porcentaje de varianza explicado por el mercado
+- `interpretation` textual
+
+#### Riesgo sistemático vs. no sistemático: por qué importa
+
+El riesgo total de un activo se descompone en:
+
+> **σ²_total = β² · σ²_mercado + σ²_ε**
+>
+> └─── sistemático ─────┘ └ idiosincrático ┘
+
+- **Riesgo sistemático (β² · σ²_m):** sensibilidad al mercado. Refleja el ciclo macro, política monetaria, eventos sistémicos. **NO se puede diversificar** combinando activos del mismo mercado.
+- **Riesgo idiosincrático (σ²_ε):** específico del activo (gestión, sector, eventos individuales). **SÍ se reduce** combinando activos descorrelacionados.
+
+A medida que el portafolio crece con activos descorrelacionados, la varianza idiosincrática tiende a cero (Ley de los Grandes Números), pero la sistemática persiste. Esto es **el límite teórico de la diversificación**: por más activos que agregues, no puedes eliminar el riesgo sistemático del mercado en el que operas.
+
+Esta es exactamente la razón por la que el M6 (Markowitz) busca el portafolio óptimo respetando este límite, y el M11 (Stress Testing) somete al portafolio a shocks sistemáticos para medir su exposición residual.
 
 ### M5 — Valor en Riesgo (VaR) y CVaR
 
