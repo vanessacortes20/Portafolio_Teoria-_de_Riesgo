@@ -1,0 +1,23 @@
+# docker-compose.yml — desarrollo local con hot-reload
+# Uso:
+#   docker compose up --build
+#   curl http://localhost:8001/docs
+services:
+  backend:
+    build: .
+    container_name: risklab-backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env          # se ignora en .dockerignore para el build, pero compose lo monta
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      # Hot-reload: cualquier cambio en api/ se refleja sin reconstruir
+      - ./api:/app/api
+      - ./generate_data.py:/app/generate_data.py
+      # data/ se mantiene como volumen persistente local
+      - ./data:/app/data
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    restart: unless-stopped

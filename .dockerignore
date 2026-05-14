@@ -1,0 +1,56 @@
+# Secretos y configuración local
+.env
+.env.local
+.env.*.local
+
+# Memoria local de IA
+.claude/
+CLAUDE.md
+
+# Backups y BD locales
+data/backups/
+data/*.db
+data/users.json
+*.bak
+
+# Caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Documentación pesada (no se necesita para correr el backend)
+docs/
+
+# Tests (no se incluyen en producción)
+tests/
+pytest.ini
+
+# Frontend (se sirve aparte)
+dashboard/
+
+# Logs
+*.log
+
+# Archivos de build/CI
+.github/
+Dockerfile
+docker-compose.yml
+README.md
