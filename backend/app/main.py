@@ -726,10 +726,43 @@ def get_volatility_analysis(
         if data is None:
             raise HTTPException(404, f"No se encontraron datos para '{ticker}'.")
         _, log_ret = calculate_returns(data)
+        clean_log = log_ret.replace([np.inf, -np.inf], np.nan).dropna()
 
         result = fit_garch_models(log_ret)
 
-        # Residuos estandarizados, pronóstico a 10 días y diagnóstico ARCH-LM
+        # ── Parámetros GARCH(1,1): ω, α, β + varianza incondicional ──────────
+        garch_params: dict = {}
+        try:
+            from arch import arch_model  # type: ignore
+            scaled = log_ret * 100
+            m_g    = arch_model(scaled, vol="GARCH", p=1, q=1)
+            res_g  = m_g.fit(disp="off")
+            params = res_g.params.to_dict()
+            omega  = float(params.get("omega", 0))
+            alpha  = float(params.get("alpha[1]", 0))
+            beta   = float(params.get("beta[1]", 0))
+            persistence = alpha + beta
+            uncond_var = (omega / (1 - persistence)) if persistence < 1 else None
+            garch_params = {
+                "omega":               round(omega, 8),
+                "alpha":               round(alpha, 6),
+                "beta":                round(beta, 6),
+                "persistence":         round(persistence, 6),
+                "unconditional_var":   round(uncond_var, 8) if uncond_var is not None else None,
+                "unconditional_vol":   round(np.sqrt(uncond_var) / 100, 6) if uncond_var is not None else None,
+                "mean_reversion":      bool(persistence < 1),
+                "interpretation":      (
+                    f"Persistencia α+β = {persistence:.4f}. "
+                    + ("Hay reversión a la media (α+β<1); la varianza vuelve al nivel incondicional con velocidad 1-α-β."
+                       if persistence < 1 else
+                       "α+β ≥ 1 → no hay varianza incondicional finita (proceso integrado tipo IGARCH).")
+                ),
+            }
+            result["GARCH(1,1)"]["parameters"] = garch_params
+        except Exception:
+            pass
+
+        # ── Residuos, pronóstico, diagnósticos JB y ARCH-LM ──────────────────
         try:
             from arch import arch_model  # type: ignore
             scaled = log_ret * 100
@@ -739,32 +772,74 @@ def get_volatility_analysis(
             forecast     = res.forecast(horizon=10)
             vol_forecast = (np.sqrt(forecast.variance.iloc[-1].values) / 100).tolist()
 
+            jb_stat, jb_p = scipy_stats.jarque_bera(std_resid)
+            jb_p = float(jb_p)
+            jb_interp = (
+                f"p={jb_p:.4g} < 0.05 → se rechaza normalidad de residuos (justifica usar t-Student en GARCH si se quiere mayor robustez)."
+                if jb_p < 0.05 else
+                f"p={jb_p:.4g} ≥ 0.05 → no se rechaza normalidad de residuos estandarizados (modelo capturó bien la heterocedasticidad)."
+            )
+
             result["Residuals"] = {
-                "Std_Residuals": _safe_json(std_resid[-500:]),
-                "JB_Stat":       _sv(float(scipy_stats.jarque_bera(std_resid)[0])),
-                "JB_Pvalue":     _sv(float(scipy_stats.jarque_bera(std_resid)[1])),
-                "Normal":        bool(scipy_stats.jarque_bera(std_resid)[1] > 0.05),
-                "ARCH_LM":       _safe_json(arch_lm_test(std_resid, nlags=5)),
+                "Std_Residuals":  _safe_json(std_resid[-500:]),
+                "JB_Stat":        _sv(float(jb_stat)),
+                "JB_Pvalue":      _sv(jb_p),
+                "Normal":         bool(jb_p > 0.05),
+                "JB_Interpretation": jb_interp,
+                "ARCH_LM":        _safe_json(arch_lm_test(std_resid, nlags=5)),
             }
             result["Forecast_10d"] = _safe_json(vol_forecast)
         except Exception:
             pass
 
-        # EWMA y comparación contra GARCH(1,1)
+        # ── EWMA + serie rodante + comparación contra GARCH(1,1) ─────────────
         try:
             ewma = calculate_ewma_volatility(log_ret, lambda_=lambda_ewma)
             garch_vol = result.get("GARCH(1,1)", {}).get("Volatility", [])
             garch_last = float(garch_vol[-1]) if garch_vol else None
+
+            # Volatilidad muestral rodante 30d (serie completa, no solo promedio)
+            rolling_30 = clean_log.rolling(window=30).std().dropna()
+
             comparison = compare_ewma_vs_garch(ewma.get("ewma_last_value"), garch_last)
             result["EWMA"] = _safe_json({
-                "lambda":          ewma["lambda"],
-                "ewma_volatility": ewma["ewma_volatility"][-500:],
-                "ewma_last_value": ewma["ewma_last_value"],
-                "ewma_mean":       ewma["ewma_mean"],
-                "rolling_30d_avg": ewma["rolling_30d_avg"],
+                "lambda":              ewma["lambda"],
+                "ewma_volatility":     ewma["ewma_volatility"][-500:],
+                "ewma_last_value":     ewma["ewma_last_value"],
+                "ewma_mean":           ewma["ewma_mean"],
+                "rolling_30d_avg":     ewma["rolling_30d_avg"],
+                "rolling_30d_series":  rolling_30.iloc[-500:].tolist(),
             })
             result["comparison_ewma_garch"] = _safe_json(comparison)
             result["interpretation"] = comparison.get("interpretation")
+
+            # Tabla estructurada EWMA vs GARCH(1,1) (formato del profesor)
+            result["comparison_table"] = _safe_json({
+                "title": "Comparación EWMA vs GARCH(1,1)",
+                "rows": [
+                    {"aspect": "Parámetros estimados",
+                     "EWMA":     "0 (λ fijo o calibrado)",
+                     "GARCH":    f"3 (ω={garch_params.get('omega')}, α={garch_params.get('alpha')}, β={garch_params.get('beta')})"
+                                 if garch_params else "3 (ω, α, β)"},
+                    {"aspect": "Varianza incondicional",
+                     "EWMA":  "No definida",
+                     "GARCH": f"σ²={garch_params.get('unconditional_var')} → σ={garch_params.get('unconditional_vol')}"
+                              if garch_params and garch_params.get('unconditional_var') is not None
+                              else "σ² = ω/(1−α−β)"},
+                    {"aspect": "Reversión a la media",
+                     "EWMA":  "No",
+                     "GARCH": "Sí" if (garch_params.get("mean_reversion") if garch_params else True) else "No (α+β≥1)"},
+                    {"aspect": "Costo computacional",
+                     "EWMA":  "Mínimo (recursión)",
+                     "GARCH": "Optimización por máxima verosimilitud"},
+                    {"aspect": "Captura asimetría",
+                     "EWMA":  "No",
+                     "GARCH": "Solo en variantes (EGARCH, GJR)"},
+                    {"aspect": "Interpretación",
+                     "EWMA":  "Decay exponencial constante",
+                     "GARCH": "Estructura paramétrica completa"},
+                ],
+            })
         except Exception:
             pass
 
