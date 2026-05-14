@@ -12,7 +12,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from api.db_models import Base
+from backend.app.models.db_models import Base
 
 # Misma ruta que api/database.py
 _DB_PATH = Path(__file__).parent.parent / "data" / "risklab_users.db"

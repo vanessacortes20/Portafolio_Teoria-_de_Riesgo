@@ -26,8 +26,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 
-from api.data import get_historical_data
-from api.logic import calculate_macd, calculate_rsi, calculate_returns
+from backend.app.data_yf import get_historical_data
+from backend.app.services.logic import calculate_macd, calculate_rsi, calculate_returns
 
 MODEL_VERSION   = "v1.0.0"
 DEFAULT_OUTPUT  = Path(__file__).parent / "model.joblib"

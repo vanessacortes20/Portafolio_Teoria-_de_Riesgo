@@ -17,7 +17,7 @@ from typing import Optional
 import requests
 from sqlalchemy.orm import Session
 
-from api.db_models import FredCache
+from backend.app.models.db_models import FredCache
 
 # Series FRED soportadas — el resto se puede pedir por id directo
 SERIES = {

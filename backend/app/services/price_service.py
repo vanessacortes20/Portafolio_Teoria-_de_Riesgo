@@ -21,7 +21,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from api.db_models import Asset, Price
+from backend.app.models.db_models import Asset, Price
 
 # TTL de cache: si la fecha más reciente almacenada es >= hoy - REFRESH_DAYS
 # se considera fresca. Default 1 día (precios de hoy quedan disponibles tras cierre).

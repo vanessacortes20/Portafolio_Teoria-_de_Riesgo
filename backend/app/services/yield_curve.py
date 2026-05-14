@@ -15,7 +15,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from sqlalchemy.orm import Session
 
-from api.services import fred_service as fred
+from backend.app.services import fred_service as fred
 
 # Mapping FRED series → maturity en años
 SERIES_BY_MATURITY = [

@@ -27,8 +27,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 from scipy import stats as scipy_stats
 from starlette.responses import Response
 
-from api.data import get_historical_data
-from api.database import (
+from backend.app.data_yf import get_historical_data
+from backend.app.auth_db import (
     create_user,
     get_all_users,
     get_reset_token,
@@ -43,7 +43,7 @@ from api.database import (
     update_last_login,
     update_user_password,
 )
-from api.logic import (
+from backend.app.services.logic import (
     arch_lm_test,
     calculate_bollinger_bands,
     calculate_capm,
@@ -164,7 +164,7 @@ def _startup():
     init_db()
     seed_demo_users(_hash)
     # Capa SQLAlchemy ORM (nueva en Fase 2 — convive con la anterior)
-    from api.database_session import init_orm_tables
+    from backend.app.database import init_orm_tables
     init_orm_tables()
 
 
@@ -846,8 +846,8 @@ def get_macro_indicators(db = Depends(lambda: None)):
     para no romper el dashboard. Se agregan campos opcionales con info de cache.
     """
     import yfinance as yf
-    from api.database_session import SessionLocal
-    from api.services import fred_service as fred
+    from backend.app.database import SessionLocal
+    from backend.app.services import fred_service as fred
 
     result: dict = {"as_of": date.today().isoformat()}
     cache_status = {}
@@ -963,9 +963,9 @@ def post_predict(req: PredictRequest):
     El modelo se carga UNA sola vez al primer request (patrón Singleton).
     Cada predicción se persiste en PredictionLog.
     """
-    from api.database_session import SessionLocal
-    from api.db_models import PredictionLog
-    from api.ml.predictor import get_predictor
+    from backend.app.database import SessionLocal
+    from backend.app.models.db_models import PredictionLog
+    from backend.app.ml.predictor import get_predictor
 
     predictor = get_predictor()
     if not predictor.is_ready:
@@ -1029,7 +1029,7 @@ def post_predict(req: PredictRequest):
 @app.get("/api/v1/predict/info", summary="Metadata del modelo ML cargado")
 def get_predict_info():
     """Devuelve metadata del modelo, sin requerir input. Útil para docs/dashboard."""
-    from api.ml.predictor import get_predictor
+    from backend.app.ml.predictor import get_predictor
     predictor = get_predictor()
     return json_response({
         "is_ready":       predictor.is_ready,
@@ -1069,7 +1069,7 @@ class StressRequest(BaseModel):
 @app.post("/api/v1/stress", summary="Stress testing del portafolio bajo escenarios — M11")
 def post_stress(req: StressRequest):
     """Aplica escenarios de mercado, tasa y volatilidad sobre el portafolio."""
-    from api.services.stress import StressTester
+    from backend.app.services.stress import StressTester
     try:
         scenarios = [s.model_dump() for s in req.scenarios] if req.scenarios else None
         tester = StressTester(
@@ -1118,10 +1118,10 @@ def get_option_price_for_ticker(
     el precio + Greeks + paridad. Cumple el requisito del instructivo:
     *las opciones se valoran sobre los mismos activos del portafolio*.
     """
-    from api.database_session import SessionLocal
-    from api.services.options import OptionPricer
-    from api.services.price_service import get_prices
-    from api.services import fred_service as fred
+    from backend.app.database import SessionLocal
+    from backend.app.services.options import OptionPricer
+    from backend.app.services.price_service import get_prices
+    from backend.app.services import fred_service as fred
     import yfinance as yf
     import numpy as np
 
@@ -1181,7 +1181,7 @@ def get_option_price_for_ticker(
 @app.post("/api/v1/opcion/precio", summary="Black-Scholes + Greeks + paridad put-call (parámetros libres) — M10")
 def post_option_price(req: OptionRequest):
     """Valoración Black-Scholes para opción europea con sus Greeks."""
-    from api.services.options import OptionPricer
+    from backend.app.services.options import OptionPricer
     try:
         pricer = OptionPricer(S=req.S, K=req.K, T=req.T, r=req.r, sigma=req.sigma)
         return json_response(pricer.summary(req.option_type))  # type: ignore[arg-type]
@@ -1209,7 +1209,7 @@ class BondRequest(BaseModel):
 @app.post("/api/v1/bono/duracion", summary="Bono sintético: precio, duración, convexidad — M9")
 def post_bond_duration(req: BondRequest):
     """Calcula precio, duración Macaulay/modificada, convexidad y sensibilidad ante shocks."""
-    from api.services.bond import Bond
+    from backend.app.services.bond import Bond
     try:
         bond = Bond(
             face_value=req.face_value,
@@ -1228,8 +1228,8 @@ def post_bond_duration(req: BondRequest):
 @app.get("/api/v1/precios/cache", summary="Estado del cache de precios en SQLAlchemy")
 def get_prices_cache():
     """Reporta cuántos activos y precios están cacheados en SQLite."""
-    from api.database_session import SessionLocal
-    from api.services.price_service import cache_summary
+    from backend.app.database import SessionLocal
+    from backend.app.services.price_service import cache_summary
     db = SessionLocal()
     try:
         return json_response(cache_summary(db))
@@ -1249,8 +1249,8 @@ def get_prices_with_cache(
     - Si no, descarga de yfinance con reintentos y persiste (`cache_status: miss`).
     - Si yfinance falla y hay cache vencido, lo reutiliza (`cache_status: stale_used`).
     """
-    from api.database_session import SessionLocal
-    from api.services.price_service import get_prices
+    from backend.app.database import SessionLocal
+    from backend.app.services.price_service import get_prices
     db = SessionLocal()
     try:
         df, meta = get_prices(db, ticker, period=period, fresh=fresh)
@@ -1277,8 +1277,8 @@ def get_yield_curve():
     Si FRED_API_KEY no está configurada, usa una curva DEMO ilustrativa
     marcada como `source: fallback_demo`.
     """
-    from api.database_session import SessionLocal
-    from api.services.yield_curve import YieldCurve
+    from backend.app.database import SessionLocal
+    from backend.app.services.yield_curve import YieldCurve
 
     db = SessionLocal()
     try:
@@ -1312,8 +1312,8 @@ def get_asset_signals(
     try:
         from datetime import datetime as _dt
         from sqlalchemy import and_
-        from api.database_session import SessionLocal
-        from api.db_models import SignalLog
+        from backend.app.database import SessionLocal
+        from backend.app.models.db_models import SignalLog
 
         records = _build_technical_records(ticker, **dates)
         if not records or len(records) < 2:
@@ -1417,8 +1417,8 @@ def get_signals_history(
 ):
     """Devuelve las señales persistidas en signals_log para el ticker dado."""
     try:
-        from api.database_session import SessionLocal
-        from api.db_models import SignalLog
+        from backend.app.database import SessionLocal
+        from backend.app.models.db_models import SignalLog
 
         db = SessionLocal()
         try:
