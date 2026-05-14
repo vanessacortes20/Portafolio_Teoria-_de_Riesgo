@@ -1530,3 +1530,139 @@ async def get_all_dashboard_data(
         output["benchmark"] = {}
 
     return json_response(output)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ALIAS DE ENDPOINTS CORTOS — exigidos por la guía del profesor
+# Re-exportan los handlers existentes bajo paths cortos sin romper compatibilidad
+# ═════════════════════════════════════════════════════════════════════════════
+
+from backend.app.routers import aliases as _aliases_router  # noqa: E402
+app.include_router(_aliases_router.router)
+
+
+# Cada alias delega al handler original. Dependencias se reinyectan al pasar
+# por el alias para que FastAPI valide los query params igual que en el original.
+
+@app.get("/precios/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_precios(ticker: str,
+                  period: str = Query("2y"),
+                  fresh:  bool = Query(False)):
+    return get_prices_with_cache(ticker=ticker, period=period, fresh=fresh)
+
+
+@app.get("/rendimientos/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_rendimientos(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
+    return get_returns_analysis(ticker=ticker, dates=dates, _cfg=_cfg)
+
+
+@app.get("/indicadores/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_indicadores(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
+    return get_technical_analysis(ticker=ticker, dates=dates, _cfg=_cfg)
+
+
+@app.get("/volatilidad/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_volatilidad(ticker: str, dates: DateRangeDep, _cfg: ConfigDep,
+                      lambda_ewma: float = Query(0.94, gt=0.0, lt=1.0)):
+    return get_volatility_analysis(ticker=ticker, dates=dates, _cfg=_cfg, lambda_ewma=lambda_ewma)
+
+
+@app.get("/capm/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_capm(ticker: str, dates: DateRangeDep, var_p: VaRParamsDep, config: ConfigDep):
+    """Alias corto: extrae solo el bloque CAPM del endpoint risk."""
+    full = get_risk_analysis(ticker=ticker, dates=dates, var_p=var_p, config=config)
+    # `full` es un Response — devolver tal cual mantiene contrato
+    return full
+
+
+class VarRequest(BaseModel):
+    tickers:        list[str] = Field(..., min_length=1, max_length=20)
+    weights:        list[float] = Field(..., min_length=1, max_length=20)
+    confidence:     float = Field(0.95, ge=0.80, le=0.99)
+    n_simulations:  int   = Field(10_000, ge=1_000, le=100_000)
+
+    @model_validator(mode="after")
+    def _weights_sum(self) -> "VarRequest":
+        if len(self.tickers) != len(self.weights):
+            raise ValueError("tickers y weights deben tener la misma longitud")
+        s = sum(self.weights)
+        if abs(s - 1.0) > 1e-3:
+            raise ValueError(f"weights deben sumar 1; suman {s:.4f}")
+        return self
+
+
+@app.post("/var", tags=["alias-corto (guía profesor)"])
+def alias_var(req: VarRequest, config: ConfigDep):
+    """VaR/CVaR del portafolio compuesto. Pesos validados con model_validator."""
+    all_rets: dict[str, pd.Series] = {}
+    for t in req.tickers:
+        data = get_historical_data(t, period="2y")
+        if data is None:
+            raise HTTPException(404, f"Sin datos para '{t}'.")
+        ret, _ = calculate_returns(data)
+        all_rets[t] = ret
+    df = pd.DataFrame(all_rets).dropna()
+    weights = np.array(req.weights)
+    portfolio_ret = (df.values * weights).sum(axis=1)
+    portfolio_ret = pd.Series(portfolio_ret).replace([np.inf, -np.inf], np.nan).dropna()
+    result = calculate_var_cvar(portfolio_ret, confidence=req.confidence,
+                                n_simulations=req.n_simulations)
+    backtesting = {}
+    for method in ("Historico", "Parametrico", "Montecarlo"):
+        var_val = result[method]["VaR"]
+        backtesting[method] = kupiec_test(portfolio_ret, var_val, req.confidence)
+    return json_response({
+        "tickers":       req.tickers,
+        "weights":       req.weights,
+        "confidence":    req.confidence,
+        "n_simulations": req.n_simulations,
+        "var_cvar":      result,
+        "kupiec":        backtesting,
+    })
+
+
+@app.post("/frontera-eficiente", tags=["alias-corto (guía profesor)"])
+def alias_frontera(dates: DateRangeDep, config: ConfigDep,
+                   include_qp: bool = Query(True)):
+    return get_portfolio_optimization(dates=dates, config=config, include_qp=include_qp)
+
+
+@app.get("/alertas/{ticker}", tags=["alias-corto (guía profesor)"])
+def alias_alertas(ticker: str, dates: DateRangeDep, _cfg: ConfigDep,
+                  rsi_overbought: int = Query(70, ge=50, le=99),
+                  rsi_oversold:   int = Query(30, ge=1, le=50),
+                  bollinger_std:  float = Query(2.0, gt=0.0, le=5.0),
+                  persist:        bool = Query(True)):
+    return get_asset_signals(ticker=ticker, dates=dates, _cfg=_cfg,
+                             rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+                             bollinger_std=bollinger_std, persist=persist)
+
+
+@app.get("/macro", tags=["alias-corto (guía profesor)"])
+def alias_macro():
+    return get_macro_indicators(db=None)
+
+
+@app.get("/curva-rendimiento", tags=["alias-corto (guía profesor)"])
+def alias_curva():
+    return get_yield_curve()
+
+
+@app.post("/bono/duracion", tags=["alias-corto (guía profesor)"])
+def alias_bono(req: BondRequest):
+    return post_bond_duration(req=req)
+
+
+@app.post("/opcion/precio", tags=["alias-corto (guía profesor)"])
+def alias_opcion(req: OptionRequest):
+    return post_option_price(req=req)
+
+
+@app.post("/stress", tags=["alias-corto (guía profesor)"])
+def alias_stress(req: StressRequest):
+    return post_stress(req=req)
+
+
+@app.post("/predict", tags=["alias-corto (guía profesor)"])
+def alias_predict(req: PredictRequest):
+    return post_predict(req=req)
