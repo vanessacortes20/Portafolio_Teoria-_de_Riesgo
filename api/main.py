@@ -938,6 +938,51 @@ def get_macro_indicators(db = Depends(lambda: None)):
     return json_response(result)
 
 
+class StressScenario(BaseModel):
+    name:            str   = Field(..., min_length=1, max_length=80)
+    market_drop_pct: Optional[float] = Field(None, ge=-1.0, le=1.0,
+        description="Caída del mercado en decimal (ej: -0.20).")
+    rate_shock_bp:   Optional[int]   = Field(None, ge=-500, le=500,
+        description="Shock de tasa en puntos básicos.")
+    vol_multiplier:  Optional[float] = Field(None, gt=0, le=10,
+        description="Multiplicador de volatilidad (1.0 = sin cambio).")
+
+
+class StressRequest(BaseModel):
+    weights:    dict[str, float] = Field(..., description="Mapa ticker → peso (deben sumar 1).")
+    prices:     dict[str, float] = Field(..., description="Mapa ticker → precio actual.")
+    betas:      Optional[dict[str, float]] = Field(None, description="Beta por activo (default 1.0).")
+    sigmas:     Optional[dict[str, float]] = Field(None, description="Sigma anual por activo (default 0.20).")
+    scenarios:  Optional[list[StressScenario]] = Field(None,
+        description="Si no se pasa, se corren los 6 escenarios obligatorios.")
+
+    @model_validator(mode="after")
+    def _weights_sum_one(self) -> "StressRequest":
+        s = sum(self.weights.values())
+        if abs(s - 1.0) > 1e-3:
+            raise ValueError(f"weights deben sumar 1; suman {s:.4f}")
+        return self
+
+
+@app.post("/api/v1/stress", summary="Stress testing del portafolio bajo escenarios — M11")
+def post_stress(req: StressRequest):
+    """Aplica escenarios de mercado, tasa y volatilidad sobre el portafolio."""
+    from api.services.stress import StressTester
+    try:
+        scenarios = [s.model_dump() for s in req.scenarios] if req.scenarios else None
+        tester = StressTester(
+            weights=req.weights,
+            prices=req.prices,
+            betas=req.betas,
+            sigmas=req.sigmas,
+        )
+        return json_response(tester.run_all(scenarios))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(500, f"Error en stress test: {exc}")
+
+
 class OptionRequest(BaseModel):
     S:           float = Field(..., gt=0,  description="Precio spot del subyacente.")
     K:           float = Field(..., gt=0,  description="Strike de la opción.")
