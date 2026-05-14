@@ -68,7 +68,23 @@ Servicio en `api/services/fred_service.py` con cache transparente en `FredCache`
 
 ## 5. EWMA vs GARCH (M3, 2 min)
 
-**EWMA RiskMetrics:** σ²ₜ = λσ²ₜ₋₁ + (1-λ)r²ₜ₋₁, λ=0.94 default, configurable vía `?lambda_ewma=`. **GARCH(1,1):** σ²ₜ = ω + αε²ₜ₋₁ + βσ²ₜ₋₁ con tres parámetros estimados. La tabla comparativa muestra que GARCH tiene reversión a la media y captura asimetría (vía EGARCH); EWMA es más simple pero no tiene varianza incondicional. El test **ARCH-LM** (Engle 1982) sobre residuos GARCH confirma si quedan efectos heterocedásticos sin capturar.
+**EWMA RiskMetrics:** σ²ₜ = λσ²ₜ₋₁ + (1-λ)r²ₜ₋₁, λ=0.94 default, configurable vía `?lambda_ewma=`.
+
+**Ventajas de EWMA:** parsimonia (0 parámetros estimados), decay exponencial constante, costo computacional mínimo (recursión).
+
+**Limitaciones:** no captura asimetría, no tiene varianza incondicional finita, no modela reversión a la media.
+
+**GARCH(1,1):** σ²ₜ = ω + αε²ₜ₋₁ + βσ²ₜ₋₁ con tres parámetros estimados por máxima verosimilitud. Si α+β<1 la varianza reverte al nivel ω/(1−α−β) (varianza incondicional). Persistencia α+β cuantifica cuánto duran los shocks.
+
+**¿Por qué se necesita GARCH además de EWMA?** Por cuatro razones:
+1. Para tener varianza incondicional medible (objetivo a largo plazo).
+2. Para que el modelo tenga reversión a la media.
+3. Para capturar asimetría (vía EGARCH o GJR-GARCH).
+4. Para someter los residuos a diagnósticos formales (JB y ARCH-LM).
+
+El endpoint `/volatilidad/{ticker}` devuelve los parámetros ω, α, β estimados, persistencia, varianza incondicional, los tres modelos (ARCH, GARCH, EGARCH) con AIC/BIC, residuos estandarizados, JB+ARCH-LM con interpretación, pronóstico a 10 días y la **tabla comparativa estructurada** EWMA vs GARCH(1,1).
+
+El **test ARCH-LM** (Engle 1982) sobre residuos GARCH(1,1) con 5 lags es el test que valida si el modelo capturó adecuadamente la heterocedasticidad: p > 0.05 → no quedan efectos ARCH residuales; p ≤ 0.05 → el modelo deja heterocedasticidad sin capturar (necesita más lags).
 
 ---
 

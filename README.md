@@ -211,10 +211,50 @@ Esta justificación también aparece en el response del endpoint bajo la clave `
 
 Ajusta cuatro enfoques de volatilidad condicional sobre el mismo activo:
 
-- **EWMA (RiskMetrics)** con λ configurable (default 0.94) vía query parameter `lambda_ewma`. Validado por Pydantic (0 < λ < 1). Devuelve la serie completa, el último valor, la media histórica y la volatilidad rodante de 30 días para comparar.
-- **ARCH(1)**, **GARCH(1,1)** y **EGARCH(1,1)** estimados por máxima verosimilitud. Comparados por AIC y BIC para identificar el mejor ajuste.
+- **EWMA (RiskMetrics)** con λ configurable (default 0.94) vía query `lambda_ewma`. Validado por Pydantic (0 < λ < 1). Devuelve la serie completa, el último valor, la media histórica, la **volatilidad muestral rodante de 30 días** (serie completa para comparación visual) y el promedio rodante.
+- **ARCH(1)**, **GARCH(1,1)** y **EGARCH(1,1)** estimados por máxima verosimilitud. Tabla comparativa con Log-Likelihood, AIC, BIC; selección automática del mejor por AIC.
 
-Con el GARCH(1,1) seleccionado, calcula los residuos estandarizados con dos diagnósticos formales: **Jarque-Bera** (normalidad) y **ARCH-LM (Engle 1982)** sobre 5 lags para detectar heterocedasticidad condicional remanente. Genera un **pronóstico de volatilidad a 10 días** y una **comparación EWMA vs GARCH(1,1)** con interpretación textual sobre el régimen de volatilidad actual. Los retornos se escalan por 100 para mejorar la convergencia numérica del optimizador.
+#### Parámetros GARCH(1,1) extraídos en cada llamada
+El response incluye `GARCH(1,1).parameters` con:
+- `omega` (ω), `alpha` (α), `beta` (β) estimados por MLE
+- `persistence` = α + β
+- `unconditional_var` = ω/(1−α−β) y `unconditional_vol` = √(ω/(1−α−β))/100
+- `mean_reversion` (boolean): true si α+β < 1
+- `interpretation` textual
+
+#### Diagnósticos sobre residuos estandarizados
+- **Jarque-Bera** (normalidad de residuos): `JB_Stat`, `JB_Pvalue`, `Normal`, `JB_Interpretation` textual
+- **ARCH-LM (Engle 1982)** con 5 lags: `lm_stat`, `lm_pvalue`, `passed`, `interpretation`
+- Serie de residuos disponible para gráfico
+
+#### Pronóstico de volatilidad
+`Forecast_10d`: 10 valores diarios (volatilidad pronosticada por GARCH(1,1)).
+
+#### Tabla comparativa EWMA vs GARCH(1,1) (formato del profesor)
+El response incluye `comparison_table.rows` con 6 aspectos: parámetros estimados, varianza incondicional, reversión a la media, costo computacional, captura de asimetría, interpretación.
+
+#### ¿Por qué EWMA y por qué además GARCH?
+
+**Ventajas de EWMA:**
+- **Parsimonia:** no requiere estimación de parámetros (con λ fijo) — solo recursión
+- **Decay constante:** cada observación pesa proporcionalmente menos por (1−λ)·λ^k
+- **Costo computacional mínimo:** una pasada sobre los datos
+- **Estándar industria:** RiskMetrics de J.P. Morgan usa λ=0.94 para series diarias
+
+**Limitaciones de EWMA:**
+- **No captura asimetría:** una caída grande pesa lo mismo que una subida grande del mismo tamaño absoluto
+- **Sin varianza incondicional finita:** el proceso es no-estacionario; no hay σ² al que converger
+- **Sin reversión a la media:** la volatilidad no vuelve a un nivel de largo plazo
+- **No modela el efecto apalancamiento:** la asimetría sí/no requiere variantes (EGARCH, GJR-GARCH)
+
+**Por qué se necesita ARCH/GARCH además:**
+- **Clustering de volatilidad:** GARCH modela explícitamente que σ²_t depende de σ²_(t-1) y de ε²_(t-1)
+- **Reversión a la media:** si α+β<1, la varianza reverte al nivel ω/(1−α−β)
+- **Asimetría:** EGARCH y GJR-GARCH capturan el efecto apalancamiento (caídas → más volatilidad que subidas equivalentes)
+- **Persistencia medible:** α+β cuantifica cuánto persisten los shocks (cerca de 1 = muy persistentes)
+- **Diagnósticos formales:** los residuos GARCH se pueden someter a JB y ARCH-LM para validar el ajuste
+
+Los retornos se escalan por 100 antes del fit para mejorar la convergencia numérica del optimizador (el resultado se vuelve a dividir por 100).
 
 ### M4 — Riesgo Sistemático (CAPM)
 
