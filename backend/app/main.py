@@ -874,7 +874,9 @@ def get_risk_analysis(
         common = ret.index.intersection(bench_ret.index)
 
         if len(common) >= 10:
-            capm_stats = calculate_capm(ret.loc[common], bench_ret.loc[common], config.default_rf)
+            # Rf desde FRED (con fallback a yfinance/.env) — no hardcodeada
+            rf_annual_used, _rf_source_used = _resolve_rf_from_fred_or_fallback(config)
+            capm_stats = calculate_capm(ret.loc[common], bench_ret.loc[common], rf_annual_used)
             # Scatter: puntos alineados + línea de regresión
             asset_vals = _safe_json(ret.loc[common].tolist())
             bench_vals = _safe_json(bench_ret.loc[common].tolist())
@@ -1779,6 +1781,109 @@ def alias_capm(ticker: str, dates: DateRangeDep, var_p: VaRParamsDep, config: Co
     full = get_risk_analysis(ticker=ticker, dates=dates, var_p=var_p, config=config)
     # `full` es un Response — devolver tal cual mantiene contrato
     return full
+
+
+def _resolve_rf_from_fred_or_fallback(config) -> tuple[float, str]:
+    """Devuelve (rf_anual_decimal, source_label).
+
+    Estrategia:
+    1. Si FRED está disponible, usa DGS3MO con cache transparente.
+    2. Si FRED falla o no hay key, usa yfinance ^IRX.
+    3. Si ambos fallan, cae al config.default_rf de .env.
+    """
+    from backend.app.database import SessionLocal
+    from backend.app.services import fred_service as fred
+    import yfinance as yf
+
+    if fred.is_available():
+        db = SessionLocal()
+        try:
+            rf = fred.get_rf_rate_3m(db)
+            if rf and rf.get("value_decimal") is not None:
+                return float(rf["value_decimal"]), f"FRED.DGS3MO ({rf.get('date','')})"
+        finally:
+            db.close()
+
+    try:
+        irx = yf.Ticker("^IRX").history(period="5d")
+        if not irx.empty:
+            return float(irx["Close"].iloc[-1]) / 100, "yfinance.^IRX"
+    except Exception:
+        pass
+
+    return float(config.default_rf), f"config.default_rf ({config.default_rf})"
+
+
+@app.get("/capm", tags=["alias-corto (guía profesor)"],
+         summary="CAPM consolidado: tabla resumen para todos los activos del portafolio — M4")
+def get_capm_consolidated(dates: DateRangeDep, config: ConfigDep):
+    """Tabla CAPM completa con Rf obtenida automáticamente desde FRED.
+
+    Para cada activo del portafolio devuelve:
+    - Beta (regresión MCO)
+    - Alpha de Jensen
+    - R²
+    - Rendimiento esperado CAPM (anual)
+    - Clasificación (agresivo / defensivo / neutro)
+    - Descomposición de varianza (sistemática vs idiosincrática)
+    - Tasa libre de riesgo usada y su fuente
+    - Discusión de diversificación
+    """
+    rf_annual, rf_source = _resolve_rf_from_fred_or_fallback(config)
+
+    bench_data = get_historical_data(config.benchmark, **dates)
+    if bench_data is None:
+        raise HTTPException(404, f"No hay datos para benchmark '{config.benchmark}'.")
+    bench_ret, _ = calculate_returns(bench_data)
+
+    market_mean_daily   = float(bench_ret.mean())
+    market_mean_annual  = (1 + market_mean_daily) ** 252 - 1
+    market_premium_ann  = market_mean_annual - rf_annual
+
+    rows: list[dict] = []
+    for ticker in config.tickers:
+        data = get_historical_data(ticker, **dates)
+        if data is None:
+            rows.append({"ticker": ticker, "error": "sin datos"})
+            continue
+        ret, _ = calculate_returns(data)
+        common = ret.index.intersection(bench_ret.index)
+        if len(common) < 30:
+            rows.append({"ticker": ticker, "error": f"insuficientes (n={len(common)})"})
+            continue
+        capm = calculate_capm(ret.loc[common], bench_ret.loc[common], rf_rate=rf_annual)
+        vd = capm["Variance_Decomposition"]
+        rows.append({
+            "ticker":              ticker,
+            "beta":                round(capm["Beta"], 4),
+            "alpha_daily":         round(capm["Alpha"], 6),
+            "r_squared":           round(capm["R_Squared"], 4),
+            "expected_return_annual": round(capm["Expected_Return_Annual"], 4),
+            "classification":      capm["Classification"],
+            "classification_note": capm["Classification_Note"],
+            "systematic_share":    round(vd["systematic_share"], 4) if vd["systematic_share"] is not None else None,
+            "var_systematic":      round(vd["var_systematic"], 8),
+            "var_idiosyncratic":   round(vd["var_idiosyncratic"], 8),
+        })
+
+    diversification_note = (
+        "El riesgo total de un activo se descompone en dos partes: la sistemática (β²·σ²_m), "
+        "que es la sensibilidad al mercado y NO se puede diversificar; y la idiosincrática (σ²_ε), "
+        "específica del activo, que SÍ se reduce combinando activos descorrelacionados. "
+        "A medida que el portafolio crece, la varianza idiosincrática tiende a cero (LGN), pero "
+        "siempre queda el riesgo sistemático: ese es el límite teórico de la diversificación."
+    )
+
+    return json_response({
+        "benchmark":              config.benchmark,
+        "rf_annual_used":         round(rf_annual, 6),
+        "rf_source":              rf_source,
+        "market_mean_annual":     round(market_mean_annual, 6),
+        "market_premium_annual":  round(market_premium_ann, 6),
+        "n_assets_evaluated":     len([r for r in rows if "error" not in r]),
+        "summary_table":          rows,
+        "diversification_discussion": diversification_note,
+    })
 
 
 class VarRequest(BaseModel):
