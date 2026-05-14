@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.models.db_models import Base
 
-# Misma ruta que api/database.py
-_DB_PATH = Path(__file__).parent.parent / "data" / "risklab_users.db"
+# BD en la raíz del proyecto (compartida con backend/app/auth_db.py).
+# __file__ = backend/app/database.py → parent.parent.parent = raíz del proyecto
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+_DB_PATH = _PROJECT_ROOT / "data" / "risklab_users.db"
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = f"sqlite:///{_DB_PATH.as_posix()}"

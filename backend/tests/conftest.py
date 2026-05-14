@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-# Asegura que la raíz del proyecto esté en sys.path para `from api.main import app`
-_PROJECT_ROOT = Path(__file__).parent.parent
+# Asegura que la raíz del proyecto esté en sys.path para `from backend.app.main import app`
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Variables de entorno predecibles para los tests (no dependen de .env real)
@@ -25,7 +25,7 @@ os.environ.setdefault("JWT_TTL_MINUTES", "60")
 @pytest.fixture(scope="session")
 def app():
     """Importa la app FastAPI ya configurada."""
-    from api.main import app as fastapi_app
+    from backend.app.main import app as fastapi_app
     return fastapi_app
 
 
@@ -35,8 +35,8 @@ def client(app):
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from api.db_models import Base
-    from api.database_session import get_db
+    from backend.app.models.db_models import Base
+    from backend.app.database import get_db
 
     # BD SQLite en memoria — aislada y rápida
     engine = create_engine(

@@ -126,7 +126,8 @@ CurrentUser  = Annotated[dict, Depends(get_current_user)]
 AdminUser    = Annotated[dict, Depends(require_admin)]
 
 # ── Importar funciones de cómputo completo desde generate_data.py ─────────────
-_project_root = Path(__file__).parent.parent
+# generate_data.py vive en la raíz del proyecto: backend/app → parent.parent.parent
+_project_root = Path(__file__).parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 

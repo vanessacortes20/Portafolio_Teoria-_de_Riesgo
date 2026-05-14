@@ -51,8 +51,8 @@ sys.path.insert(0, str(ROOT))
 
 load_dotenv(ROOT / ".env")
 
-from api.data import get_historical_data
-from api.logic import (
+from backend.app.data_yf import get_historical_data
+from backend.app.services.logic import (
     calculate_sma, calculate_ema, calculate_rsi,
     calculate_macd, calculate_bollinger_bands, calculate_stochastic,
     calculate_returns, get_descriptive_stats, perform_normality_tests,
@@ -120,7 +120,7 @@ class GeneratorConfig(BaseModel):
 # ── Configuración ─────────────────────────────────────────────────────────────
 TICKERS   = [t.strip() for t in os.getenv("PORTFOLIO_TICKERS", "NU,AMZN,SONY,XOM,WPM").split(",")]
 BENCHMARK = os.getenv("BENCHMARK_TICKER", "^GSPC")
-OUT_FILE  = ROOT / "dashboard" / "data.js"
+OUT_FILE  = ROOT / "frontend" / "data.js"
 
 
 # ── Utilidades de serialización ───────────────────────────────────────────────

@@ -16,7 +16,7 @@ import pytest
 
 def test_rsi_constante_es_neutral():
     """RSI sobre una serie con cambios uniformes debe estar bien acotado."""
-    from api.logic import calculate_rsi
+    from backend.app.services.logic import calculate_rsi
 
     # Serie con tendencia alcista pura (cada día sube 1)
     df = pd.DataFrame({"Close": [100 + i for i in range(50)]})
@@ -30,7 +30,7 @@ def test_rsi_constante_es_neutral():
 
 def test_rsi_bajista_pura():
     """RSI sobre una serie bajista pura tiende a 0."""
-    from api.logic import calculate_rsi
+    from backend.app.services.logic import calculate_rsi
 
     df = pd.DataFrame({"Close": [100 - i for i in range(50)]})
     rsi = calculate_rsi(df, window=14).dropna()
@@ -45,7 +45,7 @@ def test_var_parametrico_normal_analitico():
     Con μ=0, σ=0.02, z_0.05=-1.6449 → VaR ≈ 0.0329.
     """
     from scipy.stats import norm
-    from api.logic import calculate_var_cvar
+    from backend.app.services.logic import calculate_var_cvar
 
     np.random.seed(42)
     rng_returns = pd.Series(np.random.normal(0.0, 0.02, 10_000))
@@ -65,7 +65,7 @@ def test_var_parametrico_normal_analitico():
 
 def test_put_call_parity_clasica():
     """C - P debe igualar S - K·e^(-rT) hasta error numérico."""
-    from api.services.options import OptionPricer
+    from backend.app.services.options import OptionPricer
 
     op = OptionPricer(S=100, K=100, T=1.0, r=0.05, sigma=0.20)
     parity = op.put_call_parity_check()
@@ -79,7 +79,7 @@ def test_put_call_parity_clasica():
 
 def test_put_call_parity_strike_distinto():
     """Paridad debe cumplirse para cualquier strike."""
-    from api.services.options import OptionPricer
+    from backend.app.services.options import OptionPricer
 
     op = OptionPricer(S=100, K=110, T=0.5, r=0.04, sigma=0.25)
     parity = op.put_call_parity_check()
