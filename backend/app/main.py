@@ -467,25 +467,44 @@ def json_response(data) -> Response:
 
 # ─── Helper: datos técnicos completos (M1 / M7) ───────────────────────────────
 
-def _build_technical_records(ticker: str, start_date=None, end_date=None):
+def _build_technical_records(
+    ticker: str,
+    start_date=None,
+    end_date=None,
+    sma_short: int = 20,
+    sma_long:  int = 50,
+    ema_window: int = 20,
+    rsi_window: int = 14,
+    bb_window:  int = 20,
+    bb_std:     float = 2.0,
+):
+    """Calcula todos los indicadores técnicos del M1.
+
+    Parámetros ajustables (defaults estándar de la industria):
+    - sma_short, sma_long: ventanas de las dos medias móviles simples (Cruce Dorado)
+    - ema_window: ventana de la media móvil exponencial
+    - rsi_window: ventana del RSI (default 14)
+    - bb_window, bb_std: parámetros de las Bandas de Bollinger
+    """
     data = get_historical_data(ticker, start_date=start_date, end_date=end_date)
     if data is None:
         return None
 
     df = data.copy()
     df["Date"]        = df["Date"].dt.strftime("%Y-%m-%d")
-    df["SMA_20"]      = calculate_sma(data, 20)
-    df["SMA_50"]      = calculate_sma(data, 50)   # necesario para Golden/Death Cross
-    df["EMA_20"]      = calculate_ema(data)
-    df["RSI"]         = calculate_rsi(data)
+    df["SMA_20"]      = calculate_sma(data, sma_short)
+    df["SMA_50"]      = calculate_sma(data, sma_long)   # necesario para Golden/Death Cross
+    df["EMA_20"]      = calculate_ema(data, ema_window)
+    df["RSI"]         = calculate_rsi(data, rsi_window)
 
     ml, sl, hist      = calculate_macd(data)
     df["MACD_Line"]   = ml
     df["MACD_Signal"] = sl
     df["MACD_Hist"]   = hist
 
-    bb_up, bb_low     = calculate_bollinger_bands(data)
+    bb_up, bb_low     = calculate_bollinger_bands(data, bb_window, bb_std)
     df["BB_Upper"]    = bb_up
+    df["BB_Middle"]   = calculate_sma(data, bb_window)   # banda media = SMA del mismo window
     df["BB_Lower"]    = bb_low
 
     sk, sd            = calculate_stochastic(data)
@@ -515,9 +534,19 @@ def get_technical_analysis(
     ticker: str,
     dates: DateRangeDep,
     _cfg: ConfigDep,
+    sma_short:  int   = Query(20, ge=2,   le=200, description="Ventana SMA corta (default 20)."),
+    sma_long:   int   = Query(50, ge=5,   le=400, description="Ventana SMA larga (default 50)."),
+    ema_window: int   = Query(20, ge=2,   le=200, description="Ventana EMA (default 20)."),
+    rsi_window: int   = Query(14, ge=2,   le=100, description="Ventana RSI (default 14)."),
+    bb_window:  int   = Query(20, ge=5,   le=200, description="Ventana Bollinger (default 20)."),
+    bb_std:     float = Query(2.0, gt=0,  le=5,   description="Desviaciones estándar Bollinger (default 2.0)."),
 ):
     try:
-        records = _build_technical_records(ticker, **dates)
+        records = _build_technical_records(
+            ticker, **dates,
+            sma_short=sma_short, sma_long=sma_long, ema_window=ema_window,
+            rsi_window=rsi_window, bb_window=bb_window, bb_std=bb_std,
+        )
         if records is None:
             raise HTTPException(404, f"No se encontraron datos para '{ticker}'.")
         return json_response(records)
@@ -1557,8 +1586,20 @@ def alias_rendimientos(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
 
 
 @app.get("/indicadores/{ticker}", tags=["alias-corto (guía profesor)"])
-def alias_indicadores(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
-    return get_technical_analysis(ticker=ticker, dates=dates, _cfg=_cfg)
+def alias_indicadores(
+    ticker: str, dates: DateRangeDep, _cfg: ConfigDep,
+    sma_short:  int   = Query(20, ge=2,  le=200),
+    sma_long:   int   = Query(50, ge=5,  le=400),
+    ema_window: int   = Query(20, ge=2,  le=200),
+    rsi_window: int   = Query(14, ge=2,  le=100),
+    bb_window:  int   = Query(20, ge=5,  le=200),
+    bb_std:     float = Query(2.0, gt=0, le=5),
+):
+    return get_technical_analysis(
+        ticker=ticker, dates=dates, _cfg=_cfg,
+        sma_short=sma_short, sma_long=sma_long, ema_window=ema_window,
+        rsi_window=rsi_window, bb_window=bb_window, bb_std=bb_std,
+    )
 
 
 @app.get("/volatilidad/{ticker}", tags=["alias-corto (guía profesor)"])
