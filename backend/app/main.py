@@ -1045,14 +1045,38 @@ def get_portfolio_target_return(
         raise HTTPException(500, str(exc))
 
 
-@app.get("/api/v1/macro", summary="Indicadores macroeconómicos de contexto — M8")
-def get_macro_indicators(db = Depends(lambda: None)):
-    """Devuelve tasa libre de riesgo, rendimiento del Tesoro a 10 años y retorno YTD del S&P 500.
+# ── Modelos Pydantic del Módulo 8 ────────────────────────────────────────────
 
-    Fuente primaria: FRED (DGS3MO, DGS10, CPIAUCSL) con cache transparente en SQLite.
-    Fallback: yfinance (^IRX, ^TNX, ^GSPC) si FRED no está disponible o falla.
-    Las keys originales (as_of, rf_rate, rf_source, treasury_10y, spx_ytd) se preservan
-    para no romper el dashboard. Se agregan campos opcionales con info de cache.
+class MacroIndicators(BaseModel):
+    """Response model del endpoint /macro — panel de contexto macroeconómico."""
+    as_of:               str
+    rf_rate:             Optional[float] = None
+    rf_source:           Optional[str]   = None
+    treasury_10y:        Optional[float] = None
+    treasury_10y_source: Optional[str]   = None
+    spx_ytd:             Optional[float] = None
+    inflation_yoy:       Optional[float] = None
+    usdcop:              Optional[float] = None
+    usdcop_source:       Optional[str]   = None
+    fred_enabled:        bool            = False
+    cache_status:        Optional[dict]  = None
+
+
+@app.get("/api/v1/macro", response_model=MacroIndicators,
+         summary="Indicadores macroeconómicos de contexto — M8")
+def get_macro_indicators(db = Depends(lambda: None)):
+    """Panel de indicadores macro actualizados vía API.
+
+    Indicadores devueltos:
+      - `rf_rate`        — Tasa libre de riesgo (FRED.DGS3MO, fallback yfinance ^IRX)
+      - `treasury_10y`   — Tesoro EE.UU. a 10 años (FRED.DGS10, fallback ^TNX)
+      - `spx_ytd`        — Retorno YTD del S&P 500 (yfinance ^GSPC)
+      - `inflation_yoy`  — Inflación interanual EE.UU. (FRED.CPIAUCSL)
+      - `usdcop`         — Tasa de cambio USD/COP (yfinance COP=X)
+
+    Cache transparente en SQLite con TTL 24h (vía `services/fred_service`).
+    Si FRED_API_KEY no está configurada → fallback automático a yfinance
+    sin fingir que el dato viene de FRED. Cada métrica reporta su `_source`.
     """
     import yfinance as yf
     from backend.app.database import SessionLocal
@@ -1139,12 +1163,103 @@ def get_macro_indicators(db = Depends(lambda: None)):
         finally:
             db_local.close()
 
+    # ---- USD/COP (Banco de la República / yfinance fallback) ----
+    # FRED no publica una serie USD/COP directa estable; usamos yfinance COP=X.
+    try:
+        copx = yf.Ticker("COP=X").history(period="5d")
+        if not copx.empty:
+            result["usdcop"]        = float(copx["Close"].iloc[-1])
+            result["usdcop_source"] = "yfinance.COP=X"
+        else:
+            result["usdcop"]        = None
+            result["usdcop_source"] = "unavailable"
+    except Exception:
+        result["usdcop"]        = None
+        result["usdcop_source"] = "unavailable"
+
     # ---- Metadatos de fuente ----
     result["fred_enabled"] = fred.is_available()
     if cache_status:
         result["cache_status"] = cache_status
 
     return json_response(result)
+
+
+@app.get("/api/v1/benchmark", summary="Comparación Portafolio óptimo vs Benchmark — M8")
+def get_benchmark_comparison(dates: DateRangeDep, config: ConfigDep):
+    """Devuelve la comparación del portafolio Max Sharpe contra el benchmark.
+
+    Reutiliza `compute_benchmark` (mismo cálculo que alimenta `/api/v1/all` y
+    `data.js`). Incluye:
+      - Curvas base 100 (`Port_Cum`, `Bench_Cum`) y series de drawdown
+      - Métricas por activo (Ann_Return, Ann_Volatility, Sharpe, Max_Drawdown)
+      - Métricas relativas: Alpha de Jensen, Beta, Tracking Error,
+        Information Ratio, R²
+      - Interpretación textual (`interpretation`) sobre desempeño relativo
+
+    La tasa libre de riesgo se obtiene del mismo helper que usa CAPM (FRED →
+    yfinance → default), garantizando consistencia con el Módulo 4.
+    """
+    date_kwargs   = {k: v for k, v in dates.items() if v is not None}
+    rf_annual, _  = get_rf_rate()
+    bench_data    = get_historical_data(config.benchmark, **date_kwargs)
+    if bench_data is None:
+        raise HTTPException(404, f"No hay datos para benchmark '{config.benchmark}'.")
+
+    all_ret: dict = {}
+    for ticker in config.tickers:
+        data = get_historical_data(ticker, **date_kwargs)
+        if data is None:
+            continue
+        try:
+            simple, _ = calculate_returns(data)
+            all_ret[ticker] = simple
+        except Exception:
+            continue
+
+    bench = compute_benchmark(all_ret, bench_data, rf_annual)
+    if not bench:
+        raise HTTPException(500, "No se pudo construir la comparación con benchmark.")
+
+    # Interpretación textual (no recomendación absoluta)
+    alpha = bench.get("Jensen_Alpha")
+    ir    = bench.get("Information_Ratio")
+    te    = bench.get("Tracking_Error")
+    port_sharpe  = bench.get("Port", {}).get("Sharpe")
+    bench_sharpe = bench.get("Bench", {}).get("Sharpe")
+
+    parts = []
+    if alpha is not None:
+        if alpha > 0:
+            parts.append(
+                f"Alpha de Jensen positivo ({alpha*100:.2f}%/año): el portafolio "
+                "generó retorno adicional por encima del exigido por su beta. "
+                "Significancia estadística no calculada en este endpoint."
+            )
+        else:
+            parts.append(
+                f"Alpha de Jensen negativo ({alpha*100:.2f}%/año): el portafolio "
+                "no compensó adecuadamente el riesgo sistemático asumido."
+            )
+    if ir is not None:
+        if ir > 0.5:
+            parts.append(f"Information Ratio {ir:.2f}: indica gestión activa favorable (IR>0.5).")
+        elif ir > 0:
+            parts.append(f"Information Ratio {ir:.2f}: gestión activa marginal (positiva pero baja).")
+        else:
+            parts.append(f"Information Ratio {ir:.2f}: gestión activa desfavorable (IR<=0).")
+    if te is not None:
+        parts.append(f"Tracking Error anual {te*100:.2f}%: cuantifica el alejamiento diario del portafolio respecto al benchmark.")
+    if port_sharpe is not None and bench_sharpe is not None:
+        if port_sharpe > bench_sharpe:
+            parts.append(f"Sharpe portafolio {port_sharpe:.2f} > benchmark {bench_sharpe:.2f}: mejor retorno por unidad de riesgo asumido.")
+        else:
+            parts.append(f"Sharpe portafolio {port_sharpe:.2f} <= benchmark {bench_sharpe:.2f}: peor retorno por unidad de riesgo asumido.")
+
+    bench["benchmark_ticker"] = config.benchmark
+    bench["rf_rate"]          = rf_annual
+    bench["interpretation"]   = " ".join(parts) if parts else None
+    return json_response(bench)
 
 
 class PredictRequest(BaseModel):
@@ -2161,9 +2276,15 @@ def alias_alertas_portfolio(dates: DateRangeDep, config: ConfigDep,
     }
 
 
-@app.get("/macro", tags=["alias-corto (guía profesor)"])
+@app.get("/macro", tags=["alias-corto (guía profesor)"], response_model=MacroIndicators)
 def alias_macro():
     return get_macro_indicators(db=None)
+
+
+@app.get("/benchmark", tags=["alias-corto (guía profesor)"],
+         summary="Alias corto: comparación Portafolio óptimo vs Benchmark — M8")
+def alias_benchmark(dates: DateRangeDep, config: ConfigDep):
+    return get_benchmark_comparison(dates=dates, config=config)
 
 
 @app.get("/curva-rendimiento", tags=["alias-corto (guía profesor)"])
