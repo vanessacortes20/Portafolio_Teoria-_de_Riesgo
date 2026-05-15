@@ -57,6 +57,7 @@ from backend.app.services.logic import (
     calculate_var_cvar,
     compare_ewma_vs_garch,
     compare_qp_long_only_vs_short,
+    efficient_frontier_curve,
     fit_garch_models,
     generate_signals,
     get_descriptive_stats,
@@ -964,8 +965,20 @@ def get_portfolio_optimization(
                     "sharpe_gain_with_short":         qp["sharpe_gain_with_short"],
                     "zero_weight_in_long_only":       qp["zero_weight_in_long_only"],
                     "short_positions_when_allowed":   qp["short_positions_when_allowed"],
+                    "composition_table":              qp["composition_table"],
+                    "restriction_cost":               qp["restriction_cost"],
                     "interpretation":                 qp["interpretation"],
                 }
+                # Frontera eficiente paramétrica (curva resaltada): long-only y con short
+                try:
+                    result["efficient_frontier_curve_long_only"] = efficient_frontier_curve(
+                        df_rets, allow_short=False, n_points=30,
+                    )
+                    result["efficient_frontier_curve_with_short"] = efficient_frontier_curve(
+                        df_rets, allow_short=True, n_points=30,
+                    )
+                except Exception:
+                    pass
             except Exception as exc:  # pragma: no cover
                 result["qp_error"] = str(exc)
 
