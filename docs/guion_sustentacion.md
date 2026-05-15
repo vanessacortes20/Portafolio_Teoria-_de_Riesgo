@@ -99,6 +99,18 @@ Con el portafolio actual NU es el primero en quedar en 0 en long-only y en posic
 
 ---
 
+## 6.5. VaR, CVaR y Kupiec (M5, 2 min)
+
+> "El M5 cuantifica la pérdida potencial del portafolio por **3 métodos en paralelo**: paramétrico (asume Normal), histórico (no paramétrico, percentil empírico) y Monte Carlo con ≥10,000 simulaciones, **distribución Normal(μ_emp, σ_emp) y semilla 42** documentada para reproducibilidad. CVaR (Expected Shortfall) acompaña al VaR midiendo la pérdida promedio condicional a estar más allá del umbral."
+>
+> "El endpoint `POST /var` siempre devuelve los niveles 95% Y 99%, valores diarios y anualizados, una tabla comparativa y datos para graficar el histograma con líneas verticales."
+>
+> "Para validar formalmente el VaR aplicamos el **test de Kupiec POF** a los 3 métodos en una ventana de 500 días (mínimo exigido: 250). El estadístico `LR_POF` se compara contra chi²(1)=3.84 al 95%. El response incluye un `verdict` textual por método: 'modelo correcto', 'subestima el riesgo' o 'sobreestima el riesgo' — y `methods_passing` lista cuáles pasan."
+>
+> "Resultado típico con el portafolio NU/AMZN/SONY/XOM/WPM: VaR Histórico (2.08%) ligeramente mayor que Paramétrico (2.01%) → la distribución empírica tiene colas un poco más pesadas que la normal asumida. Monte Carlo coincide con Paramétrico porque ambos asumen normalidad. CVaR Histórico es 56% mayor que CVaR Paramétrico → la cola izquierda real es más severa. Los 3 pasan Kupiec en esta ventana."
+
+---
+
 ## 7. Señales persistidas (M7, 1 min)
 
 Cada llamada a `/api/v1/signals/{ticker}` persiste las señales disparadas en `signals_log` (vía `Depends(get_db)`), con dedup por `(ticker, regla, día)`. Umbrales `rsi_overbought`, `rsi_oversold`, `bollinger_std` configurables y validados por Pydantic. Endpoint `/api/v1/signals/{ticker}/history` devuelve el historial.
