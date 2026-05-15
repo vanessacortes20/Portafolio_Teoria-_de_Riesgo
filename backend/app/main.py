@@ -59,7 +59,6 @@ from backend.app.services.logic import (
     compare_qp_long_only_vs_short,
     efficient_frontier_curve,
     fit_garch_models,
-    generate_signals,
     get_descriptive_stats,
     kupiec_test,
     optimize_portfolio,
@@ -1500,7 +1499,37 @@ def get_yield_curve():
         db.close()
 
 
-@app.get("/api/v1/signals/{ticker}", summary="Señales técnicas automáticas — M7")
+# ── Modelos Pydantic del Módulo 7 ────────────────────────────────────────────
+
+class SignalItem(BaseModel):
+    """Una señal técnica individual."""
+    id:          str
+    rule:        Optional[str] = None
+    type:        str
+    value:       Optional[float] = None
+    msg:         str
+    explanation: Optional[str] = None
+
+
+class SignalThresholds(BaseModel):
+    rsi_overbought:   int
+    rsi_oversold:     int
+    bollinger_std:    float
+    stoch_overbought: int
+    stoch_oversold:   int
+
+
+class SignalReport(BaseModel):
+    """Response model del endpoint /api/v1/signals/{ticker} y /alertas/{ticker}."""
+    ticker:          str
+    timestamp:       str
+    signals:         list[SignalItem]
+    thresholds:      SignalThresholds
+    persisted_count: int
+
+
+@app.get("/api/v1/signals/{ticker}", response_model=SignalReport,
+         summary="Señales técnicas automáticas — M7")
 def get_asset_signals(
     ticker: str,
     dates: DateRangeDep,
@@ -1511,74 +1540,49 @@ def get_asset_signals(
         description="Umbral de sobreventa RSI (default 30)."),
     bollinger_std:  float = Query(2.0, gt=0.0, le=5.0,
         description="Desviaciones estándar para Bandas de Bollinger (default 2.0)."),
+    stoch_overbought: int = Query(80, ge=50, le=99,
+        description="Umbral de sobrecompra del oscilador estocástico (default 80)."),
+    stoch_oversold:   int = Query(20, ge=1,  le=50,
+        description="Umbral de sobreventa del oscilador estocástico (default 20)."),
     persist: bool = Query(True,
         description="Guardar las señales disparadas en signals_log."),
 ):
-    """Genera señales técnicas y opcionalmente las persiste en signals_log.
+    """Evalúa las cinco reglas técnicas del M7 sobre el último registro disponible.
 
-    Evita duplicados: solo persiste señales que no estén ya registradas para
-    el mismo ticker, regla y fecha de hoy.
+    Reglas (encapsuladas en `SignalGenerator`):
+        1. Cruce del MACD (línea MACD vs línea de señal).
+        2. RSI en zonas extremas (umbrales configurables).
+        3. Bandas de Bollinger (precio tocando banda superior/inferior).
+        4. Cruce de medias móviles (Golden cross / Death cross — SMA20 vs SMA50).
+        5. Oscilador Estocástico (%K cruzando %D en zonas extremas).
+
+    Cada señal incluye `id`, `rule`, `type`, `value`, `msg` y `explanation`
+    en lenguaje simple para el inversionista. Las señales se persisten en
+    `signals_log` evitando duplicados del mismo ticker/regla/día.
     """
     try:
         from datetime import datetime as _dt
         from sqlalchemy import and_
         from backend.app.database import SessionLocal
         from backend.app.models.db_models import SignalLog
+        from backend.app.services.signals import SignalGenerator
 
-        records = _build_technical_records(ticker, **dates)
+        records = _build_technical_records(ticker, bb_std=bollinger_std, **dates)
         if not records or len(records) < 2:
             raise HTTPException(404, f"Datos insuficientes para '{ticker}'.")
 
         last, prev = records[-1], records[-2]
-        rsi_val   = last.get("RSI") or 50
-        macd_h    = last.get("MACD_Hist") or 0
-        close     = last.get("Close") or 0
-        bb_up     = last.get("BB_Upper") or 0
-        bb_low    = last.get("BB_Lower") or 0
 
-        signals = generate_signals({
-            "RSI":            rsi_val,
-            "MACD_Hist":      macd_h,
-            "MACD_Hist_Prev": prev.get("MACD_Hist") or 0,
-            "Close":          close,
-            "BB_Upper":       bb_up,
-            "BB_Lower":       bb_low,
-            "RSI_Overbought": rsi_overbought,
-            "RSI_Oversold":   rsi_oversold,
-        })
-
-        # Reglas adicionales aplicadas con los umbrales configurables del usuario
-        extra: list[dict] = []
-        if rsi_val >= rsi_overbought:
-            extra.append({
-                "id": "RSI_OVERBOUGHT_USER", "type": "sell",
-                "value": float(rsi_val),
-                "msg": f"RSI {rsi_val:.1f} >= umbral configurado ({rsi_overbought})",
-            })
-        if rsi_val <= rsi_oversold:
-            extra.append({
-                "id": "RSI_OVERSOLD_USER", "type": "buy",
-                "value": float(rsi_val),
-                "msg": f"RSI {rsi_val:.1f} <= umbral configurado ({rsi_oversold})",
-            })
-        if bb_up and close >= bb_up:
-            extra.append({
-                "id": "BB_UPPER_BREAK", "type": "sell",
-                "value": float(close),
-                "msg": f"Precio {close:.2f} toca/excede banda superior ({bb_up:.2f})",
-            })
-        if bb_low and close <= bb_low:
-            extra.append({
-                "id": "BB_LOWER_BREAK", "type": "buy",
-                "value": float(close),
-                "msg": f"Precio {close:.2f} toca/cae bajo banda inferior ({bb_low:.2f})",
-            })
-
-        all_signals = signals + extra
+        gen = SignalGenerator(
+            last=last, prev=prev,
+            rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+            stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+        )
+        all_signals = gen.evaluate_all()
 
         # Persistencia en signals_log evitando duplicados del mismo día
         persisted = 0
-        if persist:
+        if persist and all_signals:
             db = SessionLocal()
             try:
                 today = _dt.utcnow().date()
@@ -1605,12 +1609,15 @@ def get_asset_signals(
                 db.close()
 
         return {
-            "ticker":        ticker,
-            "signals":       all_signals,
-            "thresholds":    {
-                "rsi_overbought": rsi_overbought,
-                "rsi_oversold":   rsi_oversold,
-                "bollinger_std":  bollinger_std,
+            "ticker":     ticker,
+            "timestamp":  datetime.utcnow().isoformat(timespec="seconds"),
+            "signals":    all_signals,
+            "thresholds": {
+                "rsi_overbought":   rsi_overbought,
+                "rsi_oversold":     rsi_oversold,
+                "bollinger_std":    bollinger_std,
+                "stoch_overbought": stoch_overbought,
+                "stoch_oversold":   stoch_oversold,
             },
             "persisted_count": persisted,
         }
@@ -2083,15 +2090,75 @@ def alias_frontera(dates: DateRangeDep, config: ConfigDep,
     return get_portfolio_optimization(dates=dates, config=config, include_qp=include_qp)
 
 
-@app.get("/alertas/{ticker}", tags=["alias-corto (guía profesor)"])
+@app.get("/alertas/{ticker}", tags=["alias-corto (guía profesor)"],
+         response_model=SignalReport)
 def alias_alertas(ticker: str, dates: DateRangeDep, _cfg: ConfigDep,
                   rsi_overbought: int = Query(70, ge=50, le=99),
                   rsi_oversold:   int = Query(30, ge=1, le=50),
                   bollinger_std:  float = Query(2.0, gt=0.0, le=5.0),
+                  stoch_overbought: int = Query(80, ge=50, le=99),
+                  stoch_oversold:   int = Query(20, ge=1, le=50),
                   persist:        bool = Query(True)):
     return get_asset_signals(ticker=ticker, dates=dates, _cfg=_cfg,
                              rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
-                             bollinger_std=bollinger_std, persist=persist)
+                             bollinger_std=bollinger_std,
+                             stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+                             persist=persist)
+
+
+@app.get("/alertas/{ticker}/history", tags=["alias-corto (guía profesor)"])
+def alias_alertas_history(ticker: str,
+                          limit: int = Query(100, ge=1, le=1000)):
+    """Alias corto del historial de señales persistidas en `signals_log`."""
+    return get_signals_history(ticker=ticker, limit=limit)
+
+
+@app.get("/alertas", tags=["alias-corto (guía profesor)"],
+         summary="Evalúa señales técnicas para TODOS los activos del portafolio — M7")
+def alias_alertas_portfolio(dates: DateRangeDep, config: ConfigDep,
+                            rsi_overbought: int = Query(70, ge=50, le=99),
+                            rsi_oversold:   int = Query(30, ge=1, le=50),
+                            bollinger_std:  float = Query(2.0, gt=0.0, le=5.0),
+                            stoch_overbought: int = Query(80, ge=50, le=99),
+                            stoch_oversold:   int = Query(20, ge=1, le=50),
+                            persist:        bool = Query(True)):
+    """Devuelve un panel consolidado con señales por activo del portafolio.
+
+    Itera sobre `config.tickers` aplicando `SignalGenerator` a cada uno.
+    Cada activo produce un `SignalReport` independiente; los errores por
+    activo se reportan en `errors` sin abortar el panel completo.
+    """
+    reports:  list[dict] = []
+    errors:   list[dict] = []
+    total_signals = 0
+    for ticker in config.tickers:
+        try:
+            rpt = get_asset_signals(
+                ticker=ticker, dates=dates, _cfg=config,
+                rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+                bollinger_std=bollinger_std,
+                stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+                persist=persist,
+            )
+            reports.append(rpt)
+            total_signals += len(rpt.get("signals", []))
+        except HTTPException as exc:
+            errors.append({"ticker": ticker, "detail": str(exc.detail)})
+        except Exception as exc:  # pragma: no cover
+            errors.append({"ticker": ticker, "detail": str(exc)})
+    return {
+        "tickers":       config.tickers,
+        "n_signals":     total_signals,
+        "thresholds":    {
+            "rsi_overbought":   rsi_overbought,
+            "rsi_oversold":     rsi_oversold,
+            "bollinger_std":    bollinger_std,
+            "stoch_overbought": stoch_overbought,
+            "stoch_oversold":   stoch_oversold,
+        },
+        "reports":       reports,
+        "errors":        errors,
+    }
 
 
 @app.get("/macro", tags=["alias-corto (guía profesor)"])
