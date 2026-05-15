@@ -564,16 +564,76 @@ def optimize_portfolio_qp(
     }
 
 
+def efficient_frontier_curve(
+    returns_df: pd.DataFrame,
+    allow_short: bool = False,
+    n_points: int = 30,
+) -> dict:
+    """
+    Genera la frontera eficiente paramétrica resolviendo, para cada μ* del grid,
+    el QP `min wᵀΣw  s.t. wᵀμ = μ*, Σwᵢ = 1, [wᵢ ≥ 0 si long-only]`.
+
+    Devuelve listas paralelas `target_returns`, `min_volatility`, y la composición
+    de pesos para cada punto. Ideal para que el frontend dibuje la curva resaltada
+    sobre el conjunto factible del Monte Carlo.
+    """
+    from scipy.optimize import minimize
+
+    tickers  = returns_df.columns.tolist()
+    n        = len(tickers)
+    mean_ann = returns_df.mean() * 252
+    cov_ann  = returns_df.cov()  * 252
+    bounds   = [(-1.0, 1.0)] * n if allow_short else [(0.0, 1.0)] * n
+
+    def _vol(w):
+        return float(np.sqrt(w @ cov_ann.values @ w))
+
+    # Rango de retornos objetivo: desde el mínimo individual al máximo individual
+    mu_min = float(mean_ann.min())
+    mu_max = float(mean_ann.max())
+    targets = np.linspace(mu_min, mu_max, n_points)
+
+    rets, vols, weights_list, conv = [], [], [], []
+    w0 = np.ones(n) / n
+    for mu_star in targets:
+        cons = [
+            {"type": "eq", "fun": lambda w: float(np.sum(w)) - 1.0},
+            {"type": "eq", "fun": lambda w, mu=mu_star: float(np.dot(w, mean_ann.values)) - mu},
+        ]
+        try:
+            res = minimize(_vol, w0, method="SLSQP",
+                           bounds=bounds, constraints=cons,
+                           options={"maxiter": 500, "ftol": 1e-9})
+            if res.success:
+                rets.append(float(np.dot(res.x, mean_ann.values)))
+                vols.append(_vol(res.x))
+                weights_list.append({t: float(w) for t, w in zip(tickers, res.x)})
+                conv.append(True)
+            else:
+                rets.append(float(mu_star)); vols.append(None); weights_list.append({}); conv.append(False)
+        except Exception:
+            rets.append(float(mu_star)); vols.append(None); weights_list.append({}); conv.append(False)
+
+    return {
+        "allow_short":    allow_short,
+        "n_points":       n_points,
+        "target_returns": [round(r, 6) for r in rets],
+        "min_volatility": [round(v, 6) if v is not None else None for v in vols],
+        "weights":        weights_list,
+        "converged":      conv,
+        "n_converged":    int(sum(conv)),
+    }
+
+
 def compare_qp_long_only_vs_short(
     returns_df: pd.DataFrame,
     rf_rate: float = 0.04,
 ) -> dict:
     """
     Resuelve QP en las dos versiones (con y sin no-negatividad) y devuelve
-    una comparación interpretativa: qué cambia cuando se permiten ventas en corto,
-    qué activos quedan en cero, y si el portafolio se vuelve más agresivo.
+    comparación interpretativa con costo cuantificado de la restricción.
     """
-    long_only = optimize_portfolio_qp(returns_df, allow_short=False, rf_rate=rf_rate)
+    long_only  = optimize_portfolio_qp(returns_df, allow_short=False, rf_rate=rf_rate)
     with_short = optimize_portfolio_qp(returns_df, allow_short=True,  rf_rate=rf_rate)
 
     # Activos con peso ~0 en long-only (esquina del conjunto factible)
@@ -583,26 +643,58 @@ def compare_qp_long_only_vs_short(
     short_assets = [t for t, w in with_short["max_sharpe"]["Weights"].items()
                     if w < -zero_threshold]
 
-    sharpe_lo = long_only["max_sharpe"]["Sharpe"]
-    sharpe_sh = with_short["max_sharpe"]["Sharpe"]
-    sharpe_gain = round(sharpe_sh - sharpe_lo, 4)
+    # Costo cuantificado de imponer no-negatividad sobre el max-Sharpe
+    delta_sharpe = round(with_short["max_sharpe"]["Sharpe"]   - long_only["max_sharpe"]["Sharpe"], 6)
+    delta_return = round(with_short["max_sharpe"]["Return"]   - long_only["max_sharpe"]["Return"], 6)
+    delta_vol    = round(with_short["max_sharpe"]["Volatility"] - long_only["max_sharpe"]["Volatility"], 6)
+    # Mismo análisis sobre min-variance
+    delta_min_vol = round(with_short["min_variance"]["Volatility"] - long_only["min_variance"]["Volatility"], 6)
 
-    if sharpe_gain > 0.05:
+    if delta_sharpe > 0.05:
         msg = ("Permitir short-selling mejora notablemente el Sharpe — el modelo aprovecha "
                "ventas en corto para reducir volatilidad. Trade-off: mayor complejidad operativa.")
-    elif sharpe_gain > 0.0:
+    elif delta_sharpe > 0.0:
         msg = ("Permitir short-selling mejora marginalmente el Sharpe. El portafolio long-only "
                "ya está cerca del óptimo no restringido.")
     else:
         msg = ("Long-only iguala o supera al portafolio con short — la restricción de no-negatividad "
                "no es vinculante en este conjunto de activos.")
 
+    # Tabla de composición porcentual (pesos en %)
+    tickers = list(long_only["max_sharpe"]["Weights"].keys())
+    composition_table = []
+    for t in tickers:
+        composition_table.append({
+            "ticker":          t,
+            "min_var_long":    round(long_only["min_variance"]["Weights"].get(t, 0) * 100, 3),
+            "max_sharpe_long": round(long_only["max_sharpe"]["Weights"].get(t, 0) * 100, 3),
+            "min_var_short":   round(with_short["min_variance"]["Weights"].get(t, 0) * 100, 3),
+            "max_sharpe_short": round(with_short["max_sharpe"]["Weights"].get(t, 0) * 100, 3),
+            "is_zero_in_long_only": t in zero_assets,
+            "is_short_when_allowed": t in short_assets,
+        })
+
     return {
         "long_only":            long_only,
         "with_short":           with_short,
-        "sharpe_gain_with_short": sharpe_gain,
-        "zero_weight_in_long_only": zero_assets,
+        "sharpe_gain_with_short":      delta_sharpe,
+        "zero_weight_in_long_only":    zero_assets,
         "short_positions_when_allowed": short_assets,
+        "composition_table":           composition_table,
+        "restriction_cost": {
+            "delta_sharpe_max":   delta_sharpe,    # >0 si short mejora Sharpe
+            "delta_return_max":   delta_return,
+            "delta_volatility_max": delta_vol,
+            "delta_min_variance": delta_min_vol,   # <0 si short reduce mín varianza
+            "interpretation": (
+                f"Costo de imponer no-negatividad sobre el portafolio máx-Sharpe: "
+                f"ΔSharpe = {delta_sharpe:+.4f}, ΔReturn = {delta_return:+.4f}, "
+                f"ΔVolatility = {delta_vol:+.4f}. "
+                f"Sobre la mín-varianza: ΔVol = {delta_min_vol:+.4f}. "
+                f"Activos en cero (long-only): {zero_assets or 'ninguno'}. "
+                f"Activos en corto (cuando se permite): {short_assets or 'ninguno'}."
+            ),
+        },
         "interpretation":       msg,
     }
 
