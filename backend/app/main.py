@@ -1889,8 +1889,14 @@ def get_capm_consolidated(dates: DateRangeDep, config: ConfigDep):
 class VarRequest(BaseModel):
     tickers:        list[str] = Field(..., min_length=1, max_length=20)
     weights:        list[float] = Field(..., min_length=1, max_length=20)
-    confidence:     float = Field(0.95, ge=0.80, le=0.99)
-    n_simulations:  int   = Field(10_000, ge=1_000, le=100_000)
+    confidence:     float = Field(0.95, ge=0.80, le=0.99,
+        description="Nivel principal de confianza (siempre se reporta también el 99%).")
+    n_simulations:  int   = Field(10_000, ge=10_000, le=200_000,
+        description="Iteraciones Monte Carlo (mínimo 10,000 según instructivo).")
+    seed:           int   = Field(42, ge=0, le=2**31 - 1,
+        description="Semilla NumPy para reproducibilidad del Monte Carlo.")
+    lookback_days:  int   = Field(500, ge=250, le=2520,
+        description="Ventana de backtesting Kupiec (mínimo 250 días según instructivo).")
 
     @model_validator(mode="after")
     def _weights_sum(self) -> "VarRequest":
@@ -1899,12 +1905,45 @@ class VarRequest(BaseModel):
         s = sum(self.weights)
         if abs(s - 1.0) > 1e-3:
             raise ValueError(f"weights deben sumar 1; suman {s:.4f}")
+        for w in self.weights:
+            if not isinstance(w, (int, float)):
+                raise ValueError("Todos los pesos deben ser numéricos")
         return self
 
 
-@app.post("/var", tags=["alias-corto (guía profesor)"])
+def _build_var_block(portfolio_ret: pd.Series, confidence: float,
+                     n_simulations: int, seed: int) -> dict:
+    """Calcula VaR diario y anualizado para los 3 métodos en un nivel de confianza."""
+    sqrt252 = math.sqrt(252)
+    raw = calculate_var_cvar(portfolio_ret, confidence=confidence,
+                             n_simulations=n_simulations, seed=seed)
+    out: dict[str, dict] = {}
+    for method in ("Historico", "Parametrico", "Montecarlo"):
+        var_d  = raw[method]["VaR"]
+        cvar_d = raw[method]["CVaR"]
+        out[method] = {
+            "VaR_daily":   round(var_d, 8),
+            "VaR_annual":  round(var_d * sqrt252, 8),
+            "CVaR_daily":  round(cvar_d, 8),
+            "CVaR_annual": round(cvar_d * sqrt252, 8),
+        }
+    out["confidence"] = confidence
+    if "distribution" in raw["Montecarlo"]:
+        out["Montecarlo"]["distribution"] = raw["Montecarlo"]["distribution"]
+        out["Montecarlo"]["seed"]         = raw["Montecarlo"]["seed"]
+    return out
+
+
+@app.post("/var", tags=["alias-corto (guía profesor)"],
+          summary="VaR/CVaR del portafolio + Kupiec en 3 métodos — M5")
 def alias_var(req: VarRequest, config: ConfigDep):
-    """VaR/CVaR del portafolio compuesto. Pesos validados con model_validator."""
+    """VaR paramétrico, histórico y Monte Carlo + CVaR + Kupiec POF en los 3 métodos.
+
+    Devuelve siempre los niveles 95% Y 99%, valores diarios y anualizados,
+    tabla comparativa con interpretación de diferencias, datos para histograma
+    con líneas verticales VaR/CVaR, y backtesting Kupiec con verdict textual
+    indicando si cada método subestima/sobreestima/es correcto.
+    """
     all_rets: dict[str, pd.Series] = {}
     for t in req.tickers:
         data = get_historical_data(t, period="2y")
@@ -1913,22 +1952,115 @@ def alias_var(req: VarRequest, config: ConfigDep):
         ret, _ = calculate_returns(data)
         all_rets[t] = ret
     df = pd.DataFrame(all_rets).dropna()
+
     weights = np.array(req.weights)
     portfolio_ret = (df.values * weights).sum(axis=1)
     portfolio_ret = pd.Series(portfolio_ret).replace([np.inf, -np.inf], np.nan).dropna()
-    result = calculate_var_cvar(portfolio_ret, confidence=req.confidence,
-                                n_simulations=req.n_simulations)
-    backtesting = {}
+
+    # Recortar a la ventana de backtesting solicitada
+    lookback = min(req.lookback_days, len(portfolio_ret))
+    portfolio_lb = portfolio_ret.iloc[-lookback:]
+
+    # ── Bloques 95% Y 99% ────────────────────────────────────────────────
+    block_main = _build_var_block(portfolio_lb, req.confidence, req.n_simulations, req.seed)
+    block_99   = _build_var_block(portfolio_lb, 0.99,            req.n_simulations, req.seed)
+
+    # ── Kupiec en los 3 métodos al nivel principal ──────────────────────
+    raw_main = calculate_var_cvar(portfolio_lb, confidence=req.confidence,
+                                  n_simulations=req.n_simulations, seed=req.seed)
+    kupiec: dict = {}
     for method in ("Historico", "Parametrico", "Montecarlo"):
-        var_val = result[method]["VaR"]
-        backtesting[method] = kupiec_test(portfolio_ret, var_val, req.confidence)
+        var_val = raw_main[method]["VaR"]
+        kupiec[method] = kupiec_test(portfolio_lb, var_val, req.confidence)
+
+    passes_summary = {m: kupiec[m]["passed"] for m in ("Historico", "Parametrico", "Montecarlo")}
+    methods_pass = [m for m, p in passes_summary.items() if p is True]
+
+    # ── Tabla comparativa con interpretación ────────────────────────────
+    comparison_rows = []
+    for method in ("Historico", "Parametrico", "Montecarlo"):
+        d = block_main[method]
+        comparison_rows.append({
+            "method":      method,
+            "VaR_daily":   d["VaR_daily"],
+            "VaR_annual":  d["VaR_annual"],
+            "CVaR_daily":  d["CVaR_daily"],
+            "CVaR_annual": d["CVaR_annual"],
+            "kupiec_passes": kupiec[method]["passed"],
+            "kupiec_verdict": kupiec[method]["verdict"],
+        })
+
+    diff_interp_parts: list[str] = []
+    var_h = block_main["Historico"]["VaR_daily"]
+    var_p = block_main["Parametrico"]["VaR_daily"]
+    var_m = block_main["Montecarlo"]["VaR_daily"]
+    if var_h > var_p * 1.05:
+        diff_interp_parts.append(
+            f"Histórico ({var_h:.4f}) > Paramétrico ({var_p:.4f}) → la distribución empírica tiene colas más pesadas que la normal asumida.")
+    if abs(var_m - var_p) / max(var_p, 1e-9) < 0.10:
+        diff_interp_parts.append(
+            "Monte Carlo ≈ Paramétrico → ambos asumen normalidad y producen valores similares.")
+    if methods_pass:
+        diff_interp_parts.append(f"Pasan Kupiec: {', '.join(methods_pass)}.")
+    else:
+        diff_interp_parts.append("Ningún método pasa Kupiec en esta ventana — revisar régimen del activo.")
+
+    # ── Datos para histograma con líneas verticales VaR/CVaR ────────────
+    hist_data = portfolio_lb.tolist()
+    chart_data = {
+        "portfolio_returns": _safe_json(hist_data[-500:]),  # cap para no sobrecargar
+        "n_returns":         int(len(portfolio_lb)),
+        "vertical_lines": {
+            "VaR_Historico_95":   -block_main["Historico"]["VaR_daily"],
+            "VaR_Parametrico_95": -block_main["Parametrico"]["VaR_daily"],
+            "VaR_Montecarlo_95":  -block_main["Montecarlo"]["VaR_daily"],
+            "CVaR_Historico_95":  -block_main["Historico"]["CVaR_daily"],
+            "VaR_Historico_99":   -block_99["Historico"]["VaR_daily"],
+        },
+    }
+
     return json_response({
         "tickers":       req.tickers,
         "weights":       req.weights,
         "confidence":    req.confidence,
         "n_simulations": req.n_simulations,
-        "var_cvar":      result,
-        "kupiec":        backtesting,
+        "seed":          req.seed,
+        "lookback_days_used": lookback,
+        "n_returns_total":    int(len(portfolio_ret)),
+        # Bloques principales del response (conservados + nuevos)
+        "var_cvar":      raw_main,                 # legacy
+        "kupiec":        kupiec,                   # legacy
+        # Nuevos campos del instructivo
+        "parametric":    block_main["Parametrico"],
+        "historical":    block_main["Historico"],
+        "montecarlo":    block_main["Montecarlo"],
+        "cvar":          {
+            "Historico":   block_main["Historico"]["CVaR_daily"],
+            "Parametrico": block_main["Parametrico"]["CVaR_daily"],
+            "Montecarlo":  block_main["Montecarlo"]["CVaR_daily"],
+            "interpretation": (
+                "CVaR (Expected Shortfall) mide la pérdida promedio condicionada a "
+                "que se exceda el VaR. Es siempre >= VaR y captura la severidad del riesgo de cola."
+            ),
+        },
+        "var_99":        block_99,
+        "comparison_table": {
+            "rows":           comparison_rows,
+            "interpretation": " ".join(diff_interp_parts),
+        },
+        "kupiec_test": {
+            "lookback_days":  lookback,
+            "confidence":     req.confidence,
+            "by_method":      kupiec,
+            "passes_summary": passes_summary,
+            "methods_passing": methods_pass,
+            "interpretation": (
+                f"Kupiec POF aplicado a los 3 métodos en ventana de {lookback} días "
+                f"(mínimo exigido: 250). Pasan: {methods_pass if methods_pass else 'ninguno'}. "
+                "LR_POF se compara contra chi²(1)=3.84 al 95%."
+            ),
+        },
+        "chart_data":    chart_data,
     })
 
 
