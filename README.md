@@ -455,9 +455,55 @@ Pipeline completo `train → joblib → load → predict` con clasificación dir
 
 > ⚠️ **El módulo ML es una herramienta analítica académica.** No constituye recomendación financiera ni garantía de rentabilidad. Las predicciones son probabilísticas y no consideran costos de transacción, liquidez ni cambios de régimen.
 
-### M8 — Portafolio vs. Benchmark S&P 500
+### M8 — Macro y Benchmark
 
-Compara el portafolio óptimo (pesos del máximo Sharpe) frente al S&P 500 con retorno acumulado base 100, curvas de drawdown máximo, Alpha de Jensen anualizado, Beta del portafolio, Tracking Error, Information Ratio y R². Incorpora un panel de **contexto macroeconómico** con datos en tiempo real: tasa libre de riesgo (^IRX), rendimiento del Tesoro EE.UU. a 10 años (^TNX) y retorno YTD del S&P 500. Estas tres métricas macro contextualizan los resultados del portafolio dentro del entorno de tasas y mercado vigente.
+Combina dos sub-módulos del análisis de portafolio: el **panel macroeconómico** que
+contextualiza el entorno de tasas, inflación y tipo de cambio, y la **comparación
+portafolio óptimo vs. benchmark** que cuantifica el desempeño relativo.
+
+#### Panel macroeconómico (`GET /api/v1/macro` / alias `GET /macro`)
+
+Response tipado por Pydantic (`MacroIndicators`):
+
+| Campo               | Fuente primaria          | Fallback           |
+|---------------------|--------------------------|--------------------|
+| `rf_rate`           | FRED.DGS3MO              | yfinance ^IRX      |
+| `treasury_10y`      | FRED.DGS10               | yfinance ^TNX      |
+| `spx_ytd`           | yfinance ^GSPC           | _(no fallback)_    |
+| `inflation_yoy`     | FRED.CPIAUCSL (YoY calc) | _(opcional)_       |
+| `usdcop`            | yfinance COP=X           | _(opcional)_       |
+
+Cada métrica reporta su `_source` explícitamente — el endpoint **no finge** que el
+dato viene de FRED cuando usa fallback. Cache transparente en SQLite con
+**TTL 24h** vía `fred_cache` (controlado por `services/fred_service.py`).
+`cache_status` por serie (`hit` / `miss` / `stale_used`) viaja en el response cuando FRED está habilitado.
+
+#### Comparación con benchmark (`GET /api/v1/benchmark` / alias `GET /benchmark`)
+
+Extiende el CAPM del M4 con métricas de desempeño relativo del portafolio Max Sharpe
+contra el S&P 500. La función `compute_benchmark` (reutilizada también en
+`/api/v1/all` y `data.js`) devuelve:
+
+- **Curvas base 100**: `Port_Cum`, `Bench_Cum` con `Dates` alineadas
+- **Series de drawdown**: `Port_DD`, `Bench_DD`
+- **Métricas por activo** (Port y Bench): `Ann_Return`, `Ann_Volatility`, `Sharpe`, `Max_Drawdown`
+- **Métricas relativas**: `Jensen_Alpha` (anualizado), `Beta`, `Tracking_Error` (anual), `Information_Ratio`, `R_Squared`
+- **`interpretation`** textual: si el alpha es positivo/negativo, si el IR es favorable, si el Sharpe del portafolio supera al benchmark; sin recomendaciones absolutas
+- **`benchmark_ticker`** y **`rf_rate`**: garantizan trazabilidad y consistencia con el CAPM del M4
+
+#### Justificación del benchmark `^GSPC`
+
+Todos los activos cotizan en USD en NYSE/NASDAQ. Coherencia de divisa (Rf y benchmark
+ambos en USD), estándar académico para CAPM (Sharpe 1964, Lintner 1965), disponible
+directamente en yfinance. La métrica `usdcop` se incluye para contextualizar el
+poder adquisitivo en pesos colombianos pero NO se mezcla en la lógica del benchmark.
+
+#### Significancia estadística del Alpha
+
+El endpoint reporta `Jensen_Alpha` anualizado pero **no calcula la significancia
+estadística** (t-stat sobre el intercepto de la regresión). Está documentado como
+pendiente — el cálculo es trivial pero se deja para una fase posterior para no
+alterar el contrato del endpoint.
 
 ---
 
@@ -726,7 +772,9 @@ No requiere `FRED_API_KEY` real — los tests usan datos sintéticos y fallback 
 | GET | `/api/v1/precios/{ticker}` | Precios OHLCV con cache transparente en SQLAlchemy |
 | GET | `/api/v1/precios/cache` | Resumen del cache de precios (n_assets, n_prices) |
 | GET | `/api/v1/opcion/precio/{ticker}` | Opción sobre un activo del portafolio (S y σ obtenidos automáticamente) |
-| GET | `/api/v1/macro` | Contexto macro (Rf, T10Y, S&P YTD) — M8 |
+| GET | `/api/v1/macro` | Contexto macro tipado (Rf, T10Y, S&P YTD, inflación, USDCOP) — M8 |
+| GET | `/api/v1/benchmark` | Comparación Portafolio óptimo vs benchmark con Alpha, TE e IR — M8 |
+| GET | `/benchmark` | Alias corto de la comparación contra benchmark — M8 |
 | GET | `/api/v1/all` | Todos los módulos en una sola llamada |
 
 **Parámetros comunes:**
