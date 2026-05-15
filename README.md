@@ -343,15 +343,48 @@ El test de Proportion of Failures aplica a los **3 métodos** simultáneamente:
 
 ### M6 — Optimización de Portafolio (Markowitz por Monte Carlo + QP)
 
-Tres niveles de optimización conviven en el mismo módulo:
+#### Formulación explícita del problema (M-II-4)
 
-1. **Simulación Monte Carlo (10,000 portafolios)** con pesos aleatorios y Σwᵢ = 1, para visualizar el conjunto factible y aproximar la frontera eficiente.
+```
+minimizar:    wᵀ Σ w                    (varianza del portafolio)
+sujeto a:     wᵀ μ  = μ*                (rendimiento objetivo, opcional)
+              Σᵢ wᵢ = 1                 (los pesos suman 1)
+              wᵢ ≥ 0   ∀ i              (no-negatividad — versión long-only)
+```
+
+donde **w** es el vector de pesos, **μ** es el vector de rendimientos esperados anualizados, **Σ** es la matriz de covarianzas anualizada, y **μ\*** el rendimiento objetivo. Es un **problema cuadrático convexo** (función objetivo cuadrática + restricciones lineales).
+
+#### Implementación
+
+Cuatro niveles conviven en el módulo:
+
+1. **Simulación Monte Carlo (10,000 portafolios)** con pesos aleatorios y Σwᵢ = 1, para visualizar el conjunto factible.
 2. **Programación cuadrática explícita (SLSQP)** que resuelve numéricamente:
    - **Mínima varianza global**: `min wᵀΣw  s.t. Σwᵢ = 1`
    - **Máximo Sharpe**: `max (wᵀμ − Rƒ)/√(wᵀΣw)  s.t. Σwᵢ = 1`
    En **dos versiones**: long-only (wᵢ ≥ 0) y con short-selling permitido (wᵢ ∈ [-1, 1]).
-3. **Comparación interpretativa con/sin no-negatividad**: identifica activos con peso 0 en long-only, posiciones cortas cuando se permiten, y la ganancia de Sharpe que aporta levantar la restricción.
-4. **Rendimiento objetivo** (legacy SLSQP): dada una tasa anual deseada, encuentra la composición de mínima volatilidad que la alcanza exactamente.
+3. **Frontera eficiente paramétrica**: 30 puntos resolviendo `min wᵀΣw  s.t. wᵀμ = μ*` para cada μ* en el grid `[μ_min, μ_max]`. Devuelve `efficient_frontier_curve_long_only` y `efficient_frontier_curve_with_short` con `target_returns`, `min_volatility`, `weights` por punto y `n_converged`.
+4. **Rendimiento objetivo individual** (endpoint `/portfolio/target`): dada una tasa anual deseada, encuentra la composición exacta.
+
+#### Comparación con/sin no-negatividad (M-II-5)
+
+El response `comparison_long_only_vs_short_allowed` incluye:
+
+- **`composition_table`**: filas por activo con pesos en % para min-var y max-Sharpe, en ambas versiones (long-only y short-permitido)
+- **`zero_weight_in_long_only`**: lista de activos que quedan en cero (esquinas del conjunto factible)
+- **`short_positions_when_allowed`**: lista de activos en posición corta cuando se permite
+- **`restriction_cost`**: costo cuantificado de imponer no-negatividad
+  - `delta_sharpe_max`, `delta_return_max`, `delta_volatility_max` sobre el max-Sharpe
+  - `delta_min_variance` sobre el portafolio de mínima varianza
+- **`interpretation`** textual
+
+#### Discusión del costo de la restricción
+
+Cuando se impone wᵢ ≥ 0:
+- **Pierde flexibilidad** para combinar posiciones cortas con largas (no puede usar venta en corto para reducir varianza)
+- **Gana realismo** para inversionistas minoristas que no pueden vender en corto fácilmente
+- La frontera con no-negatividad es **un subconjunto** de la frontera sin restricción → siempre la "domina por debajo": misma volatilidad o más para un retorno objetivo dado
+- En este portafolio: ΔSharpe ≈ +0.058 al permitir short, ΔVol_min ≈ 0 → la restricción no es vinculante en mín-varianza pero sí cuesta algo en max-Sharpe
 
 La matriz de correlación entre activos se visualiza como heatmap interactivo (escala RdBu de −1 a +1).
 

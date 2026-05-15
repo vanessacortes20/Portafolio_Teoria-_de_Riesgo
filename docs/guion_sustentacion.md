@@ -90,12 +90,17 @@ El **test ARCH-LM** (Engle 1982) sobre residuos GARCH(1,1) con 5 lags es el test
 
 ## 6. Markowitz QP (M6, 2 min)
 
-Tres niveles conviven:
-1. **Monte Carlo (10k portafolios)** para visualizar el conjunto factible
-2. **QP determinista (SLSQP)** que resuelve `min wᵀΣw  s.t. Σwᵢ=1` para mín varianza, y `max (μᵀw − Rf)/√(wᵀΣw)` para máx Sharpe
-3. **Comparación con/sin no-negatividad**: long-only (wᵢ≥0) vs short permitido (wᵢ∈[-1,1])
+> "El M6 formula explícitamente la optimización Markowitz como un **problema cuadrático convexo**: minimizar wᵀΣw sujeto a Σwᵢ=1 (los pesos suman 1), opcionalmente wᵢ≥0 (no-negatividad), y opcionalmente wᵀμ=μ* (rendimiento objetivo). Función objetivo cuadrática + restricciones lineales = QP."
 
-Con el portafolio actual NU es el primero en quedar en 0 en long-only y en posición corta cuando se permite. La ganancia de Sharpe es marginal — el long-only ya está cerca del óptimo no restringido.
+Cuatro niveles conviven:
+1. **Monte Carlo (10,000 portafolios)** para visualizar el conjunto factible
+2. **QP determinista (SLSQP)** que resuelve `min wᵀΣw  s.t. Σwᵢ=1` para mín varianza, y `max (μᵀw − Rf)/√(wᵀΣw)` para máx Sharpe
+3. **Frontera eficiente paramétrica**: 30 puntos resolviendo el QP para cada μ* en grid (no solo dos puntos óptimos sueltos sino la curva completa)
+4. **Comparación con/sin no-negatividad**: long-only (wᵢ≥0) vs short permitido (wᵢ∈[-1,1])
+
+> "El response incluye `composition_table` con los pesos % por activo en las dos versiones, y `restriction_cost` que cuantifica explícitamente cuánto se pierde al imponer no-negatividad: ΔSharpe, ΔReturn, ΔVolatility en el max-Sharpe, y ΔVol en la mín-varianza."
+
+Con el portafolio actual: NU es el primero en quedar en cero en long-only y en posición corta cuando se permite (-15.4%). El short mejora el Sharpe en +0.058 (+5.8 puntos), aumenta retorno +2.7% y vol +1.0%, pero la mín-varianza es prácticamente igual con o sin restricción → la restricción cuesta poco en lo conservador, algo más en lo agresivo.
 
 ---
 
