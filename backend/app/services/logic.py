@@ -294,32 +294,41 @@ def calculate_var_cvar(
     returns: pd.Series,
     confidence: float = 0.95,
     n_simulations: int = 10_000,
+    seed: int = 42,
 ) -> dict:
     """
     Computes Historical, Parametric (Normal) and Monte Carlo VaR/CVaR.
+
     Returns losses as positive values (conventional VaR sign).
+
+    seed: semilla NumPy para reproducibilidad del Monte Carlo. Default 42.
+          La distribución asumida es Normal(μ, σ) con μ y σ empíricos de
+          los retornos del portafolio.
     """
     percentile = (1 - confidence) * 100
 
-    # 1. Historical
+    # 1. Historical (no paramétrico — percentil empírico)
     var_hist  = np.percentile(returns, percentile)
     cvar_hist = returns[returns <= var_hist].mean()
 
-    # 2. Parametric (Normal)
+    # 2. Parametric (asume Normal)
     mu, sigma = returns.mean(), returns.std()
     z = stats.norm.ppf(1 - confidence)
     var_param  = mu + sigma * z
     cvar_param = mu - sigma * stats.norm.pdf(z) / (1 - confidence)
 
-    # 3. Monte Carlo
-    sims   = np.random.normal(mu, sigma, n_simulations)
+    # 3. Monte Carlo (Normal(μ, σ) con semilla fija para reproducibilidad)
+    rng    = np.random.default_rng(seed)
+    sims   = rng.normal(mu, sigma, n_simulations)
     var_mc  = np.percentile(sims, percentile)
     cvar_mc = sims[sims <= var_mc].mean()
 
     return {
         "Historico":   {"VaR": abs(var_hist),  "CVaR": abs(cvar_hist)},
         "Parametrico": {"VaR": abs(var_param),  "CVaR": abs(cvar_param)},
-        "Montecarlo":  {"VaR": abs(var_mc),     "CVaR": abs(cvar_mc)},
+        "Montecarlo":  {"VaR": abs(var_mc),     "CVaR": abs(cvar_mc),
+                        "distribution": "Normal(mu_emp, sigma_emp)",
+                        "seed": seed},
         "confidence":     confidence,
         "n_simulations":  n_simulations,
     }
@@ -345,6 +354,29 @@ def kupiec_test(returns: pd.Series, var_value: float, confidence: float = 0.95) 
         lr_stat = None
         p_value = None
 
+    # Interpretación textual: ¿el modelo subestima o sobreestima el riesgo?
+    if lr_stat is None:
+        verdict = "no determinable"
+        interp = (f"No hay excepciones suficientes para evaluar (N={N} de T={T}). "
+                  f"El test requiere 0 < p̂ < 1.")
+    else:
+        passes = bool(p_value > 0.05)
+        if passes:
+            verdict = "modelo correcto"
+            interp = (f"Tasa observada p̂={p_hat*100:.2f}% vs esperada {p*100:.2f}%. "
+                      f"LR_POF={lr_stat:.3f} ≤ 3.84 (chi²(1) al 95%); p={p_value:.4g}. "
+                      f"No se rechaza H0 → la frecuencia de excedencias es coherente con el VaR declarado.")
+        elif p_hat > p:
+            verdict = "subestima el riesgo"
+            interp = (f"Tasa observada p̂={p_hat*100:.2f}% > esperada {p*100:.2f}%. "
+                      f"LR_POF={lr_stat:.3f} > 3.84 → se rechaza H0. "
+                      f"El modelo SUBESTIMA el riesgo: ocurren más excedencias de las que el VaR predice.")
+        else:
+            verdict = "sobreestima el riesgo"
+            interp = (f"Tasa observada p̂={p_hat*100:.2f}% < esperada {p*100:.2f}%. "
+                      f"LR_POF={lr_stat:.3f} > 3.84 → se rechaza H0. "
+                      f"El modelo SOBREESTIMA el riesgo: el VaR es demasiado conservador.")
+
     return {
         "T":                   T,
         "N_exceptions":        N,
@@ -354,6 +386,8 @@ def kupiec_test(returns: pd.Series, var_value: float, confidence: float = 0.95) 
         "LR_stat":             round(lr_stat, 6) if lr_stat is not None else None,
         "p_value":             round(p_value, 6) if p_value is not None else None,
         "passed":              (p_value > 0.05) if p_value is not None else None,
+        "verdict":             verdict,
+        "interpretation":      interp,
     }
 
 
