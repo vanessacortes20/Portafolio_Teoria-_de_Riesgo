@@ -435,11 +435,37 @@ class SignalItem(BaseModel):
 
 ### M9 — Renta Fija (Curva de Rendimiento + Nelson-Siegel + Bono)
 
-Combina dos servicios financieros del mercado de tasas:
+Combina dos servicios financieros del mercado de tasas, encapsulados como clases
+en `backend/app/services/`:
 
-- **Curva de rendimiento** del Tesoro EE.UU. construida desde 6 series FRED (DGS3MO, DGS1, DGS2, DGS5, DGS10, DGS30) con cache transparente de 24h. Si `FRED_API_KEY` no está configurada, devuelve una curva DEMO marcada como `source: fallback_demo`.
-- **Ajuste Nelson-Siegel** por mínimos cuadrados no lineales (scipy.optimize.least_squares) con bounds en λ. Devuelve β₀ (nivel), β₁ (pendiente), β₂ (curvatura), λ (decay), `fitted_yields`, `rmse` e interpretación cualitativa de la forma de la curva.
-- **Bono sintético** (clase `Bond`) con cálculo analítico de precio, duración Macaulay/modificada, convexidad y batería de shocks (±50/±100/±200 bp) comparando aproximación lineal con duración, segundo orden con convexidad y reprice exacto.
+#### Clase `YieldCurve` (`services/yield_curve.py`)
+
+- **Descarga de la curva del Tesoro EE.UU.** desde 6 series FRED:
+  `DGS3MO`, `DGS1`, `DGS2`, `DGS5`, `DGS10`, `DGS30` (cubre todos los vencimientos clave).
+- **Cache transparente en SQLite** vía tabla `fred_cache` con TTL 24h. `cache_status` por serie (`hit`/`miss`/`stale_used`) aparece en el response.
+- **Fallback declarado**: si `FRED_API_KEY` no está configurada o falla, devuelve curva DEMO marcada como `source: "fallback_demo"` — el endpoint nunca finge que el dato es real de FRED.
+- **`fit_nelson_siegel(maturities, yields)`** — ajusta los 4 parámetros (β₀, β₁, β₂, λ) por **mínimos cuadrados no lineales** con `scipy.optimize.least_squares` y bounds en λ ∈ [0.05, 30]. Reporta `rmse`, `fitted_yields`, `converged` (bool) y dos niveles de interpretación:
+  - `interpretation`: diagnóstico cualitativo de la forma (normal / plana / invertida).
+  - `param_interpretation`: explicación de cada parámetro (β₀ = nivel de largo plazo, β₁ = pendiente corto−largo, β₂ = curvatura, λ = velocidad de decay).
+- **`spot_rate(tau)`** — yield estimado a cualquier plazo τ usando los parámetros ajustados (escalar o lista).
+- **`interpolated_curve(n=50)`** — curva spot densa entre 0.25 y 30 años para visualización suave en el frontend (clave `interpolated_curve` en el response).
+
+#### Clase `Bond` (`services/bond.py`)
+
+Bono sintético con cupón fijo. Parámetros validados por Pydantic (`BondRequest`):
+`face_value > 0`, `coupon_rate ∈ [0,1]`, `maturity_years ∈ (0,100]`, `yield_rate ∈ [0,1]`, `frequency ∈ {1,2,4,12}`.
+
+Métodos analíticos:
+- **`price()`** — descuento de flujos sobre el yield actual o un yield alternativo.
+- **`macaulay_duration()`** — tiempo promedio ponderado de los flujos.
+- **`modified_duration()`** — sensibilidad porcentual del precio: D* = D/(1+y/m).
+- **`convexity()`** — curvatura del precio respecto al yield, corrección de segundo orden.
+- **`shock_sensitivity()`** — para cada shock en `(-200, -100, -50, +50, +100, +200)` bp, compara **tres aproximaciones**:
+  - `duration_only_pct`: ΔP/P ≈ −D*·Δy (lineal con duración)
+  - `duration_convex_pct`: ΔP/P ≈ −D*·Δy + ½·C·(Δy)² (segundo orden)
+  - `exact_pct`: reprice exacto descontando todos los flujos a (y + Δy)
+
+`summary()` devuelve precio, las tres duraciones, convexidad, tabla completa de shocks e interpretación cualitativa según la duración (corto/intermedio/largo).
 
 ### M10 — Opciones Europeas (Black-Scholes + Greeks)
 
