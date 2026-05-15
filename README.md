@@ -390,14 +390,48 @@ La matriz de correlación entre activos se visualiza como heatmap interactivo (e
 
 ### M7 — Señales y Alertas Técnicas (con persistencia)
 
-Evalúa el estado actual de cada indicador (RSI, MACD, Bollinger) sobre la última sesión disponible y genera señales de compra/venta con **explicaciones en lenguaje natural**. Cada señal explica por qué se activa, qué implica económicamente y qué limitaciones tiene.
+Evalúa de forma automática las **cinco reglas técnicas** exigidas por el instructivo
+sobre el último registro disponible de cada activo y genera señales accionables con
+**explicaciones en lenguaje natural** prudentes (sin recomendaciones absolutas).
+
+**Reglas implementadas (`SignalGenerator.evaluate_all`):**
+1. **Cruce del MACD** — línea MACD cruzando línea de señal (con fallback al histograma si las líneas no están disponibles).
+2. **RSI extremo** — sobrecompra/sobreventa con umbrales configurables.
+3. **Bandas de Bollinger** — precio tocando o cruzando banda superior/inferior (±k·σ).
+4. **Cruce de medias móviles** — Golden cross (SMA20 cruza por encima de SMA50) y Death cross (lo opuesto).
+5. **Oscilador Estocástico** — %K cruzando %D en zonas extremas.
+
+La lógica vive en una **clase `SignalGenerator`** (`backend/app/services/signals.py`)
+con un método por regla (`macd_cross`, `rsi_extreme`, `bollinger_touch`,
+`moving_average_cross`, `stochastic_signal`) y un agregador `evaluate_all`.
+
+**Endpoints:**
+- `GET /api/v1/signals/{ticker}` y alias `GET /alertas/{ticker}` — devuelve un `SignalReport` (Pydantic) con ticker, timestamp, lista de señales tipadas, thresholds usados y `persisted_count`.
+- `GET /alertas` (sin ticker) — **panel consolidado**: itera sobre todos los activos del portafolio y retorna un reporte por activo + total agregado.
+- `GET /api/v1/signals/{ticker}/history` y alias `GET /alertas/{ticker}/history` — historial persistido de señales.
 
 **Umbrales configurables vía query parameters** (validados por Pydantic):
 - `rsi_overbought` (50–99, default 70)
 - `rsi_oversold` (1–50, default 30)
-- `bollinger_std` (default 2.0)
+- `bollinger_std` (0 < σ ≤ 5, default 2.0)
+- `stoch_overbought` (50–99, default 80)
+- `stoch_oversold` (1–50, default 20)
+- `persist` (bool, default true)
 
-**Persistencia en `signals_log`** (SQLAlchemy): cada señal disparada se guarda con timestamp, ticker, regla, valor y nota interpretativa. Se evita duplicar señales del mismo ticker/regla/día. Endpoint adicional `GET /api/v1/signals/{ticker}/history` devuelve el historial ordenado por fecha descendente.
+**Persistencia en `signals_log`** (SQLAlchemy): cada señal disparada se guarda con
+`timestamp`, `ticker`, `rule`, `value` y `note`. Se evita duplicar señales del mismo
+ticker/regla/día.
+
+**Modelo Pydantic `SignalReport`** (response model del endpoint):
+```python
+class SignalItem(BaseModel):
+    id: str
+    rule: Optional[str]
+    type: str            # "buy" | "sell"
+    value: Optional[float]
+    msg: str
+    explanation: Optional[str]   # interpretación en lenguaje simple
+```
 
 ### M9 — Renta Fija (Curva de Rendimiento + Nelson-Siegel + Bono)
 
@@ -680,6 +714,9 @@ No requiere `FRED_API_KEY` real — los tests usan datos sintéticos y fallback 
 | GET | `/api/v1/portfolio/target` | Optimización por rendimiento objetivo — M6 |
 | GET | `/api/v1/signals/{ticker}` | Señales técnicas automáticas + persistencia — M7 |
 | GET | `/api/v1/signals/{ticker}/history` | Historial de señales persistidas — M7 |
+| GET | `/alertas` | Panel consolidado de señales para todos los activos del portafolio — M7 |
+| GET | `/alertas/{ticker}` | Alias corto del endpoint de señales por activo — M7 |
+| GET | `/alertas/{ticker}/history` | Alias corto del historial persistido — M7 |
 | GET | `/api/v1/curva-rendimiento` | Curva FRED + ajuste Nelson-Siegel — M9 |
 | POST | `/api/v1/bono/duracion` | Bono sintético: precio, duración, convexidad — M9 |
 | POST | `/api/v1/opcion/precio` | Black-Scholes + Greeks + paridad put-call — M10 |
