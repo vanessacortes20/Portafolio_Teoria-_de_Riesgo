@@ -27,7 +27,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_DB_FILE = (_PROJECT_ROOT / "data" / "risklab.db").as_posix()
+_DEFAULT_DB_FILE = (_PROJECT_ROOT / "data" / "risklab_users.db").as_posix()
 
 
 class Settings(BaseSettings):
