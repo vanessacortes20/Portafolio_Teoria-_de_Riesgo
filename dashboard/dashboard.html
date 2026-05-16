@@ -522,7 +522,16 @@
   <button class="nav-btn" data-page="m6" onclick="navigate('m6')">💎 M6 — Optimización</button>
   <button class="nav-btn" data-page="m7" onclick="navigate('m7')">🔔 M7 — Señales y Alertas</button>
   <button class="nav-btn" data-page="m8" onclick="navigate('m8')">🌍 M8 — Benchmark</button>
-  <button class="nav-btn" data-page="m9" onclick="navigate('m9')">🚀 M9 — Oportunidades</button>
+  <button class="nav-btn" data-page="m9" onclick="navigate('m9')">🚀 Roadmap & Mejoras</button>
+
+  <hr>
+
+  <!-- ── Módulos extendidos: EWMA, renta fija, opciones, stress, ML ── -->
+  <button class="nav-btn" data-page="ewma"     onclick="navigate('ewma')">🌊 M3⁺ — EWMA</button>
+  <button class="nav-btn" data-page="rentafija" onclick="navigate('rentafija')">🏦 M9 — Renta Fija</button>
+  <button class="nav-btn" data-page="opciones" onclick="navigate('opciones')">📜 M10 — Opciones</button>
+  <button class="nav-btn" data-page="stress"   onclick="navigate('stress')">⚡ M11 — Stress Test</button>
+  <button class="nav-btn" data-page="ml"       onclick="navigate('ml')">🤖 ML — Predicción</button>
 
   <hr />
   <div class="nav-label">⚙️ Parámetros de Análisis</div>
@@ -1559,6 +1568,11 @@ function renderPage() {
     case 'm7':     renderM7();     break;
     case 'm8':     renderM8();     break;
     case 'm9':     renderM9();     break;
+    case 'ewma':      renderEWMA();      break;
+    case 'rentafija': renderRentaFija(); break;
+    case 'opciones':  renderOpciones();  break;
+    case 'stress':    renderStress();    break;
+    case 'ml':        renderML();        break;
     default:       renderHome();
   }
 }
@@ -3510,6 +3524,517 @@ function renderM9() {
     <div class="footer">RiskLab USTA · M9 Hoja de Ruta Estratégica</div>`);
 }
 
+
+// ═══════════════════════════════════════════
+//  MÓDULOS EXTENDIDOS (commit 15)
+//  EWMA · Renta Fija · Opciones · Stress · ML
+// ═══════════════════════════════════════════
+
+/** Helper compartido: fetch con feedback de error en el panel. */
+async function _apiFetch(url, opts = {}) {
+  try {
+    const res = await fetch(API_BASE + url, opts);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`${res.status} — ${text || res.statusText}`);
+    }
+    return await res.json();
+  } catch (err) {
+    throw new Error(err.message || 'Error de red');
+  }
+}
+
+function _spinnerHTML(label = 'Cargando…') {
+  return `<div class="card" style="padding:24px;text-align:center;color:#64748b">
+    <div style="font-size:1.4rem;margin-bottom:6px">⏳</div>
+    <div>${label}</div>
+  </div>`;
+}
+
+function _errorHTML(msg) {
+  return `<div class="card" style="padding:18px;background:#FEF2F2;border:1px solid #FECACA;color:#991B1B">
+    <strong>⚠️ Error:</strong> ${msg}
+  </div>`;
+}
+
+// ─────────────────────────────────────────
+//  M3⁺ — EWMA (RiskMetrics)
+// ─────────────────────────────────────────
+async function renderEWMA() {
+  const ticker = (state.activeTickers && state.activeTickers[0]) || (D && D.tickers && D.tickers[0]) || 'AAPL';
+  setContent(`
+    <h1 class="header-gradient">M3⁺ — Volatilidad EWMA (RiskMetrics)</h1>
+    <p class="page-subtitle">Suavizamiento exponencial con λ configurable, comparado con la volatilidad condicional GARCH.</p>
+
+    <div class="card" style="padding:16px;margin-bottom:18px">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
+        <div>
+          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">Ticker</label>
+          <select id="ewma-ticker" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-weight:600">
+            ${(D?.tickers || [ticker]).map(t => `<option value="${t}" ${t===ticker?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ (decay)</label>
+          <input id="ewma-lambda" type="number" value="0.94" min="0.50" max="0.999" step="0.01"
+            style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600">
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ extra (CSV)</label>
+          <input id="ewma-extras" type="text" value="0.90,0.97" placeholder="0.90,0.97"
+            style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:140px">
+        </div>
+        <button id="ewma-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular</button>
+      </div>
+    </div>
+
+    <div id="ewma-output">${_spinnerHTML('Esperando primera consulta…')}</div>
+    <div class="footer">RiskLab USTA · M3⁺ — Endpoint <code>/api/v1/volatility/{ticker}</code></div>
+  `);
+
+  document.getElementById('ewma-run').addEventListener('click', _runEWMA);
+  _runEWMA();
+}
+
+async function _runEWMA() {
+  const t = document.getElementById('ewma-ticker').value;
+  const lam = document.getElementById('ewma-lambda').value;
+  const extras = document.getElementById('ewma-extras').value.trim();
+  const out = document.getElementById('ewma-output');
+  out.innerHTML = _spinnerHTML(`Consultando volatilidad de ${t}…`);
+
+  const qs = new URLSearchParams({ewma_lambda: lam});
+  if (extras) qs.set('ewma_extra_lambdas', extras);
+
+  try {
+    const data = await _apiFetch(`/api/v1/volatility/${t}?${qs}`);
+    const ewma = data.EWMA || {};
+    const comp = data.EWMA_Comparison || {};
+    const garchVol = (data['GARCH(1,1)'] || {}).Volatility || [];
+
+    const traces = [];
+    if (Array.isArray(ewma.volatility) && ewma.volatility.length) {
+      traces.push({y: ewma.volatility, mode:'lines', name:`EWMA(λ=${lam})`, line:{color:'#2563EB',width:2.2}});
+    }
+    if (garchVol.length) {
+      traces.push({y: garchVol, mode:'lines', name:'GARCH(1,1)', line:{color:'#DC2626',width:1.6,dash:'dot'}});
+    }
+    Object.entries(comp).forEach(([k, arr], i) => {
+      const palette = ['#16A34A','#9333EA','#EA580C','#0891B2'];
+      traces.push({y: arr, mode:'lines', name:`EWMA(λ=${k})`, line:{color:palette[i%palette.length],width:1.2,dash:'dash'}, opacity:0.6});
+    });
+
+    out.innerHTML = `
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <h3 style="margin:0 0 12px;font-size:1rem">σ actual estimada (último día)</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          <div><div style="font-size:.72rem;color:#64748b">σ diario</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#1e3a8a">${(ewma.current_volatility_daily*100||0).toFixed(3)}%</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">σ anualizado</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#9333EA">${(ewma.current_volatility_annual*100||0).toFixed(2)}%</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">λ usado</div>
+            <div style="font-size:1.4rem;font-weight:700">${ewma.lambda||lam}</div></div>
+        </div>
+      </div>
+      <div class="card" style="padding:8px"><div id="ewma-chart" style="height:380px"></div></div>
+      ${(data.EWMA_vs_GARCH_Table||[]).length ? `
+        <div class="card" style="padding:18px;margin-top:14px">
+          <h3 style="margin:0 0 10px;font-size:1rem">EWMA vs GARCH(1,1) — tabla comparativa</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+            <thead><tr style="background:#F1F5F9"><th style="text-align:left;padding:8px">Aspecto</th><th style="text-align:left;padding:8px">EWMA</th><th style="text-align:left;padding:8px">GARCH(1,1)</th></tr></thead>
+            <tbody>${data.EWMA_vs_GARCH_Table.map(r => `<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;font-weight:600">${r.aspect}</td><td style="padding:8px">${r.ewma}</td><td style="padding:8px">${r.garch}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}
+    `;
+    Plotly.newPlot('ewma-chart', traces, {
+      margin:{l:50,r:20,t:10,b:40},
+      yaxis:{title:'σ diaria', tickformat:'.2%'},
+      xaxis:{title:'Observaciones (orden temporal)'},
+      legend:{orientation:'h', y:-0.18},
+    }, {responsive:true, displaylogo:false});
+  } catch (e) {
+    out.innerHTML = _errorHTML(e.message);
+  }
+}
+
+// ─────────────────────────────────────────
+//  M9 — Renta Fija (curva NS + bono sintético)
+// ─────────────────────────────────────────
+async function renderRentaFija() {
+  setContent(`
+    <h1 class="header-gradient">M9 — Renta Fija: curva, Nelson-Siegel, duración y convexidad</h1>
+    <p class="page-subtitle">Curva de tesoros US desde FRED (DGS3MO, DGS1, DGS2, DGS5, DGS10, DGS30) ajustada por Nelson-Siegel, más bono sintético con sensibilidad ante shocks de tasa.</p>
+
+    <div id="curve-output">${_spinnerHTML('Consultando curva de tesoros US…')}</div>
+
+    <div class="card" style="padding:18px;margin-top:18px">
+      <h3 style="margin:0 0 12px;font-size:1rem">Bono sintético: duración y convexidad</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+        <div><label style="font-size:.72rem;color:#475569">Face</label><input id="bond-face" type="number" value="1000" min="1" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">Cupón anual</label><input id="bond-coupon" type="number" value="0.05" min="0" max="0.5" step="0.005" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">Vencimiento (años)</label><input id="bond-maturity" type="number" value="10" min="0.5" max="50" step="0.5" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">Freq (1/2/4)</label><input id="bond-freq" type="number" value="2" min="1" max="4" step="1" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">YTM (opcional)</label><input id="bond-ytm" type="number" value="" placeholder="auto (curva)" min="0" max="0.5" step="0.001" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+      </div>
+      <button id="bond-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular bono</button>
+      <div id="bond-output" style="margin-top:14px"></div>
+    </div>
+
+    <div class="footer">RiskLab USTA · M9 — Endpoints <code>/api/v1/yield-curve</code> y <code>/api/v1/bond/duration</code></div>
+  `);
+
+  document.getElementById('bond-run').addEventListener('click', _runBond);
+
+  try {
+    const data = await _apiFetch('/api/v1/yield-curve?fit_ns=true');
+    const points = data.points || [];
+    const fitted = data.fitted_curve || [];
+    const ns = data.nelson_siegel || {};
+
+    const traceObs = {
+      x: points.map(p => p.maturity_years),
+      y: points.map(p => p.yield * 100),
+      mode:'markers', name:'FRED (observado)',
+      marker:{color:'#DC2626', size:11, line:{color:'#fff',width:1.5}},
+    };
+    const traceFit = {
+      x: fitted.map(p => p.maturity_years),
+      y: fitted.map(p => p.yield * 100),
+      mode:'lines', name:'Nelson-Siegel ajustado', line:{color:'#2563EB', width:2.5},
+    };
+
+    document.getElementById('curve-output').innerHTML = `
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px">
+          <div><div style="font-size:.72rem;color:#64748b">Fuente</div><div style="font-size:1rem;font-weight:700">${data.source||'—'}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">As of</div><div style="font-size:1rem;font-weight:700">${data.as_of||'—'}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">Forma</div><div style="font-size:1rem;font-weight:700;color:${data.shape==='inverted'?'#DC2626':data.shape==='flat'?'#EA580C':'#16A34A'}">${data.shape||'—'}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">RMSE NS</div><div style="font-size:1rem;font-weight:700">${(ns.rmse*100||0).toFixed(4)}%</div></div>
+        </div>
+        <div id="curve-chart" style="height:380px"></div>
+      </div>
+      <div class="card" style="padding:16px;margin-bottom:14px">
+        <h4 style="margin:0 0 8px;font-size:.95rem">Parámetros Nelson-Siegel</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;font-size:.85rem">
+          <div><div style="color:#64748b">β₀ (nivel)</div><strong>${(ns.beta0||0).toFixed(4)}</strong></div>
+          <div><div style="color:#64748b">β₁ (pendiente)</div><strong>${(ns.beta1||0).toFixed(4)}</strong></div>
+          <div><div style="color:#64748b">β₂ (curvatura)</div><strong>${(ns.beta2||0).toFixed(4)}</strong></div>
+          <div><div style="color:#64748b">λ (decay)</div><strong>${(ns.lambda||0).toFixed(4)}</strong></div>
+        </div>
+      </div>
+    `;
+    Plotly.newPlot('curve-chart', [traceObs, traceFit], {
+      margin:{l:50,r:20,t:10,b:45},
+      xaxis:{title:'Vencimiento (años)', type:'log'},
+      yaxis:{title:'Rendimiento (%)'},
+      legend:{orientation:'h', y:-0.18},
+    }, {responsive:true, displaylogo:false});
+  } catch (e) {
+    document.getElementById('curve-output').innerHTML = _errorHTML(e.message);
+  }
+}
+
+async function _runBond() {
+  const body = {
+    face: parseFloat(document.getElementById('bond-face').value),
+    coupon_rate: parseFloat(document.getElementById('bond-coupon').value),
+    maturity_years: parseFloat(document.getElementById('bond-maturity').value),
+    freq: parseInt(document.getElementById('bond-freq').value, 10),
+  };
+  const ytm = document.getElementById('bond-ytm').value;
+  if (ytm) body.ytm = parseFloat(ytm);
+
+  const out = document.getElementById('bond-output');
+  out.innerHTML = _spinnerHTML('Calculando duración y sensibilidad…');
+
+  try {
+    const r = await _apiFetch('/api/v1/bond/duration', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    out.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+        <div><div style="font-size:.72rem;color:#64748b">Precio</div><div style="font-size:1.2rem;font-weight:700">${r.price.toFixed(2)}</div></div>
+        <div><div style="font-size:.72rem;color:#64748b">YTM (${r.ytm_source})</div><div style="font-size:1.2rem;font-weight:700">${(r.ytm*100).toFixed(3)}%</div></div>
+        <div><div style="font-size:.72rem;color:#64748b">Macaulay</div><div style="font-size:1.2rem;font-weight:700">${r.macaulay_duration.toFixed(3)}</div></div>
+        <div><div style="font-size:.72rem;color:#64748b">Modificada</div><div style="font-size:1.2rem;font-weight:700">${r.modified_duration.toFixed(3)}</div></div>
+        <div><div style="font-size:.72rem;color:#64748b">Convexidad</div><div style="font-size:1.2rem;font-weight:700">${r.convexity.toFixed(2)}</div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px">
+        <thead><tr style="background:#F1F5F9"><th style="text-align:right;padding:6px">Δy (pb)</th><th style="text-align:right;padding:6px">Lineal (D*)</th><th style="text-align:right;padding:6px">D + Convex</th><th style="text-align:right;padding:6px">Reprice</th></tr></thead>
+        <tbody>${(r.sensitivity||[]).map(s => `<tr style="border-top:1px solid #e2e8f0">
+          <td style="text-align:right;padding:6px">${s.delta_y_bp>0?'+':''}${s.delta_y_bp}</td>
+          <td style="text-align:right;padding:6px;color:${s.approx_linear_pct<0?'#DC2626':'#16A34A'}">${(s.approx_linear_pct*100).toFixed(3)}%</td>
+          <td style="text-align:right;padding:6px;color:${s.approx_full_pct<0?'#DC2626':'#16A34A'}">${(s.approx_full_pct*100).toFixed(3)}%</td>
+          <td style="text-align:right;padding:6px;color:${s.reprice_pct<0?'#DC2626':'#16A34A'}">${(s.reprice_pct*100).toFixed(3)}%</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    `;
+  } catch (e) {
+    out.innerHTML = _errorHTML(e.message);
+  }
+}
+
+// ─────────────────────────────────────────
+//  M10 — Opciones europeas (Black-Scholes)
+// ─────────────────────────────────────────
+function renderOpciones() {
+  setContent(`
+    <h1 class="header-gradient">M10 — Opciones europeas (Black-Scholes)</h1>
+    <p class="page-subtitle">Precio, las cinco Greeks, paridad put-call y volatilidad implícita por Newton-Raphson.</p>
+
+    <div class="card" style="padding:18px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+        <div><label style="font-size:.72rem;color:#475569">S (spot)</label><input id="opt-S" type="number" value="100" min="0.01" step="0.5" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">K (strike)</label><input id="opt-K" type="number" value="100" min="0.01" step="0.5" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">T (años)</label><input id="opt-T" type="number" value="1.0" min="0.01" max="30" step="0.05" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">r (decimal)</label><input id="opt-r" type="number" value="0.05" min="0" max="0.5" step="0.005" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">σ (decimal)</label><input id="opt-sigma" type="number" value="0.20" min="0.01" max="5" step="0.01" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+        <div><label style="font-size:.72rem;color:#475569">Tipo</label><select id="opt-type" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"><option value="call">Call</option><option value="put">Put</option></select></div>
+        <div><label style="font-size:.72rem;color:#475569">Precio observado (IV)</label><input id="opt-mkt" type="number" value="" placeholder="opcional" min="0" step="0.05" style="width:100%;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px"></div>
+      </div>
+      <button id="opt-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular opción</button>
+    </div>
+
+    <div id="opt-output"></div>
+    <div class="footer">RiskLab USTA · M10 — Endpoint <code>/api/v1/option/price</code></div>
+  `);
+
+  document.getElementById('opt-run').addEventListener('click', _runOption);
+  _runOption();
+}
+
+async function _runOption() {
+  const body = {
+    S: parseFloat(document.getElementById('opt-S').value),
+    K: parseFloat(document.getElementById('opt-K').value),
+    T: parseFloat(document.getElementById('opt-T').value),
+    r: parseFloat(document.getElementById('opt-r').value),
+    sigma: parseFloat(document.getElementById('opt-sigma').value),
+    option_type: document.getElementById('opt-type').value,
+  };
+  const mkt = document.getElementById('opt-mkt').value;
+  if (mkt) body.market_price = parseFloat(mkt);
+
+  const out = document.getElementById('opt-output');
+  out.innerHTML = _spinnerHTML('Calculando Black-Scholes…');
+
+  try {
+    const r = await _apiFetch('/api/v1/option/price', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const g = r.greeks || {};
+    const pcp = r.put_call_parity || {};
+    const iv = r.implied_volatility;
+
+    out.innerHTML = `
+      <div class="card" style="padding:18px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+          <div><div style="font-size:.72rem;color:#64748b">Precio (${r.option_type})</div><div style="font-size:1.6rem;font-weight:700;color:#1e3a8a">${r.price.toFixed(4)}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">Δ Delta</div><div style="font-size:1.2rem;font-weight:700">${g.delta?.toFixed(4)}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">Γ Gamma</div><div style="font-size:1.2rem;font-weight:700">${g.gamma?.toFixed(4)}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">ν Vega</div><div style="font-size:1.2rem;font-weight:700">${g.vega?.toFixed(4)}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">Θ Theta</div><div style="font-size:1.2rem;font-weight:700">${g.theta?.toFixed(4)}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">ρ Rho</div><div style="font-size:1.2rem;font-weight:700">${g.rho?.toFixed(4)}</div></div>
+        </div>
+      </div>
+      <div class="card" style="padding:16px;margin-bottom:14px;background:${pcp.valid?'#F0FDF4':'#FEF2F2'};border:1px solid ${pcp.valid?'#BBF7D0':'#FECACA'}">
+        <h4 style="margin:0 0 8px;font-size:.95rem">Paridad put-call ${pcp.valid?'✓':'✗'}</h4>
+        <div style="font-size:.85rem;color:#475569">
+          C − P = <strong>${pcp.lhs_c_minus_p?.toFixed(6)}</strong> &nbsp;&nbsp;
+          S − K·e<sup>−rT</sup> = <strong>${pcp.rhs_s_minus_pv_k?.toFixed(6)}</strong> &nbsp;&nbsp;
+          error = <strong>${pcp.error?.toExponential(2)}</strong>
+        </div>
+      </div>
+      ${iv ? `<div class="card" style="padding:16px"><h4 style="margin:0 0 6px;font-size:.95rem">Volatilidad implícita (Newton-Raphson)</h4>
+        <div style="font-size:.88rem">σ implícita: <strong>${(iv.sigma*100).toFixed(3)}%</strong> · iteraciones: <strong>${iv.iterations}</strong> · converged: <strong>${iv.converged?'sí':'no'}</strong></div>
+      </div>`:''}
+    `;
+  } catch (e) {
+    out.innerHTML = _errorHTML(e.message);
+  }
+}
+
+// ─────────────────────────────────────────
+//  M11 — Stress testing
+// ─────────────────────────────────────────
+async function renderStress() {
+  setContent(`
+    <h1 class="header-gradient">M11 — Stress testing del portafolio</h1>
+    <p class="page-subtitle">Escenarios de tasa (±200 pb), caída de mercado (−20% y −30%), shock de volatilidad (×2) y tormenta perfecta combinada. Aplicado al portafolio Max Sharpe del QP de Markowitz.</p>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+        <div><label style="font-size:.72rem;color:#475569">Valor del portafolio (USD)</label><input id="stress-value" type="number" value="100000" min="1" step="1000" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:130px;font-weight:600"></div>
+        <div><label style="font-size:.72rem;color:#475569">Confianza VaR</label><input id="stress-conf" type="number" value="0.95" min="0.80" max="0.99" step="0.01" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600"></div>
+        <div><label style="font-size:.72rem;color:#475569">Duración equity proxy</label><input id="stress-dur" type="number" value="0" min="0" max="20" step="0.5" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600"></div>
+        <button id="stress-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Ejecutar stress</button>
+      </div>
+    </div>
+
+    <div id="stress-output">${_spinnerHTML('Pulsa "Ejecutar stress" para correr los 6 escenarios.')}</div>
+    <div class="footer">RiskLab USTA · M11 — Endpoint <code>/api/v1/stress</code></div>
+  `);
+  document.getElementById('stress-run').addEventListener('click', _runStress);
+}
+
+async function _runStress() {
+  const body = {
+    portfolio_value: parseFloat(document.getElementById('stress-value').value),
+    confidence: parseFloat(document.getElementById('stress-conf').value),
+    equity_rate_duration: parseFloat(document.getElementById('stress-dur').value),
+  };
+  const out = document.getElementById('stress-output');
+  out.innerHTML = _spinnerHTML('Resolviendo Max Sharpe y aplicando escenarios… (puede tardar ~10s)');
+
+  try {
+    const r = await _apiFetch('/api/v1/stress', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const losses = r.loss_bar || [];
+    const heatmap = r.heatmap || {};
+    const scenarios = Object.keys(r.scenarios?.[0]?.asset_impact_pct ? {} : {}); // unused
+
+    out.innerHTML = `
+      <div class="card" style="padding:14px;margin-bottom:14px">
+        <h4 style="margin:0 0 10px;font-size:.95rem">Pérdida por escenario</h4>
+        <div id="stress-bar" style="height:300px"></div>
+      </div>
+      <div class="card" style="padding:14px;margin-bottom:14px">
+        <h4 style="margin:0 0 10px;font-size:.95rem">VaR base vs estresado (por escenario)</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+          <thead><tr style="background:#F1F5F9"><th style="text-align:left;padding:6px">Escenario</th><th style="text-align:right;padding:6px">VaR base</th><th style="text-align:right;padding:6px">VaR estresado</th><th style="text-align:right;padding:6px">Pérdida $</th></tr></thead>
+          <tbody>${r.scenarios.map(s => `<tr style="border-top:1px solid #e2e8f0"><td style="padding:6px;font-weight:600">${s.name}</td>
+            <td style="text-align:right;padding:6px">${(s.var_base_alpha*100).toFixed(3)}%</td>
+            <td style="text-align:right;padding:6px;color:#DC2626">${(s.var_stressed_alpha*100).toFixed(3)}%</td>
+            <td style="text-align:right;padding:6px;color:${s.portfolio_loss_amount<0?'#16A34A':'#DC2626'}">$${s.portfolio_loss_amount.toFixed(0)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div class="card" style="padding:14px">
+        <h4 style="margin:0 0 10px;font-size:.95rem">Heatmap activo × escenario (impacto %)</h4>
+        <div id="stress-heatmap" style="height:380px"></div>
+      </div>
+    `;
+
+    Plotly.newPlot('stress-bar', [{
+      x: losses.map(l => l.name),
+      y: losses.map(l => l.loss_amount),
+      type:'bar',
+      marker:{color: losses.map(l => l.loss_amount<0?'#16A34A':'#DC2626')},
+    }], {
+      margin:{l:60,r:20,t:10,b:60},
+      yaxis:{title:'Pérdida ($)', tickprefix:'$'},
+      xaxis:{tickangle:-15},
+    }, {responsive:true, displaylogo:false});
+
+    const assets = Object.keys(heatmap);
+    const scenarioNames = assets.length ? Object.keys(heatmap[assets[0]]) : [];
+    const zMatrix = assets.map(a => scenarioNames.map(s => (heatmap[a][s]||0) * 100));
+    Plotly.newPlot('stress-heatmap', [{
+      z: zMatrix,
+      x: scenarioNames,
+      y: assets,
+      type:'heatmap',
+      colorscale:'RdBu',
+      reversescale:true,
+      zmid:0,
+      colorbar:{title:'Δ%'},
+    }], {
+      margin:{l:80,r:20,t:10,b:80},
+      xaxis:{tickangle:-20},
+    }, {responsive:true, displaylogo:false});
+  } catch (e) {
+    out.innerHTML = _errorHTML(e.message);
+  }
+}
+
+// ─────────────────────────────────────────
+//  ML — Predicción buy/hold/sell
+// ─────────────────────────────────────────
+async function renderML() {
+  setContent(`
+    <h1 class="header-gradient">ML — Clasificación buy / hold / sell</h1>
+    <p class="page-subtitle">Modelo (RandomForest) servido vía patrón Singleton. Las features se computan automáticamente desde los precios cacheados del ticker; cada llamada se persiste en <code>predictions_log</code>.</p>
+
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:.72rem;color:#475569">Ticker</label>
+          <select id="ml-ticker" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-weight:600">
+            ${(D?.tickers || ['AAPL']).map(t => `<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <button id="ml-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Predecir</button>
+        <button id="ml-info" class="nav-btn" style="background:#fff;color:#2563EB;border:1px solid #2563EB;padding:8px 16px;font-weight:600">Info modelo</button>
+      </div>
+    </div>
+
+    <div id="ml-output"></div>
+    <div class="footer">RiskLab USTA · ML — Endpoints <code>/api/v1/predict</code> y <code>/api/v1/predict/info</code></div>
+  `);
+  document.getElementById('ml-run').addEventListener('click', _runPredict);
+  document.getElementById('ml-info').addEventListener('click', _runModelInfo);
+  _runModelInfo();
+}
+
+async function _runPredict() {
+  const ticker = document.getElementById('ml-ticker').value;
+  const out = document.getElementById('ml-output');
+  out.innerHTML = _spinnerHTML(`Calculando features y prediciendo ${ticker}…`);
+  try {
+    const r = await _apiFetch('/api/v1/predict', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ticker}),
+    });
+    const action = r.prediction.action;
+    const color = action==='Buy'?'#16A34A':action==='Sell'?'#DC2626':'#EA580C';
+    const conf = r.prediction.confidence;
+    out.innerHTML = `
+      <div class="card" style="padding:22px;margin-bottom:14px;text-align:center;background:${color}10;border:2px solid ${color}40">
+        <div style="font-size:.85rem;color:#64748b;margin-bottom:6px">Predicción para ${r.ticker}</div>
+        <div style="font-size:3rem;font-weight:800;color:${color}">${action.toUpperCase()}</div>
+        ${conf!=null?`<div style="margin-top:6px;color:#64748b">confianza: <strong>${(conf*100).toFixed(1)}%</strong></div>`:''}
+        <div style="margin-top:10px;font-size:.78rem;color:#94a3b8">modelo: ${r.prediction.model_version} · ${r.prediction.model_type} · log_id: ${r.log_id||'—'}</div>
+      </div>
+      <div class="card" style="padding:14px">
+        <h4 style="margin:0 0 8px;font-size:.95rem">Features utilizadas (${r.features_source})</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+          <tbody>${Object.entries(r.features_used).map(([k,v]) => `<tr style="border-top:1px solid #e2e8f0"><td style="padding:6px;font-family:ui-monospace,monospace">${k}</td><td style="padding:6px;text-align:right">${v.toFixed(6)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (e) {
+    out.innerHTML = _errorHTML(e.message);
+  }
+}
+
+async function _runModelInfo() {
+  try {
+    const r = await _apiFetch('/api/v1/predict/info');
+    const node = document.createElement('div');
+    node.className = 'card';
+    node.style.cssText = 'padding:14px;margin-bottom:14px;background:#F0F9FF;border:1px solid #BAE6FD';
+    const meta = r.meta || {};
+    node.innerHTML = `
+      <h4 style="margin:0 0 8px;font-size:.95rem">Modelo activo</h4>
+      <div style="font-size:.85rem;line-height:1.7">
+        Versión: <strong>${r.model_version}</strong> · Tipo: <strong>${r.model_type}</strong> · Real: <strong>${r.has_real_model?'sí':'no (fallback heurístico)'}</strong><br>
+        ${meta.accuracy!=null?`Accuracy: <strong>${(meta.accuracy*100).toFixed(2)}%</strong> · F1: <strong>${(meta.f1_weighted*100).toFixed(2)}%</strong><br>`:''}
+        ${meta.trained_at?`Entrenado: <strong>${meta.trained_at}</strong><br>`:''}
+        ${meta.tickers_used?`Tickers de entrenamiento: <strong>${meta.tickers_used.join(', ')}</strong>`:''}
+      </div>
+    `;
+    const out = document.getElementById('ml-output');
+    out.insertBefore(node, out.firstChild);
+  } catch (e) { /* silencioso */ }
+}
 
 // ─────────────────────────────────────────
 //  INIT
