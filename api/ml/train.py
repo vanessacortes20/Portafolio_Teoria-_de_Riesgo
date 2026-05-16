@@ -34,6 +34,7 @@ from sklearn.preprocessing import StandardScaler
 
 from api.config import get_settings
 from api.data import get_historical_data
+from api.db.base import init_db
 from api.ml.features import FEATURE_NAMES, build_features_and_labels
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,8 @@ def _gather_dataset() -> tuple[pd.DataFrame, pd.Series, list[str]]:
 def train(verbose: bool = True) -> dict:
     """Entrena el modelo, persiste el artefacto y devuelve la metadata."""
     settings = get_settings()
+    # Asegura que las tablas existan (DataService persiste precios via ORM).
+    init_db()
     print(f"Entrenando clasificador buy/hold/sell para: {settings.tickers}")
 
     X, y, tickers_used = _gather_dataset()
