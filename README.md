@@ -110,8 +110,7 @@ Portafolio_Teoria-_de_Riesgo/
 ├── data/                    # carpeta local — la BD SQLite y users.json se generan al arrancar
 ├── docs/
 │   ├── instructivo_proyecto_integrador.html
-│   ├── INFORME_EJECUTIVO.md / .pdf
-│   └── SUSTENTACION.md / .pdf
+│   └── INFORME_EJECUTIVO.md / .pdf
 ├── generate_data.py         # genera data.js (snapshot estático)
 ├── .github/workflows/ci.yml # workflow de tests en cada push
 ├── Dockerfile               # multi-stage python:3.11.9-slim-bookworm

@@ -51,6 +51,10 @@ CLAUDE.md
 # ── Streamlit (legacy) ────────────────────────────
 .streamlit/
 
+# ── Guion de sustentacion (privado, no versionar) ──
+docs/SUSTENTACION.md
+docs/SUSTENTACION.pdf
+
 # ── Otros ─────────────────────────────────────────
 outputs/
 history/
