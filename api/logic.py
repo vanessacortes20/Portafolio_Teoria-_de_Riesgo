@@ -117,6 +117,106 @@ def fit_garch_models(returns: pd.Series) -> dict:
 
 
 # =============================================================================
+# SECCIÓN 3b: VOLATILIDAD EWMA — RiskMetrics (MÓDULO 3)
+# =============================================================================
+
+def compute_ewma_volatility(
+    returns: pd.Series,
+    lambda_: float = 0.94,
+    init_window: int = 20,
+) -> pd.Series:
+    """
+    Estima la volatilidad mediante un suavizamiento exponencial (EWMA).
+
+    Recursión:  σ²ₜ = λ · σ²ₜ₋₁ + (1 − λ) · r²ₜ₋₁
+
+    El default λ = 0.94 es el estándar RiskMetrics para datos diarios.
+    La varianza inicial σ²₀ se aproxima con la varianza muestral de las
+    primeras `init_window` observaciones para acelerar la convergencia.
+
+    Devuelve la desviación estándar condicional σₜ (mismo unit que los
+    retornos de entrada). Para anualizar: σₜ · √252.
+    """
+    if not 0 < lambda_ < 1:
+        raise ValueError(f"lambda debe estar en (0, 1); recibido: {lambda_}")
+
+    r = returns.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(r) < 2:
+        return pd.Series(dtype=float)
+
+    n = len(r)
+    sigma2 = np.full(n, np.nan)
+    w = max(2, min(init_window, n))
+    sigma2[0] = float(r.iloc[:w].var(ddof=1))
+
+    arr = r.values
+    one_minus = 1.0 - lambda_
+    for t in range(1, n):
+        sigma2[t] = lambda_ * sigma2[t - 1] + one_minus * (arr[t - 1] ** 2)
+
+    return pd.Series(np.sqrt(sigma2), index=r.index, name=f"EWMA_λ{lambda_:.2f}")
+
+
+def compute_ewma_comparison(
+    returns: pd.Series,
+    lambdas: list[float],
+) -> dict:
+    """
+    Aplica EWMA con varias λ y devuelve {label: lista_de_sigmas}.
+
+    label tiene la forma '0.94', '0.90', etc., redondeado a 2 decimales.
+    """
+    out: dict = {}
+    for lam in lambdas:
+        try:
+            s = compute_ewma_volatility(returns, lambda_=float(lam))
+            out[f"{float(lam):.2f}"] = s.tolist()
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def ewma_vs_garch_table() -> list[dict]:
+    """
+    Tabla comparativa EWMA vs GARCH(1,1) (datos cualitativos del informe).
+
+    Las celdas son strings listos para mostrar en el dashboard.
+    """
+    return [
+        {
+            "aspect": "Parámetros estimados",
+            "ewma": "0 (λ fijo o calibrado)",
+            "garch": "3 (ω, α, β)",
+        },
+        {
+            "aspect": "Varianza incondicional",
+            "ewma": "No definida",
+            "garch": "σ² = ω / (1 − α − β)",
+        },
+        {
+            "aspect": "Reversión a la media",
+            "ewma": "No",
+            "garch": "Sí, si α + β < 1",
+        },
+        {
+            "aspect": "Costo computacional",
+            "ewma": "Mínimo (recursión cerrada)",
+            "garch": "Optimización por máxima verosimilitud",
+        },
+        {
+            "aspect": "Captura asimetría",
+            "ewma": "No",
+            "garch": "Sólo en variantes (EGARCH, GJR)",
+        },
+        {
+            "aspect": "Interpretación",
+            "ewma": "Decay exponencial constante",
+            "garch": "Estructura paramétrica completa",
+        },
+    ]
+
+
+# =============================================================================
 # SECCIÓN 4: CAPM Y RIESGO SISTEMÁTICO (MÓDULO 4)
 # =============================================================================
 

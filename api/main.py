@@ -52,6 +52,9 @@ from api.logic import (
     calculate_sma,
     calculate_stochastic,
     calculate_var_cvar,
+    compute_ewma_comparison,
+    compute_ewma_volatility,
+    ewma_vs_garch_table,
     fit_garch_models,
     generate_signals,
     get_descriptive_stats,
@@ -577,11 +580,21 @@ def get_returns_analysis(
         raise HTTPException(500, str(exc))
 
 
-@app.get("/api/v1/volatility/{ticker}", summary="Modelos ARCH/GARCH — M3")
+@app.get("/api/v1/volatility/{ticker}", summary="EWMA + ARCH/GARCH/EGARCH — M3")
 def get_volatility_analysis(
     ticker: str,
     dates: DateRangeDep,
     _cfg: ConfigDep,
+    ewma_lambda: float = Query(
+        0.94,
+        ge=0.50,
+        le=0.999,
+        description="Factor de decay para EWMA (RiskMetrics usa 0.94).",
+    ),
+    ewma_extra_lambdas: Optional[str] = Query(
+        None,
+        description="Lambdas adicionales a comparar (CSV, ej: '0.90,0.97').",
+    ),
 ):
     try:
         data = get_historical_data(ticker, **dates)
@@ -591,7 +604,7 @@ def get_volatility_analysis(
 
         result = fit_garch_models(log_ret)
 
-        # Residuos estandarizados y pronóstico a 10 días
+        # ── Residuos estandarizados y pronóstico a 10 días ──────────────────
         try:
             from arch import arch_model  # type: ignore
             scaled = log_ret * 100
@@ -610,6 +623,43 @@ def get_volatility_analysis(
             result["Forecast_10d"] = _safe_json(vol_forecast)
         except Exception:
             pass
+
+        # ── EWMA (RiskMetrics) ──────────────────────────────────────────────
+        ewma_series = compute_ewma_volatility(log_ret, lambda_=ewma_lambda)
+        if not ewma_series.empty:
+            last_sigma_daily = float(ewma_series.iloc[-1])
+            result["EWMA"] = {
+                "lambda":                   ewma_lambda,
+                "volatility":               _safe_json(ewma_series.tolist()),
+                "current_volatility_daily": _sv(last_sigma_daily),
+                "current_volatility_annual": _sv(last_sigma_daily * math.sqrt(252)),
+            }
+        else:
+            result["EWMA"] = {
+                "lambda":                   ewma_lambda,
+                "volatility":               [],
+                "current_volatility_daily": None,
+                "current_volatility_annual": None,
+            }
+
+        # ── Comparación con λ adicionales ───────────────────────────────────
+        if ewma_extra_lambdas:
+            try:
+                extras = [
+                    float(x.strip())
+                    for x in ewma_extra_lambdas.split(",")
+                    if x.strip()
+                ]
+                extras = [x for x in extras if 0.5 < x < 0.999]
+                if extras:
+                    result["EWMA_Comparison"] = _safe_json(
+                        compute_ewma_comparison(log_ret, extras)
+                    )
+            except ValueError:
+                pass
+
+        # ── Tabla comparativa cualitativa EWMA vs GARCH ─────────────────────
+        result["EWMA_vs_GARCH_Table"] = ewma_vs_garch_table()
 
         return json_response(result)
     except HTTPException:
