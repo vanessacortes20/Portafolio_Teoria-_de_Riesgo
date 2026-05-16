@@ -1,0 +1,38 @@
+# docker-compose.yml — entorno de desarrollo local con hot-reload.
+#
+# Levantar:   docker compose up
+# Detener:    docker compose down
+# Reconstruir: docker compose up --build
+#
+# Diferencias con la imagen de produccion:
+#   - Monta el codigo fuente desde el host (hot-reload via uvicorn --reload).
+#   - Monta data/ desde el host para que el .db persista entre recreaciones.
+#   - Sobrescribe el CMD para incluir --reload.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: risklab-usta:dev
+    container_name: risklab-backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./api:/app/api
+      - ./dashboard:/app/dashboard
+      - ./data:/app/data
+    command: >
+      uvicorn api.main:app
+      --host 0.0.0.0
+      --port 8001
+      --reload
+      --reload-dir /app/api
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/').read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
