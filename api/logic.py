@@ -1,5 +1,10 @@
-import pandas as pd
+from __future__ import annotations
+
+import math
+from typing import Optional
+
 import numpy as np
+import pandas as pd
 from scipy import stats
 
 # =============================================================================
@@ -361,6 +366,233 @@ def optimize_portfolio(
             "Weights":    dict(zip(tickers, weights_rec[mv_idx].tolist())),
         },
         "Correlation": returns_df.corr().to_dict(),
+    }
+
+
+# =============================================================================
+# SECCIÓN 6b: MARKOWITZ COMO QP EXPLÍCITO — cvxpy (MÓDULO 6)
+# =============================================================================
+#
+# Formulación canónica de Markowitz como programación cuadrática:
+#
+#     minimizar    wᵀ Σ w                  (varianza anualizada)
+#     sujeto a     Σᵢ wᵢ  = 1              (los pesos suman 1)
+#                  μᵀ w   = μ*             (rendimiento objetivo — opcional)
+#                  wᵢ    ≥ 0  ∀ i          (no negatividad — opcional)
+#
+# Se resuelve con cvxpy: cp.Minimize(cp.quad_form(w, Σ)) sujeto a las
+# restricciones lineales. La spec del Proyecto Integrador exige
+# explícitamente esta formulación y la comparación de la versión con y
+# sin la restricción de no negatividad.
+
+
+def solve_markowitz_qp(
+    returns_df: pd.DataFrame,
+    target_return: Optional[float] = None,
+    allow_short: bool = False,
+    rf_rate: float = 0.04,
+) -> dict:
+    """
+    Resuelve un problema cuadrático individual de Markowitz.
+
+    - target_return = None y allow_short=False → mínima varianza global con
+      pesos no negativos.
+    - target_return = None y allow_short=True  → mínima varianza global con
+      pesos libres (permite ventas en corto).
+    - target_return = X                        → mínima varianza alcanzando
+      el rendimiento anual objetivo X.
+    """
+    import cvxpy as cp
+
+    tickers = returns_df.columns.tolist()
+    n = len(tickers)
+    mu_annual = (returns_df.mean() * 252).values
+    Sigma_annual = (returns_df.cov() * 252).values
+
+    w = cp.Variable(n)
+    constraints = [cp.sum(w) == 1]
+    if target_return is not None:
+        constraints.append(mu_annual @ w == float(target_return))
+    if not allow_short:
+        constraints.append(w >= 0)
+
+    objective = cp.Minimize(cp.quad_form(w, cp.psd_wrap(Sigma_annual)))
+    prob = cp.Problem(objective, constraints)
+
+    try:
+        prob.solve()
+    except Exception as exc:
+        return {"feasible": False, "error": f"cvxpy: {exc}"}
+
+    if prob.status not in ("optimal", "optimal_inaccurate"):
+        return {"feasible": False, "error": f"status={prob.status}"}
+
+    w_opt = np.asarray(w.value).flatten()
+    # Limpiar pequeños valores numéricos (~1e-12) cuando hay no-negatividad
+    if not allow_short:
+        w_opt = np.clip(w_opt, 0.0, 1.0)
+        s = w_opt.sum()
+        if s > 0:
+            w_opt = w_opt / s
+
+    port_ret = float(np.dot(w_opt, mu_annual))
+    port_var = float(w_opt @ Sigma_annual @ w_opt)
+    port_vol = math.sqrt(max(port_var, 0.0))
+    sharpe = (port_ret - rf_rate) / port_vol if port_vol > 1e-12 else 0.0
+
+    return {
+        "feasible": True,
+        "allow_short": allow_short,
+        "target_return": target_return,
+        "Return": port_ret,
+        "Volatility": port_vol,
+        "Sharpe": sharpe,
+        "Weights": dict(zip(tickers, w_opt.tolist())),
+    }
+
+
+def compute_efficient_frontier_qp(
+    returns_df: pd.DataFrame,
+    allow_short: bool = False,
+    n_points: int = 50,
+    rf_rate: float = 0.04,
+) -> dict:
+    """
+    Traza la frontera eficiente resolviendo el QP en `n_points` valores de
+    rendimiento objetivo distribuidos uniformemente entre la mínima varianza
+    global y el activo de máximo rendimiento.
+
+    Retorna además:
+      - Min_Variance: portafolio de mínima varianza global.
+      - Max_Sharpe:   portafolio con mayor ratio de Sharpe sobre la frontera.
+      - Correlation:  matriz de correlación entre activos (para el heatmap).
+    """
+    mv = solve_markowitz_qp(
+        returns_df, target_return=None, allow_short=allow_short, rf_rate=rf_rate
+    )
+    if not mv.get("feasible"):
+        return {
+            "feasible": False,
+            "error": mv.get("error", "no se pudo resolver min variance"),
+            "allow_short": allow_short,
+        }
+
+    mu_annual = (returns_df.mean() * 252).values
+    min_ret = float(mv["Return"])
+    if allow_short:
+        # Con ventas en corto el rendimiento alcanzable no está acotado por
+        # max(μᵢ); ampliamos el rango para visualizar la rama superior.
+        max_ret = float(np.max(mu_annual)) * 2.0
+    else:
+        max_ret = float(np.max(mu_annual))
+
+    n_points = max(10, int(n_points))
+    targets = np.linspace(min_ret, max_ret, n_points)
+
+    frontier: list[dict] = []
+    for t in targets:
+        sol = solve_markowitz_qp(
+            returns_df,
+            target_return=float(t),
+            allow_short=allow_short,
+            rf_rate=rf_rate,
+        )
+        if sol.get("feasible"):
+            frontier.append(
+                {
+                    "Volatility": sol["Volatility"],
+                    "Return":     sol["Return"],
+                    "Sharpe":     sol["Sharpe"],
+                }
+            )
+
+    if frontier:
+        ms_idx = max(range(len(frontier)), key=lambda i: frontier[i]["Sharpe"])
+        ms_target = frontier[ms_idx]["Return"]
+        max_sharpe = solve_markowitz_qp(
+            returns_df,
+            target_return=ms_target,
+            allow_short=allow_short,
+            rf_rate=rf_rate,
+        )
+    else:
+        max_sharpe = mv
+
+    return {
+        "feasible":     True,
+        "allow_short":  allow_short,
+        "n_points":     len(frontier),
+        "frontier":     frontier,
+        "Min_Variance": mv,
+        "Max_Sharpe":   max_sharpe,
+        "Correlation":  returns_df.corr().to_dict(),
+    }
+
+
+def compare_markowitz_with_without_short(
+    returns_df: pd.DataFrame,
+    rf_rate: float = 0.04,
+    n_points: int = 50,
+) -> dict:
+    """
+    Resuelve Markowitz en dos versiones (con y sin no-negatividad) y reporta
+    el costo de imponer la restricción. La spec exige esta comparación.
+    """
+    res_short = compute_efficient_frontier_qp(
+        returns_df, allow_short=True, n_points=n_points, rf_rate=rf_rate
+    )
+    res_no_short = compute_efficient_frontier_qp(
+        returns_df, allow_short=False, n_points=n_points, rf_rate=rf_rate
+    )
+
+    def _count_neg(weights: dict) -> int:
+        return sum(1 for v in weights.values() if v < -1e-6)
+
+    def _count_zero(weights: dict) -> int:
+        return sum(1 for v in weights.values() if abs(v) < 1e-6)
+
+    summary: dict = {}
+    if res_short.get("feasible") and res_no_short.get("feasible"):
+        ms_s  = res_short["Max_Sharpe"]
+        ms_ns = res_no_short["Max_Sharpe"]
+        mv_s  = res_short["Min_Variance"]
+        mv_ns = res_no_short["Min_Variance"]
+        summary = {
+            "max_sharpe_with_short": {
+                "Sharpe":             ms_s["Sharpe"],
+                "Volatility":         ms_s["Volatility"],
+                "Return":             ms_s["Return"],
+                "n_negative_weights": _count_neg(ms_s["Weights"]),
+                "Weights":            ms_s["Weights"],
+            },
+            "max_sharpe_no_short": {
+                "Sharpe":         ms_ns["Sharpe"],
+                "Volatility":     ms_ns["Volatility"],
+                "Return":         ms_ns["Return"],
+                "n_zero_weights": _count_zero(ms_ns["Weights"]),
+                "Weights":        ms_ns["Weights"],
+            },
+            "min_variance_with_short": {
+                "Volatility":         mv_s["Volatility"],
+                "Return":             mv_s["Return"],
+                "n_negative_weights": _count_neg(mv_s["Weights"]),
+            },
+            "min_variance_no_short": {
+                "Volatility":     mv_ns["Volatility"],
+                "Return":         mv_ns["Return"],
+                "n_zero_weights": _count_zero(mv_ns["Weights"]),
+            },
+            "cost_of_no_short": {
+                "extra_volatility_max_sharpe":  ms_ns["Volatility"] - ms_s["Volatility"],
+                "lower_sharpe_max_sharpe":      ms_s["Sharpe"]      - ms_ns["Sharpe"],
+                "extra_volatility_min_var":     mv_ns["Volatility"] - mv_s["Volatility"],
+            },
+        }
+
+    return {
+        "with_short":         res_short,
+        "no_short":           res_no_short,
+        "comparison_summary": summary,
     }
 
 

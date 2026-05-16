@@ -52,6 +52,8 @@ from api.logic import (
     calculate_sma,
     calculate_stochastic,
     calculate_var_cvar,
+    compare_markowitz_with_without_short,
+    compute_efficient_frontier_qp,
     compute_ewma_comparison,
     compute_ewma_volatility,
     ewma_vs_garch_table,
@@ -62,6 +64,7 @@ from api.logic import (
     optimize_portfolio,
     optimize_portfolio_target_return,
     perform_normality_tests,
+    solve_markowitz_qp,
 )
 
 # ── Auth config ──────────────────────────────────────────────────────────────
@@ -820,6 +823,116 @@ def get_portfolio_target_return(
         df_rets = pd.DataFrame(all_rets).dropna()
         result  = optimize_portfolio_target_return(df_rets, target_return, rf_rate=config.default_rf)
         return json_response(result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+# ─── Markowitz formulado como QP explícito (M6) ───────────────────────────────
+
+
+class FrontierRequest(BaseModel):
+    """Parámetros para la frontera eficiente vía QP."""
+    tickers:     Optional[list[str]] = Field(
+        None, description="Lista de tickers; si se omite usa los del Settings."
+    )
+    allow_short: bool = Field(
+        False, description="Permitir pesos negativos (ventas en corto)."
+    )
+    n_points:    int = Field(
+        50, ge=10, le=200, description="Cantidad de puntos en la frontera."
+    )
+    rf_rate:     Optional[float] = Field(
+        None, ge=0.0, le=1.0,
+        description="Tasa libre de riesgo anual; si se omite usa Settings.",
+    )
+
+    @field_validator("tickers")
+    @classmethod
+    def _validate_tickers(cls, v):
+        if v is not None and len(v) < 2:
+            raise ValueError("Se requieren al menos 2 tickers para optimizar.")
+        return v
+
+
+def _load_returns_df(
+    tickers: list[str],
+    dates: dict,
+) -> pd.DataFrame:
+    """Helper interno: descarga retornos diarios para una lista de tickers."""
+    all_rets: dict[str, pd.Series] = {}
+    for t in tickers:
+        data = get_historical_data(t, **dates)
+        if data is not None:
+            ret, _ = calculate_returns(data)
+            all_rets[t] = ret
+    if len(all_rets) < 2:
+        raise HTTPException(
+            500, "No hay suficientes activos con datos disponibles."
+        )
+    return pd.DataFrame(all_rets).dropna()
+
+
+@app.post(
+    "/api/v1/frontier",
+    summary="Frontera eficiente Markowitz vía QP (cvxpy) — M6",
+)
+def post_efficient_frontier(
+    body: FrontierRequest,
+    dates: DateRangeDep,
+    config: ConfigDep,
+):
+    """
+    Resuelve el problema de Markowitz como programación cuadrática explícita:
+
+        min   wᵀ Σ w
+        s.t.  Σ wᵢ = 1
+              μᵀ w = μ*           (recorre n_points valores)
+              wᵢ ≥ 0               (si allow_short=False)
+
+    Retorna la frontera completa, el portafolio de mínima varianza y el
+    portafolio de máximo Sharpe Ratio sobre la frontera.
+    """
+    try:
+        tickers = body.tickers or config.tickers
+        rf_rate = body.rf_rate if body.rf_rate is not None else config.default_rf
+        df_rets = _load_returns_df(tickers, dates)
+        result = compute_efficient_frontier_qp(
+            df_rets,
+            allow_short=body.allow_short,
+            n_points=body.n_points,
+            rf_rate=rf_rate,
+        )
+        return json_response(result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get(
+    "/api/v1/frontier/compare",
+    summary="Comparativa Markowitz con y sin no-negatividad — M6",
+)
+def get_frontier_compare(
+    dates: DateRangeDep,
+    config: ConfigDep,
+    n_points: int = Query(50, ge=10, le=200),
+):
+    """
+    Resuelve Markowitz como QP en dos versiones (permitiendo y prohibiendo
+    ventas en corto) y reporta el costo de imponer la restricción w ≥ 0:
+    cuánto sube la volatilidad, cuánto baja el Sharpe, qué activos caen a
+    peso cero en la versión restringida.
+    """
+    try:
+        df_rets = _load_returns_df(config.tickers, dates)
+        return json_response(
+            compare_markowitz_with_without_short(
+                df_rets, rf_rate=config.default_rf, n_points=n_points
+            )
+        )
     except HTTPException:
         raise
     except Exception as exc:
