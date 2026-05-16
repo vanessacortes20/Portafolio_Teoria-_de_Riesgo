@@ -10,7 +10,7 @@ import secrets
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 import bcrypt
 import numpy as np
@@ -30,6 +30,7 @@ from api.services import (
     Bond,
     DataService,
     FredClient,
+    OptionPricer,
     YieldCurve,
     get_data_service,
     get_fred_client,
@@ -1084,6 +1085,169 @@ def post_bond_duration(
                 "sensitivity": sensitivity,
             }
         )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+# ─── Opciones europeas Black-Scholes (M10) ───────────────────────────────────
+
+
+class OptionRequest(BaseModel):
+    """Parametros de una opcion europea para valoracion via Black-Scholes."""
+    S: float = Field(..., gt=0, le=1e9, description="Precio actual del subyacente.")
+    K: float = Field(..., gt=0, le=1e9, description="Strike (precio de ejercicio).")
+    T: float = Field(..., gt=0, le=30, description="Tiempo a vencimiento en anos.")
+    r: float = Field(..., ge=0, le=1, description="Tasa libre de riesgo anual (decimal).")
+    sigma: float = Field(..., gt=0, le=5, description="Volatilidad anual (decimal).")
+    option_type: Literal["call", "put"] = Field(..., description="Tipo de opcion.")
+    market_price: Optional[float] = Field(
+        None, gt=0, le=1e9,
+        description="Precio observado de mercado. Si se incluye, calcula volatilidad implicita.",
+    )
+
+    @field_validator("sigma")
+    @classmethod
+    def _validate_sigma(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("sigma debe ser positivo.")
+        return v
+
+
+class GreeksModel(BaseModel):
+    """Las cinco Greeks de Black-Scholes (raw, por unidad de cambio)."""
+    delta: float
+    gamma: float
+    vega:  float
+    theta: float
+    rho:   float
+
+
+class OptionResponse(BaseModel):
+    """Respuesta tipada del endpoint de valoracion de opciones."""
+    S: float
+    K: float
+    T: float
+    r: float
+    sigma: float
+    option_type: Literal["call", "put"]
+    price: float
+    greeks: GreeksModel
+    put_call_parity: dict
+    implied_volatility: Optional[dict] = None
+
+
+@app.post(
+    "/api/v1/option/price",
+    response_model=OptionResponse,
+    summary="Black-Scholes: precio, Greeks, paridad put-call y σ implícita — M10",
+)
+def post_option_price(body: OptionRequest):
+    """
+    Valora una opcion europea por Black-Scholes:
+
+        Call = S * N(d1) - K * exp(-rT) * N(d2)
+        Put  = K * exp(-rT) * N(-d2) - S * N(-d1)
+
+    Retorna las cinco Greeks (Delta, Gamma, Vega, Theta, Rho), verifica la
+    paridad put-call sobre el par (C, P) y, si se incluye market_price,
+    resuelve la volatilidad implicita por Newton-Raphson.
+    """
+    try:
+        pricer = OptionPricer(S=body.S, K=body.K, T=body.T, r=body.r, sigma=body.sigma)
+        price = pricer.price(body.option_type)
+        greeks = pricer.greeks(body.option_type)
+        parity = pricer.put_call_parity()
+
+        iv: Optional[dict] = None
+        if body.market_price is not None:
+            iv = pricer.implied_volatility(body.market_price, body.option_type)
+
+        return OptionResponse(
+            S=body.S, K=body.K, T=body.T, r=body.r, sigma=body.sigma,
+            option_type=body.option_type,
+            price=price,
+            greeks=GreeksModel(**greeks),
+            put_call_parity=parity,
+            implied_volatility=iv,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get(
+    "/api/v1/option/scenarios/{ticker}",
+    summary="Grilla de opciones BS sobre un activo del portafolio — M10",
+)
+def get_option_scenarios(
+    ticker: str,
+    dates: DateRangeDep,
+    config: ConfigDep,
+    moneyness_pct: float = Query(
+        0.10, ge=0.01, le=0.50,
+        description="Rango ± alrededor del spot para construir strikes.",
+    ),
+):
+    """
+    Construye una grilla de opciones europeas usando como subyacente el
+    ticker indicado del portafolio:
+      - S  : ultimo cierre disponible (cache transparente).
+      - σ  : estimacion EWMA(λ=0.94) sobre log-retornos del periodo.
+      - r  : tasa libre de riesgo desde Settings.default_rf.
+      - K  : grilla [S*(1-x), S, S*(1+x)] con x = moneyness_pct.
+      - T  : 30, 60, 90 y 180 dias en anos calendario.
+
+    Para cada combinacion calcula precio call/put, Greeks y verifica
+    numericamente la paridad put-call.
+    """
+    try:
+        data = get_historical_data(ticker, **dates)
+        if data is None or data.empty:
+            raise HTTPException(404, f"No se encontraron datos para '{ticker}'.")
+        _, log_ret = calculate_returns(data)
+        if len(log_ret) < 20:
+            raise HTTPException(422, "Historial insuficiente para estimar σ.")
+        ewma_series = compute_ewma_volatility(log_ret, lambda_=0.94)
+        if ewma_series.empty:
+            raise HTTPException(422, "No se pudo estimar σ via EWMA.")
+        sigma_daily = float(ewma_series.iloc[-1])
+        sigma_annual = sigma_daily * math.sqrt(252)
+        spot = float(data["Close"].iloc[-1])
+        r = float(config.default_rf)
+
+        strikes = [
+            spot * (1 - moneyness_pct),
+            spot,
+            spot * (1 + moneyness_pct),
+        ]
+        maturities_days = [30, 60, 90, 180]
+
+        grid: list[dict] = []
+        for tdays in maturities_days:
+            T_years = tdays / 365.0
+            for K in strikes:
+                pricer = OptionPricer(S=spot, K=K, T=T_years, r=r, sigma=sigma_annual)
+                grid.append({
+                    "T_days":          tdays,
+                    "K":               float(K),
+                    "moneyness":       float((K - spot) / spot),
+                    "call":            pricer.price("call"),
+                    "put":             pricer.price("put"),
+                    "greeks_call":     pricer.greeks("call"),
+                    "greeks_put":      pricer.greeks("put"),
+                    "put_call_parity": pricer.put_call_parity(),
+                })
+
+        return json_response({
+            "ticker":       ticker,
+            "spot":         spot,
+            "sigma_annual": sigma_annual,
+            "r":            r,
+            "grid":         grid,
+        })
     except HTTPException:
         raise
     except Exception as exc:
