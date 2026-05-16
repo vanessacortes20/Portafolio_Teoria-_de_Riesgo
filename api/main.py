@@ -31,6 +31,7 @@ from api.services import (
     DataService,
     FredClient,
     OptionPricer,
+    StressTester,
     YieldCurve,
     get_data_service,
     get_fred_client,
@@ -1248,6 +1249,163 @@ def get_option_scenarios(
             "r":            r,
             "grid":         grid,
         })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+# ─── Stress testing (M11) ────────────────────────────────────────────────────
+
+
+class ScenarioSpec(BaseModel):
+    """Especificacion de un escenario de stress."""
+    name:            str   = Field(..., min_length=1, max_length=60)
+    rate_shock_bp:   float = Field(
+        0.0, description="Shock paralelo a Rf en puntos basicos (+200 = subida).",
+    )
+    market_drop_pct: float = Field(
+        0.0, description="Variacion del benchmark (-0.20 = caida 20%).",
+    )
+    vol_multiplier:  float = Field(
+        1.0, description="Factor multiplicativo de sigma (2.0 = doble).",
+    )
+
+    @field_validator("rate_shock_bp")
+    @classmethod
+    def _v_rate(cls, v: float) -> float:
+        if not -1000.0 <= v <= 1000.0:
+            raise ValueError("rate_shock_bp fuera de rango (-1000 a +1000 pb).")
+        return v
+
+    @field_validator("market_drop_pct")
+    @classmethod
+    def _v_mkt(cls, v: float) -> float:
+        if not -1.0 <= v <= 1.0:
+            raise ValueError("market_drop_pct fuera de rango (-1.0 a +1.0).")
+        return v
+
+    @field_validator("vol_multiplier")
+    @classmethod
+    def _v_vol(cls, v: float) -> float:
+        if not 0.0 < v <= 10.0:
+            raise ValueError("vol_multiplier debe ser > 0 y <= 10.")
+        return v
+
+
+class StressRequest(BaseModel):
+    """Body del endpoint POST /api/v1/stress."""
+    tickers: Optional[list[str]] = Field(
+        None, description="Lista de tickers; si se omite usa Settings.tickers."
+    )
+    weights: Optional[dict[str, float]] = Field(
+        None,
+        description="Pesos por ticker. Si se omite, usa el Max Sharpe del QP.",
+    )
+    scenarios: Optional[list[ScenarioSpec]] = Field(
+        None,
+        description="Lista de escenarios; si se omite usa los 6 por defecto.",
+    )
+    portfolio_value: float = Field(
+        100_000.0, gt=0, le=1e12, description="Valor monetario del portafolio."
+    )
+    confidence: float = Field(
+        0.95, ge=0.80, le=0.99, description="Nivel de confianza para el VaR."
+    )
+    equity_rate_duration: float = Field(
+        0.0,
+        ge=0.0,
+        le=20.0,
+        description=(
+            "Sensibilidad implicita a la tasa para equities (0 = sin impacto "
+            "directo del shock de tasa sobre el precio del activo)."
+        ),
+    )
+
+    @field_validator("weights")
+    @classmethod
+    def _v_weights(cls, v: Optional[dict[str, float]]) -> Optional[dict[str, float]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("Si se especifica weights, no puede estar vacio.")
+        s = sum(v.values())
+        if abs(s - 1.0) > 0.05:
+            raise ValueError(f"Los pesos deben sumar ~1.0 (suma actual: {s:.4f}).")
+        return v
+
+
+@app.post(
+    "/api/v1/stress",
+    summary="Stress testing del portafolio bajo escenarios extremos — M11",
+)
+def post_stress(
+    body: StressRequest,
+    dates: DateRangeDep,
+    config: ConfigDep,
+):
+    """
+    Aplica escenarios de stress al portafolio. Si no se pasan weights, el
+    endpoint los calcula resolviendo el QP de Markowitz (Max Sharpe sin
+    ventas en corto). Si no se pasan scenarios, ejecuta los 6 default:
+
+      1. Tasa +200 pb        4. Mercado -30%
+      2. Tasa -200 pb        5. Volatilidad x2
+      3. Mercado -20%        6. Tormenta perfecta (tasa +200 + mkt -20% + sigma x2)
+
+    Para cada escenario retorna:
+      - perdida puntual del portafolio (% y monetaria),
+      - VaR base vs VaR estresado al nivel de confianza solicitado y al 99%,
+      - heatmap de impacto por activo (componente mercado, componente tasa,
+        total, beta, peso).
+
+    Tambien devuelve loss_bar (lista lista para graficar barras) y heatmap
+    (estructura activo -> escenario -> impacto %).
+    """
+    try:
+        tickers = body.tickers or config.tickers
+        if len(tickers) < 2:
+            raise HTTPException(422, "Se requieren al menos 2 tickers.")
+
+        # ── Cargar retornos del universo ────────────────────────────────────
+        df_rets = _load_returns_df(tickers, dates)
+
+        # ── Cargar retornos del benchmark ───────────────────────────────────
+        bench_data = get_historical_data(config.benchmark, **dates)
+        if bench_data is None or bench_data.empty:
+            raise HTTPException(503, "No se pudieron descargar datos del benchmark.")
+        bench_ret, _ = calculate_returns(bench_data)
+
+        # ── Resolver pesos: Max Sharpe del QP si el usuario no los pasa ─────
+        if body.weights is None:
+            qp_res = compute_efficient_frontier_qp(
+                df_rets,
+                allow_short=False,
+                n_points=30,
+                rf_rate=config.default_rf,
+            )
+            if not qp_res.get("feasible"):
+                raise HTTPException(
+                    500, "No se pudo resolver el portafolio Max Sharpe por defecto."
+                )
+            weights = qp_res["Max_Sharpe"]["Weights"]
+        else:
+            weights = dict(body.weights)
+
+        # ── Construir tester y ejecutar ─────────────────────────────────────
+        scenarios = (
+            [s.model_dump() for s in body.scenarios] if body.scenarios else None
+        )
+        tester = StressTester(
+            returns_df=df_rets,
+            weights=weights,
+            benchmark_returns=bench_ret,
+            rf_rate=config.default_rf,
+            portfolio_value=body.portfolio_value,
+            equity_rate_duration=body.equity_rate_duration,
+        )
+        result = tester.run(scenarios=scenarios, confidence=body.confidence)
+        return json_response(result)
     except HTTPException:
         raise
     except Exception as exc:

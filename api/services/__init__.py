@@ -5,6 +5,7 @@ Servicios reutilizables del backend RiskLab USTA.
   - decorators    : decoradores propios (logging de tiempo, etc.).
   - fixed_income  : FRED, curva Nelson-Siegel y bono sintetico (M9).
   - options       : Black-Scholes, Greeks y volatilidad implicita (M10).
+  - stress        : escenarios de stress testing sobre el portafolio (M11).
 """
 from api.services.data_service import DataService, get_data_service
 from api.services.decorators import log_execution_time
@@ -16,6 +17,7 @@ from api.services.fixed_income import (
     get_fred_client,
 )
 from api.services.options import OptionPricer
+from api.services.stress import StressTester
 
 __all__ = [
     "DataService",
@@ -27,4 +29,5 @@ __all__ = [
     "YieldCurve",
     "get_fred_client",
     "OptionPricer",
+    "StressTester",
 ]
