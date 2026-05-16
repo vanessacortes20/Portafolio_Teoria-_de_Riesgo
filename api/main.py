@@ -6,18 +6,15 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import secrets
 import sys
 from datetime import date, datetime, timedelta
-from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Optional
 
 import bcrypt
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -27,6 +24,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 from scipy import stats as scipy_stats
 from starlette.responses import Response
 
+from api.config import Settings, get_settings
 from api.data import get_historical_data
 from api.database import (
     create_user,
@@ -62,12 +60,11 @@ from api.logic import (
     perform_normality_tests,
 )
 
-load_dotenv()
-
 # ── Auth config ──────────────────────────────────────────────────────────────
-_SECRET_KEY = os.getenv("JWT_SECRET", secrets.token_hex(32))
+_settings_boot = get_settings()
+_SECRET_KEY = _settings_boot.jwt_secret
 _ALGORITHM  = "HS256"
-_TOKEN_TTL  = int(os.getenv("JWT_TTL_MINUTES", "60"))
+_TOKEN_TTL  = _settings_boot.jwt_ttl_minutes
 
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
@@ -316,34 +313,14 @@ def auth_list_users(_admin: AdminUser):
     return get_all_users()
 
 
-# ─── Configuración centralizada ───────────────────────────────────────────────
-
-class AppConfig(BaseModel):
-    tickers: list[str] = Field(default_factory=list)
-    benchmark: str = "^GSPC"
-    default_rf: float = 0.04
-    model_config = {"frozen": True}
-
-
-@lru_cache(maxsize=1)
-def _build_app_config() -> AppConfig:
-    raw = os.getenv("PORTFOLIO_TICKERS", "NU,AMZN,SONY,XOM,WPM")
-    return AppConfig(
-        tickers=[t.strip() for t in raw.split(",") if t.strip()],
-        benchmark=os.getenv("BENCHMARK_TICKER", "^GSPC"),
-        default_rf=float(os.getenv("RISK_FREE_RATE", "0.04")),
-    )
-
-
-def get_app_config() -> AppConfig:
-    return _build_app_config()
-
-
-ConfigDep = Annotated[AppConfig, Depends(get_app_config)]
+# ─── Configuración inyectable ─────────────────────────────────────────────────
+# Settings centraliza .env + variables de entorno (api/config.py).
+# Se inyecta vía Depends en cada ruta que la necesite.
+ConfigDep = Annotated[Settings, Depends(get_settings)]
 
 
 # ─── Rango de fechas disponible ───────────────────────────────────────────────
-DATA_MIN_DATE = date(2020, 1, 1)   # inicio mínimo — Yahoo Finance tiene datos desde 2020
+DATA_MIN_DATE = date.fromisoformat(_settings_boot.data_min_date)
 DATA_MAX_DATE = date.today()         # no se pueden solicitar datos futuros
 
 
