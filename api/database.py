@@ -39,6 +39,9 @@ def _legacy_db_path() -> _Path:
 
 DB_PATH = _legacy_db_path()
 
+# Garantiza que la carpeta data/ exista (la BD y users.json no se versionan)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 
 __all__ = [
     "DB_PATH",

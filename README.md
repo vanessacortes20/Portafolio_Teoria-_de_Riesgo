@@ -73,6 +73,7 @@ Este proyecto demuestra que los marcos teóricos estudiados —CAPM, Markowitz, 
 ```
 Portafolio_Teoria-_de_Riesgo/
 ├── api/
+│   ├── __init__.py
 │   ├── main.py              # FastAPI app + routers + endpoints
 │   ├── config.py            # Settings(BaseSettings) — .env centralizado
 │   ├── data.py              # shim de get_historical_data hacia DataService
@@ -80,7 +81,7 @@ Portafolio_Teoria-_de_Riesgo/
 │   ├── logic.py             # cálculos analíticos M1-M6 (indicadores, VaR, QP…)
 │   ├── db/
 │   │   ├── base.py          # engine, SessionLocal, Base, get_db, init_db
-│   │   ├── models.py        # 7 modelos ORM
+│   │   ├── models.py        # 8 modelos ORM
 │   │   └── repository.py    # CRUD: usuarios, portafolios, predicciones
 │   ├── services/
 │   │   ├── data_service.py  # cache transparente OHLCV
@@ -91,11 +92,12 @@ Portafolio_Teoria-_de_Riesgo/
 │   └── ml/
 │       ├── features.py      # ingeniería de 8 features técnicas
 │       ├── predictor.py     # ModelPredictor (Singleton verificable)
-│       └── train.py         # `python -m api.ml.train`
+│       ├── train.py         # `python -m api.ml.train`
+│       ├── model.joblib     # artefacto serializado
+│       └── model.meta.json  # metadata (versión, accuracy, F1)
 ├── dashboard/
 │   ├── dashboard.html       # SPA con Plotly.js — 14 módulos
-│   ├── data.js              # snapshot estático (fallback offline)
-│   └── app.py               # variante Streamlit (legacy)
+│   └── data.js              # snapshot estático (fallback offline)
 ├── tests/
 │   ├── conftest.py          # fixtures: BD en memoria + TestClient
 │   ├── test_indicators.py
@@ -105,8 +107,11 @@ Portafolio_Teoria-_de_Riesgo/
 │   ├── test_endpoints.py
 │   ├── test_singleton.py
 │   └── test_bond.py
-├── data/                    # SQLite (gitignored para .db) + users.json
-├── docs/                    # HTML del instructivo del Proyecto Integrador
+├── data/                    # carpeta local — la BD SQLite y users.json se generan al arrancar
+├── docs/
+│   ├── instructivo_proyecto_integrador.html
+│   ├── INFORME_EJECUTIVO.md / .pdf
+│   └── SUSTENTACION.md / .pdf
 ├── generate_data.py         # genera data.js (snapshot estático)
 ├── .github/workflows/ci.yml # workflow de tests en cada push
 ├── Dockerfile               # multi-stage python:3.11.9-slim-bookworm
@@ -117,8 +122,11 @@ Portafolio_Teoria-_de_Riesgo/
 ├── pytest.ini
 ├── requirements.txt         # versiones fijas
 ├── .env.example             # plantilla de variables de entorno
+├── .gitignore               # reglas de exclusión
 └── README.md
 ```
+
+> **Nota sobre `data/`:** la carpeta existe localmente para alojar `risklab_users.db` y `users.json`, pero ambos están excluidos del repositorio en `.gitignore` porque contienen datos de usuarios. Se generan automáticamente al iniciar el backend (`init_db()` y `seed_demo_users()` crean los usuarios demo).
 
 ---
 
@@ -403,3 +411,11 @@ El proyecto no solo implementa los modelos del Proyecto Integrador, sino que los
 
 *Desarrollado con Python 3.11.9 · FastAPI · SQLAlchemy · Plotly.js · scikit-learn · Yahoo Finance · FRED*
 *Universidad Santo Tomás — Proyecto Integrador Teoría del Riesgo · 2024–2026*
+
+---
+
+## Nota sobre `CLAUDE.md` (contexto operativo local)
+
+El proyecto puede incluir un archivo local `CLAUDE.md` (excluido del repositorio vía `.gitignore`) que sirve como **memoria técnica operativa** para asistencia con IA durante el desarrollo. Contiene estado actual, decisiones de diseño no triviales, mapa de validadores y dependencias inyectadas, y reglas para futuras modificaciones.
+
+**Sincronización:** `README.md` y `CLAUDE.md` deben mantenerse consistentes. Cuando se realice una modificación importante (nuevo módulo, cambio de arquitectura, nuevas dependencias), ambos archivos deben actualizarse en paralelo.

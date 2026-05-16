@@ -2494,21 +2494,26 @@ function renderM3() {
     document.getElementById('in-resid').innerHTML = getInsight('Análisis de Residuos del Modelo de Riesgo', `Los residuos estandarizados miden la diferencia entre lo que observó el mercado y lo que predijo el modelo, expresada en unidades de desviación estándar. Si el modelo ajusta correctamente, estos errores deberían distribuirse como una campana simétrica centrada en cero. Colas pesadas, es decir, muchos residuos con valor absoluto superior a 2.5, indican que el modelo subestima la frecuencia de días extremos. En ese caso, usar una distribución t-Student en lugar de la normal mejoraría la captura de episodios atípicos.`, residType);
   }
 
-  // Pronóstico a 10 días — gráfico Plotly
+  // Pronóstico a 10 días — gráfico Plotly (líneas para mostrar convergencia)
   const fLabels = ['D+1','D+2','D+3','D+4','D+5','D+6','D+7','D+8','D+9','D+10'];
-  const fTraces = datasets.filter(({d}) => d.Forecast_10d && d.Forecast_10d.length).map(({t,d}) => ({
-    type:'bar', name:t,
+  const fDatasets = datasets.filter(({d}) => d.Forecast_10d && d.Forecast_10d.length);
+  const fTraces = fDatasets.map(({t,d}) => ({
+    type:'scatter', mode:'lines+markers', name:t,
     x: fLabels,
     y: d.Forecast_10d.map(v => v != null ? parseFloat((v*100).toFixed(4)) : null),
-    marker:{ color:TICKER_COLOR[t], opacity:0.85 },
+    line:{ color:TICKER_COLOR[t], width:2.5 },
+    marker:{ color:TICKER_COLOR[t], size:7 },
   }));
   if(fTraces.length) {
-    Plotly.newPlot('ch-forecast', fTraces, { showlegend: false, ...PB, height:360, barmode:'group',
+    const allVals = fDatasets.flatMap(({d}) => d.Forecast_10d.filter(v => v != null).map(v => v*100));
+    const yMin = Math.max(0, Math.min(...allVals) * 0.97);
+    const yMax = Math.max(...allVals) * 1.03;
+    Plotly.newPlot('ch-forecast', fTraces, { showlegend: true, ...PB, height:360,
       xaxis:{...PB.xaxis, title:'Horizonte de Pronóstico (días hábiles)'},
-      yaxis:{...PB.yaxis, title:'Volatilidad Diaria Proyectada (%)', tickformat:'.3f', ticksuffix:'%', automargin: true},
+      yaxis:{...PB.yaxis, title:'Volatilidad Diaria Proyectada (%)', tickformat:'.3f', ticksuffix:'%', automargin:true, range:[yMin, yMax]},
       title:{text:'Pronóstico de Volatilidad GARCH(1,1) — Próximos 10 Días',font:{size:13}}
     }, PCFG);
-    addChartToggles('ch-forecast', datasets.filter(x=>x.d.Forecast_10d?.length).map(x=>x.t), 1);
+    addChartToggles('ch-forecast', fDatasets.map(x=>x.t), 1);
   }
   addChartToggles('ch-garch', datasets.map(x=>x.t), 1);
 }
@@ -3040,9 +3045,8 @@ function renderM6() {
       text:[`SR ${fmt(wMaxS.Sharpe,2)}`], textposition:'top center',
       marker:{ color:C.red, size:16, symbol:'star', line:{color:'#fff',width:1.5} }
     },
-    { type:'scatter', mode:'markers+text', name:`Mín. Volatilidad (${(wMinV.Volatility*100).toFixed(1)}%)`,
+    { type:'scatter', mode:'markers', name:`Mín. Volatilidad (${(wMinV.Volatility*100).toFixed(1)}%)`,
       x:[wMinV.Volatility], y:[wMinV.Return],
-      text:[`Vol ${(wMinV.Volatility*100).toFixed(1)}%`], textposition:'bottom center',
       marker:{ color:C.green, size:14, symbol:'diamond', line:{color:'#fff',width:1.5} }
     }
   ], { ...PB, height:480, margin:{t:50,b:50,l:70,r:20},
@@ -4040,6 +4044,7 @@ async function _runModelInfo() {
 //  INIT
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  localStorage.removeItem(TOKEN_KEY);   // siempre pedir login al abrir la página
   await initAuth();   // espera verificación de token antes de continuar
 
   if (!D) {
