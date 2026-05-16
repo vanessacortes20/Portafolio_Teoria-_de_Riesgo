@@ -156,6 +156,31 @@ class PredictionLog(Base):
     user = relationship("User", back_populates="predictions")
 
 
+# ── Series macroeconomicas (FRED, BanRep, etc.) ──────────────────────────────
+
+
+class MacroSeries(Base):
+    """
+    Cache de series macroeconomicas externas (FRED y similares).
+
+    Cada fila representa el valor de una serie (p.ej. DGS10) en una fecha
+    especifica. Permite cachear la curva de tesoros y otros indicadores
+    sin volver a llamar al proveedor en cada request.
+    """
+
+    __tablename__ = "macro_series"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    series_id = Column(String(40), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    value = Column(Float, nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_macro_series_id_date", "series_id", "date", unique=True),
+    )
+
+
 # ── Senales tecnicas ─────────────────────────────────────────────────────────
 
 

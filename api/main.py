@@ -26,7 +26,14 @@ from starlette.responses import Response
 
 from api.config import Settings, get_settings
 from api.data import get_historical_data
-from api.services import DataService, get_data_service
+from api.services import (
+    Bond,
+    DataService,
+    FredClient,
+    YieldCurve,
+    get_data_service,
+    get_fred_client,
+)
 from api.database import (
     create_user,
     get_all_users,
@@ -932,6 +939,150 @@ def get_frontier_compare(
             compare_markowitz_with_without_short(
                 df_rets, rf_rate=config.default_rf, n_points=n_points
             )
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+# ─── Renta fija: curva, Nelson-Siegel, duración y convexidad (M9) ─────────────
+
+
+@app.get(
+    "/api/v1/yield-curve",
+    summary="Curva de tesoros US con ajuste Nelson-Siegel — M9",
+)
+def get_yield_curve(
+    fit_ns: bool = Query(True, description="Si True, ajusta Nelson-Siegel."),
+    fred: FredClient = Depends(get_fred_client),
+):
+    """
+    Construye la curva de rendimiento spot a partir de FRED (con fallback a
+    yfinance si la API key no esta configurada). Plazos: 3M, 1Y, 2Y, 5Y,
+    10Y y 30Y.
+
+    Con fit_ns=True ajusta Nelson-Siegel sobre los puntos crudos y retorna
+    los 4 parametros (beta0, beta1, beta2, lambda) + RMSE, mas la curva
+    ajustada evaluada en una grilla densa.
+    """
+    try:
+        raw = fred.get_yield_curve()
+        points = raw["points"]
+        if len(points) < 3:
+            raise HTTPException(503, "Datos insuficientes para construir la curva.")
+
+        maturities = list(points.keys())
+        yields = [points[m]["yield"] for m in maturities]
+
+        result: dict = {
+            "as_of":   raw["as_of"],
+            "source":  raw["source"],
+            "points": [
+                {
+                    "maturity_years": m,
+                    "yield":          points[m]["yield"],
+                    "series_id":      points[m].get("series_id"),
+                    "date":           points[m].get("date"),
+                    "source":         points[m].get("source"),
+                }
+                for m in maturities
+            ],
+        }
+
+        if fit_ns:
+            curve = YieldCurve(maturities, yields)
+            ns = curve.fit_nelson_siegel()
+            grid = np.linspace(0.1, max(maturities) * 1.1, 60)
+            fitted = [
+                {"maturity_years": float(t), "yield": float(curve.spot_rate(float(t)))}
+                for t in grid
+            ]
+            result["nelson_siegel"] = ns.to_dict()
+            result["fitted_curve"] = fitted
+            result["shape"] = curve.shape()
+
+        return json_response(result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+class BondRequest(BaseModel):
+    """Especificacion de un bono sintetico para el calculo de duracion/convexidad."""
+    face: float = Field(1000.0, gt=0, le=1_000_000_000, description="Valor nominal.")
+    coupon_rate: float = Field(
+        0.05, ge=0.0, le=1.0, description="Cupon anual (decimal)."
+    )
+    maturity_years: float = Field(
+        10.0, gt=0, le=50, description="Vencimiento en anos."
+    )
+    freq: int = Field(2, description="Pagos por anio (1, 2 o 4).")
+    ytm: Optional[float] = Field(
+        None, ge=0.0, le=1.0,
+        description="YTM (decimal). Si se omite se toma de la curva NS al plazo del bono.",
+    )
+
+    @field_validator("freq")
+    @classmethod
+    def _validate_freq(cls, v: int) -> int:
+        if v not in (1, 2, 4):
+            raise ValueError("freq debe ser 1 (anual), 2 (semestral) o 4 (trimestral).")
+        return v
+
+
+@app.post(
+    "/api/v1/bond/duration",
+    summary="Duración, convexidad y sensibilidad de un bono sintético — M9",
+)
+def post_bond_duration(
+    body: BondRequest,
+    fred: FredClient = Depends(get_fred_client),
+):
+    """
+    Calcula precio, duracion de Macaulay, duracion modificada y convexidad
+    de un bono sintetico, mas la tabla de sensibilidad ante shocks de
+    +-50, +-100 y +-200 puntos basicos comparando tres aproximaciones:
+      1. Lineal (solo duracion).
+      2. Lineal + termino de convexidad.
+      3. Reprice exacto descontando flujos.
+    """
+    try:
+        ytm = body.ytm
+        if ytm is None:
+            raw = fred.get_yield_curve()
+            pts = raw["points"]
+            if len(pts) < 3:
+                raise HTTPException(
+                    503,
+                    "Sin datos de curva para inferir YTM. Especifique ytm en el body.",
+                )
+            maturities = list(pts.keys())
+            yields = [pts[m]["yield"] for m in maturities]
+            curve = YieldCurve(maturities, yields)
+            ytm = float(curve.spot_rate(body.maturity_years))
+
+        bond = Bond(
+            face=body.face,
+            coupon_rate=body.coupon_rate,
+            maturity_years=body.maturity_years,
+            freq=body.freq,
+        )
+
+        summary = bond.summary(ytm)
+        sensitivity = bond.sensitivity_table(ytm)
+        cash_flows = [
+            {"t_years": t, "cash_flow": cf} for t, cf in bond.cash_flows()
+        ]
+
+        return json_response(
+            {
+                **summary,
+                "ytm_source":  "curve_ns" if body.ytm is None else "user",
+                "cash_flows":  cash_flows,
+                "sensitivity": sensitivity,
+            }
         )
     except HTTPException:
         raise

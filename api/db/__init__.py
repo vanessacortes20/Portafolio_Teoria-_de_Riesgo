@@ -9,6 +9,7 @@ Capa de persistencia SQLAlchemy del proyecto RiskLab USTA.
 from api.db.base import Base, SessionLocal, engine, get_db, init_db
 from api.db.models import (
     Asset,
+    MacroSeries,
     Portfolio,
     PredictionLog,
     Price,
@@ -30,4 +31,5 @@ __all__ = [
     "Portfolio",
     "PredictionLog",
     "SignalLog",
+    "MacroSeries",
 ]
