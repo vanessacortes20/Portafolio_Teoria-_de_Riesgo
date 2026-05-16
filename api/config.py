@@ -20,10 +20,10 @@ from __future__ import annotations
 import secrets
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,7 +53,10 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{_DEFAULT_DB_FILE}"
 
     # ── Portafolio del análisis ───────────────────────────────
-    tickers: list[str] = Field(
+    # NoDecode evita que pydantic-settings intente JSON-parsear el valor
+    # del .env (PORTFOLIO_TICKERS=NU,AMZN,SONY). El field_validator
+    # _split_csv (mode="before") hace el split por comas.
+    tickers: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["NU", "AMZN", "SONY", "XOM", "WPM"],
         validation_alias="PORTFOLIO_TICKERS",
     )

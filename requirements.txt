@@ -3,7 +3,7 @@ fastapi==0.135.3
 uvicorn[standard]==0.43.0
 python-dotenv==1.0.1
 pydantic[email]==2.12.5
-pydantic-settings==2.6.1
+pydantic-settings==2.14.1
 email-validator==2.2.0
 
 # ─── Autenticación ────────────────────────────────────────────
