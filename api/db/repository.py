@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.db.base import SessionLocal, init_db as _init_db_tables
-from api.db.models import ResetToken, User
+from api.db.models import Portfolio, ResetToken, User
 
 # Exporte del path de users.json (mantengo la misma ruta que la version antigua)
 USERS_JSON = Path(__file__).resolve().parent.parent.parent / "data" / "users.json"
@@ -252,3 +252,89 @@ def mark_token_used(token: str) -> None:
         t = db.scalar(select(ResetToken).where(ResetToken.token == token))
         if t is not None:
             t.used = 1
+
+
+# ── Portafolios ──────────────────────────────────────────────────────────────
+#
+# A diferencia de las funciones de usuario (que abren su propia sesion para
+# preservar compatibilidad con la API antigua), las de portafolios reciben
+# la Session por parametro. Esto encaja con el patron moderno de FastAPI:
+#   db: Session = Depends(get_db)
+#   pf = create_portfolio(db, name=..., weights=...)
+
+
+def _portfolio_to_dict(p: Portfolio) -> dict:
+    return {
+        "id":          p.id,
+        "user_id":     p.user_id,
+        "name":        p.name,
+        "weights":     p.weights,
+        "description": p.description,
+        "created_at":  p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+def create_portfolio(
+    db: Session,
+    name: str,
+    weights: dict,
+    user_id: Optional[int] = None,
+    description: Optional[str] = None,
+) -> dict:
+    """Crea un portafolio persistido y devuelve su representacion serializable."""
+    p = Portfolio(
+        user_id=user_id,
+        name=name,
+        weights=weights,
+        description=description,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _portfolio_to_dict(p)
+
+
+def get_portfolio_by_id(db: Session, portfolio_id: int) -> Optional[dict]:
+    p = db.get(Portfolio, portfolio_id)
+    return _portfolio_to_dict(p) if p else None
+
+
+def list_portfolios(db: Session, user_id: Optional[int] = None) -> list[dict]:
+    """Lista portafolios. Si user_id se especifica, filtra por propietario."""
+    stmt = select(Portfolio).order_by(Portfolio.created_at.desc())
+    if user_id is not None:
+        stmt = stmt.where(Portfolio.user_id == user_id)
+    rows = db.scalars(stmt).all()
+    return [_portfolio_to_dict(p) for p in rows]
+
+
+def update_portfolio(
+    db: Session,
+    portfolio_id: int,
+    name: Optional[str] = None,
+    weights: Optional[dict] = None,
+    description: Optional[str] = None,
+) -> Optional[dict]:
+    """Actualiza un portafolio. Devuelve None si no existe."""
+    p = db.get(Portfolio, portfolio_id)
+    if p is None:
+        return None
+    if name is not None:
+        p.name = name
+    if weights is not None:
+        p.weights = weights
+    if description is not None:
+        p.description = description
+    db.commit()
+    db.refresh(p)
+    return _portfolio_to_dict(p)
+
+
+def delete_portfolio(db: Session, portfolio_id: int) -> bool:
+    """Borra un portafolio. Devuelve True si existia, False si no."""
+    p = db.get(Portfolio, portfolio_id)
+    if p is None:
+        return False
+    db.delete(p)
+    db.commit()
+    return True

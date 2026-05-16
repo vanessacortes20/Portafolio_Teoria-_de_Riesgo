@@ -24,8 +24,18 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 from scipy import stats as scipy_stats
 from starlette.responses import Response
 
+from sqlalchemy.orm import Session
+
 from api.config import Settings, get_settings
 from api.data import get_historical_data
+from api.db import get_db
+from api.db.repository import (
+    create_portfolio as _repo_create_portfolio,
+    delete_portfolio as _repo_delete_portfolio,
+    get_portfolio_by_id as _repo_get_portfolio_by_id,
+    list_portfolios as _repo_list_portfolios,
+    update_portfolio as _repo_update_portfolio,
+)
 from api.services import (
     Bond,
     DataService,
@@ -327,6 +337,171 @@ def auth_reset_confirm(body: PasswordResetConfirm):
 @app.get("/auth/users", summary="Listar todos los usuarios — solo admin")
 def auth_list_users(_admin: AdminUser):
     return get_all_users()
+
+
+# ─── CRUD de portafolios persistidos ──────────────────────────────────────────
+
+
+class PortfolioCreate(BaseModel):
+    """Body para crear un portafolio."""
+    name:        str       = Field(..., min_length=1, max_length=120)
+    weights:     dict[str, float] = Field(..., description="Mapa ticker -> peso (suma 1).")
+    description: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("weights")
+    @classmethod
+    def _v_weights(cls, v: dict) -> dict:
+        if not v or len(v) < 2:
+            raise ValueError("Se requieren al menos 2 activos en el portafolio.")
+        s = sum(v.values())
+        if abs(s - 1.0) > 0.01:
+            raise ValueError(f"Los pesos deben sumar 1.0 (suma actual: {s:.4f}).")
+        for ticker, w in v.items():
+            if not isinstance(ticker, str) or not ticker.strip():
+                raise ValueError("Los tickers deben ser strings no vacios.")
+            if w < 0:
+                raise ValueError(f"Peso negativo no permitido para '{ticker}'.")
+        return v
+
+
+class PortfolioUpdate(BaseModel):
+    """Body para actualizar un portafolio (todos los campos son opcionales)."""
+    name:        Optional[str]              = Field(None, min_length=1, max_length=120)
+    weights:     Optional[dict[str, float]] = None
+    description: Optional[str]              = Field(None, max_length=500)
+
+    @field_validator("weights")
+    @classmethod
+    def _v_weights(cls, v):
+        if v is None:
+            return v
+        if len(v) < 2:
+            raise ValueError("Se requieren al menos 2 activos.")
+        s = sum(v.values())
+        if abs(s - 1.0) > 0.01:
+            raise ValueError(f"Los pesos deben sumar 1.0 (suma actual: {s:.4f}).")
+        for ticker, w in v.items():
+            if w < 0:
+                raise ValueError(f"Peso negativo no permitido para '{ticker}'.")
+        return v
+
+
+class PortfolioResponse(BaseModel):
+    """Representacion serializada de un portafolio persistido."""
+    id:          int
+    user_id:     Optional[int]
+    name:        str
+    weights:     dict[str, float]
+    description: Optional[str]
+    created_at:  Optional[str]
+
+
+def _ensure_portfolio_access(p: dict, current_user: dict) -> None:
+    """Lanza 403 si el usuario no es owner ni admin."""
+    if p.get("user_id") is None:
+        return  # portafolio publico
+    if p["user_id"] == current_user["id"]:
+        return
+    if current_user.get("role") == "admin":
+        return
+    raise HTTPException(403, "No tienes permisos sobre este portafolio.")
+
+
+@app.post(
+    "/api/v1/portfolios",
+    response_model=PortfolioResponse,
+    status_code=201,
+    summary="Crear portafolio persistido",
+)
+def create_portfolio_route(
+    body: PortfolioCreate,
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    """Crea un portafolio asociado al usuario autenticado."""
+    pf = _repo_create_portfolio(
+        db,
+        name=body.name,
+        weights=body.weights,
+        user_id=current["id"],
+        description=body.description,
+    )
+    return PortfolioResponse(**pf)
+
+
+@app.get(
+    "/api/v1/portfolios",
+    response_model=list[PortfolioResponse],
+    summary="Listar portafolios del usuario (admin ve todos)",
+)
+def list_portfolios_route(
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    user_filter = None if current.get("role") == "admin" else current["id"]
+    rows = _repo_list_portfolios(db, user_id=user_filter)
+    return [PortfolioResponse(**p) for p in rows]
+
+
+@app.get(
+    "/api/v1/portfolios/{portfolio_id}",
+    response_model=PortfolioResponse,
+    summary="Leer un portafolio persistido",
+)
+def get_portfolio_route(
+    portfolio_id: int,
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    pf = _repo_get_portfolio_by_id(db, portfolio_id)
+    if pf is None:
+        raise HTTPException(404, "Portafolio no encontrado.")
+    _ensure_portfolio_access(pf, current)
+    return PortfolioResponse(**pf)
+
+
+@app.put(
+    "/api/v1/portfolios/{portfolio_id}",
+    response_model=PortfolioResponse,
+    summary="Actualizar un portafolio persistido",
+)
+def update_portfolio_route(
+    portfolio_id: int,
+    body: PortfolioUpdate,
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    existing = _repo_get_portfolio_by_id(db, portfolio_id)
+    if existing is None:
+        raise HTTPException(404, "Portafolio no encontrado.")
+    _ensure_portfolio_access(existing, current)
+    updated = _repo_update_portfolio(
+        db,
+        portfolio_id,
+        name=body.name,
+        weights=body.weights,
+        description=body.description,
+    )
+    return PortfolioResponse(**updated)
+
+
+@app.delete(
+    "/api/v1/portfolios/{portfolio_id}",
+    summary="Borrar un portafolio persistido",
+)
+def delete_portfolio_route(
+    portfolio_id: int,
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    existing = _repo_get_portfolio_by_id(db, portfolio_id)
+    if existing is None:
+        raise HTTPException(404, "Portafolio no encontrado.")
+    _ensure_portfolio_access(existing, current)
+    ok = _repo_delete_portfolio(db, portfolio_id)
+    if not ok:
+        raise HTTPException(500, "No se pudo borrar el portafolio.")
+    return {"message": "Portafolio eliminado.", "id": portfolio_id}
 
 
 # ─── Configuración inyectable ─────────────────────────────────────────────────
