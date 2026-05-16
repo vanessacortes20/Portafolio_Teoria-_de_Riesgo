@@ -1,57 +1,60 @@
-import yfinance as yf
+"""
+Shim de compatibilidad. La logica real con cache transparente vive
+en api.services.data_service.DataService.
+
+Las firmas de las funciones publicas se preservan para que el codigo
+existente (api/main.py, generate_data.py) siga funcionando sin cambios.
+"""
+from __future__ import annotations
+
+from typing import Optional
+
 import pandas as pd
+
+from api.services.data_service import DataService
 
 
 def get_historical_data(
     ticker: str,
     period: str = "2y",
-    start_date: str = None,
-    end_date: str = None,
-) -> pd.DataFrame | None:
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Optional[pd.DataFrame]:
     """
-    Downloads historical OHLCV data from Yahoo Finance.
-    If start_date and end_date are provided, they override the period parameter.
+    Descarga OHLCV de un activo con cache transparente en SQLite.
+
+    En la primera llamada hace fetch a Yahoo Finance y persiste el resultado
+    en la tabla `prices`. Las llamadas posteriores dentro del TTL configurado
+    (default 24 h) se sirven directo desde la BD sin tocar la red.
+
+    Mantiene la firma original: si start_date y end_date estan ambos
+    presentes se usan; de lo contrario se cae al `period`.
     """
-    try:
-        if start_date and end_date:
-            data = yf.download(
-                ticker, start=start_date, end=end_date, interval="1d", progress=False
-            )
-        else:
-            data = yf.download(ticker, period=period, interval="1d", progress=False)
-
-        if data.empty:
-            return None
-
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-
-        if data.index.name != "Date":
-            data.index.name = "Date"
-
-        data.reset_index(inplace=True)
-
-        if "Date" not in data.columns and "index" in data.columns:
-            data.rename(columns={"index": "Date"}, inplace=True)
-
-        return data
-    except Exception as e:
-        print(f"Error downloading data for {ticker}: {e}")
-        return None
+    with DataService() as svc:
+        return svc.get_prices_df(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            period=period,
+        )
 
 
 def get_portfolio_data(
     tickers: list,
     period: str = "2y",
-    start_date: str = None,
-    end_date: str = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
 ) -> dict:
-    """Downloads OHLCV data for an entire portfolio."""
-    portfolio_data = {}
-    for ticker in tickers:
-        df = get_historical_data(
-            ticker, period=period, start_date=start_date, end_date=end_date
-        )
-        if df is not None:
-            portfolio_data[ticker] = df
-    return portfolio_data
+    """Descarga OHLCV para una lista de tickers, reusando una sola sesion."""
+    out: dict = {}
+    with DataService() as svc:
+        for t in tickers:
+            df = svc.get_prices_df(
+                ticker=t,
+                start_date=start_date,
+                end_date=end_date,
+                period=period,
+            )
+            if df is not None:
+                out[t] = df
+    return out

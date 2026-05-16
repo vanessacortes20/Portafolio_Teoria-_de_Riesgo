@@ -26,6 +26,7 @@ from starlette.responses import Response
 
 from api.config import Settings, get_settings
 from api.data import get_historical_data
+from api.services import DataService, get_data_service
 from api.database import (
     create_user,
     get_all_users,
@@ -475,6 +476,23 @@ def read_root():
             "max": str(DATA_MAX_DATE),
         },
     }
+
+
+@app.get(
+    "/api/v1/cache/stats",
+    summary="Estado del cache de datos externos en SQLite",
+)
+def get_cache_stats(svc: DataService = Depends(get_data_service)):
+    """
+    Estadisticas del cache transparente que respalda los endpoints de datos.
+
+    Retorna:
+      - assets:           cantidad de tickers conocidos.
+      - price_rows:       cantidad total de filas OHLCV persistidas.
+      - last_fetched_at:  timestamp UTC de la ultima descarga.
+      - ttl_hours:        tiempo de vida configurado para los datos.
+    """
+    return svc.cache_stats()
 
 
 @app.get("/api/v1/technical/{ticker}", summary="Análisis técnico — M1 / M7")
