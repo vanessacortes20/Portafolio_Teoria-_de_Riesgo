@@ -34,7 +34,15 @@ from api.db.repository import (
     delete_portfolio as _repo_delete_portfolio,
     get_portfolio_by_id as _repo_get_portfolio_by_id,
     list_portfolios as _repo_list_portfolios,
+    list_predictions as _repo_list_predictions,
+    log_prediction as _repo_log_prediction,
     update_portfolio as _repo_update_portfolio,
+)
+from api.ml import (
+    FEATURE_NAMES,
+    ModelPredictor,
+    get_predictor,
+    latest_features_for_ticker,
 )
 from api.services import (
     Bond,
@@ -1585,6 +1593,152 @@ def post_stress(
         raise
     except Exception as exc:
         raise HTTPException(500, str(exc))
+
+
+# ─── Machine Learning: pipeline buy/hold/sell (Capa 4) ───────────────────────
+
+
+class PredictRequest(BaseModel):
+    """Body del endpoint POST /api/v1/predict."""
+    ticker: str = Field(..., min_length=1, max_length=20, description="Ticker objetivo.")
+    features: Optional[dict[str, float]] = Field(
+        None,
+        description=(
+            "Vector de features. Si se omite, el backend lo calcula desde los "
+            "precios cacheados del ticker (cache transparente)."
+        ),
+    )
+
+    @field_validator("ticker")
+    @classmethod
+    def _v_ticker(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("ticker no puede estar vacio.")
+        return v
+
+
+class PredictionResult(BaseModel):
+    """Sub-modelo anidado dentro de PredictResponse."""
+    action: Literal["Buy", "Hold", "Sell"]
+    confidence: Optional[float]
+    model_version: str
+    model_type: str
+
+
+class PredictResponse(BaseModel):
+    """Respuesta tipada del endpoint /predict."""
+    ticker: str
+    prediction: PredictionResult
+    features_used: dict[str, float]
+    features_source: Literal["user_provided", "auto_computed"]
+    log_id: Optional[int]
+
+
+@app.post(
+    "/api/v1/predict",
+    response_model=PredictResponse,
+    summary="Prediccion buy/hold/sell del modelo ML (Singleton) — Capa 4",
+)
+def post_predict(
+    body: PredictRequest,
+    predictor: ModelPredictor = Depends(get_predictor),
+    db: Session = Depends(get_db),
+):
+    """
+    Sirve el modelo entrenado (RandomForest) via patron Singleton.
+
+    Si se omite `features` en el body, el backend descarga el historial del
+    ticker (cache transparente) y calcula automaticamente los 8 features
+    tecnicos (ret_1d, ret_5d, ret_20d, rsi_14, macd_hist, vol_20d,
+    pos_in_bb, volume_ratio). Cada llamada se persiste en
+    `predictions_log` para monitoreo de drift futuro.
+    """
+    # ── Resolver features ─────────────────────────────────────────────────
+    if body.features is not None:
+        features = {k: float(v) for k, v in body.features.items()}
+        source = "user_provided"
+    else:
+        data = get_historical_data(body.ticker)
+        if data is None or data.empty:
+            raise HTTPException(404, f"No se encontraron datos para '{body.ticker}'.")
+        features = latest_features_for_ticker(data)
+        if not features:
+            raise HTTPException(
+                503, "No se pudieron computar features (historial insuficiente)."
+            )
+        source = "auto_computed"
+
+    # Validacion explicita por si el usuario pasa features incompletas
+    missing = [k for k in FEATURE_NAMES if k not in features]
+    if missing:
+        raise HTTPException(422, f"Features faltantes en el request: {missing}")
+
+    # ── Inferencia (Singleton) ────────────────────────────────────────────
+    try:
+        result = predictor.predict(features)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+    # ── Persistir en predictions_log ──────────────────────────────────────
+    log_id: Optional[int] = None
+    try:
+        log_row = _repo_log_prediction(
+            db,
+            model_version=result["model_version"],
+            ticker=body.ticker,
+            input_features=features,
+            prediction=result["action"],
+            confidence=result.get("confidence"),
+            user_id=None,
+        )
+        log_id = int(log_row["id"]) if log_row.get("id") is not None else None
+    except Exception:
+        # No bloquear la respuesta si el log falla.
+        pass
+
+    return PredictResponse(
+        ticker=body.ticker,
+        prediction=PredictionResult(**result),
+        features_used=features,
+        features_source=source,
+        log_id=log_id,
+    )
+
+
+@app.get(
+    "/api/v1/predict/info",
+    summary="Metadata del modelo ML cargado (version, accuracy, features)",
+)
+def get_predict_info(predictor: ModelPredictor = Depends(get_predictor)):
+    """
+    Retorna la metadata del modelo activo:
+      - model_version: identificador semantico del modelo.
+      - model_type: 'RandomForestClassifier (...)' o 'heuristic' si no hay artefacto.
+      - meta: contenido completo de .meta.json (accuracy, f1, fecha de entreno, etc.).
+      - expected_features: lista de features que el modelo espera recibir.
+      - has_real_model: True si hay un .joblib cargado; False si esta usando el fallback.
+    """
+    return {
+        "model_version":     predictor.model_version,
+        "model_type":        predictor.model_type,
+        "meta":              predictor.meta,
+        "expected_features": predictor.expected_features,
+        "has_real_model":    predictor.has_real_model,
+    }
+
+
+@app.get(
+    "/api/v1/predict/log",
+    summary="Ultimas predicciones registradas en predictions_log",
+)
+def get_predict_log(
+    db: Session = Depends(get_db),
+    ticker: Optional[str] = Query(None, description="Filtra por ticker."),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Permite monitorear historicamente las predicciones (uso diagnostico)."""
+    return _repo_list_predictions(db, ticker=ticker, limit=limit)
 
 
 @app.get("/api/v1/macro", summary="Indicadores macroeconómicos de contexto — M8")

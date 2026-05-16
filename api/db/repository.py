@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.db.base import SessionLocal, init_db as _init_db_tables
-from api.db.models import Portfolio, ResetToken, User
+from api.db.models import Portfolio, PredictionLog, ResetToken, User
 
 # Exporte del path de users.json (mantengo la misma ruta que la version antigua)
 USERS_JSON = Path(__file__).resolve().parent.parent.parent / "data" / "users.json"
@@ -338,3 +338,65 @@ def delete_portfolio(db: Session, portfolio_id: int) -> bool:
     db.delete(p)
     db.commit()
     return True
+
+
+# ── Predictions log (Machine Learning) ───────────────────────────────────────
+
+
+def log_prediction(
+    db: Session,
+    model_version: str,
+    ticker: str,
+    input_features: dict,
+    prediction: str,
+    confidence: Optional[float] = None,
+    user_id: Optional[int] = None,
+) -> dict:
+    """Persiste una llamada a /predict en la tabla predictions_log."""
+    row = PredictionLog(
+        user_id=user_id,
+        model_version=model_version,
+        ticker=ticker,
+        input_features=input_features,
+        prediction=prediction,
+        confidence=confidence,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {
+        "id":            row.id,
+        "user_id":       row.user_id,
+        "model_version": row.model_version,
+        "ticker":        row.ticker,
+        "prediction":    row.prediction,
+        "confidence":    row.confidence,
+        "timestamp":     row.timestamp.isoformat() if row.timestamp else None,
+    }
+
+
+def list_predictions(
+    db: Session,
+    ticker: Optional[str] = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Devuelve las ultimas predicciones logueadas; util para monitoreo."""
+    stmt = select(PredictionLog).order_by(PredictionLog.timestamp.desc())
+    if ticker is not None:
+        stmt = stmt.where(PredictionLog.ticker == ticker)
+    stmt = stmt.limit(int(max(1, limit)))
+    rows = db.scalars(stmt).all()
+    return [
+        {
+            "id":             r.id,
+            "user_id":        r.user_id,
+            "model_version":  r.model_version,
+            "ticker":         r.ticker,
+            "input_features": r.input_features,
+            "prediction":     r.prediction,
+            "confidence":     r.confidence,
+            "actual":         r.actual,
+            "timestamp":      r.timestamp.isoformat() if r.timestamp else None,
+        }
+        for r in rows
+    ]
