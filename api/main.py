@@ -2317,32 +2317,136 @@ def alias_portafolios_list(current: CurrentUser, db: Session = Depends(get_db)):
     return list_portfolios_route(current=current, db=db)
 
 
-# ─── /alertas (placeholder hasta Fase 2 M7) ─────────────────────────────────
-# La versión definitiva con SignalGenerator y persistencia en signals_log
-# se implementa en la Fase 2. Por ahora itera el portafolio configurado y
-# reusa el endpoint /api/v1/signals/{ticker} existente.
+# ─── /alertas — panel consolidado del portafolio (M7 Plan III) ──────────────
 
 @app.get(
     "/alertas",
     tags=["alias-corto Plan III"],
-    summary="Señales activas del portafolio (placeholder M7 — se refuerza en Fase 2)",
+    summary="Panel de señales activas para todos los activos del portafolio — M7",
 )
-def alias_alertas_portfolio(dates: DateRangeDep, config: ConfigDep):
-    """Evalúa señales para cada activo configurado en PORTFOLIO_TICKERS.
+def alias_alertas_portfolio(
+    dates: DateRangeDep,
+    config: ConfigDep,
+    rsi_overbought:   int   = Query(70, ge=50, le=99),
+    rsi_oversold:     int   = Query(30, ge=1,  le=50),
+    bollinger_std:    float = Query(2.0, gt=0.0, le=5.0),
+    stoch_overbought: int   = Query(80, ge=50, le=99),
+    stoch_oversold:   int   = Query(20, ge=1,  le=50),
+    persist:          bool  = Query(True),
+):
+    """Itera `config.tickers` aplicando SignalGenerator a cada activo.
 
-    Implementación mínima por ahora: itera tickers y llama al endpoint
-    individual /api/v1/signals/{ticker}. La Fase 2 de Plan III reemplaza
-    este handler con SignalGenerator + persistencia en signals_log.
+    Cada activo produce un SignalReport independiente. Errores por ticker
+    se reportan en `errors` sin abortar el panel completo. Las señales
+    disparadas se persisten en `signals_log` (dedup por ticker/regla/día).
     """
-    reports = []
+    reports:       list[dict] = []
+    errors:        list[dict] = []
+    total_signals = 0
     for t in config.tickers:
         try:
-            rpt = get_asset_signals(ticker=t, dates=dates, _cfg=config)
+            rpt = get_asset_signals(
+                ticker=t, dates=dates, _cfg=config,
+                rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+                bollinger_std=bollinger_std,
+                stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+                persist=persist,
+            )
             reports.append(rpt)
+            total_signals += len(rpt.get("signals", []))
         except HTTPException as exc:
-            reports.append({"ticker": t, "error": str(exc.detail)})
+            errors.append({"ticker": t, "detail": str(exc.detail)})
+        except Exception as exc:  # pragma: no cover
+            errors.append({"ticker": t, "detail": str(exc)})
+
     return json_response({
-        "tickers":  config.tickers,
-        "count":    len(reports),
-        "reports":  reports,
+        "tickers":    config.tickers,
+        "n_signals":  total_signals,
+        "thresholds": {
+            "rsi_overbought":   rsi_overbought,
+            "rsi_oversold":     rsi_oversold,
+            "bollinger_std":    bollinger_std,
+            "stoch_overbought": stoch_overbought,
+            "stoch_oversold":   stoch_oversold,
+        },
+        "reports":    reports,
+        "errors":     errors,
     })
+
+
+# ─── /alertas/{ticker} (alias del endpoint individual) ──────────────────────
+
+@app.get(
+    "/alertas/{ticker}",
+    response_model=SignalReport,
+    tags=["alias-corto Plan III"],
+    summary="Señales de un activo individual — alias de /api/v1/signals/{ticker}",
+)
+def alias_alertas_ticker(
+    ticker: str,
+    dates: DateRangeDep,
+    _cfg: ConfigDep,
+    rsi_overbought:   int   = Query(70, ge=50, le=99),
+    rsi_oversold:     int   = Query(30, ge=1,  le=50),
+    bollinger_std:    float = Query(2.0, gt=0.0, le=5.0),
+    stoch_overbought: int   = Query(80, ge=50, le=99),
+    stoch_oversold:   int   = Query(20, ge=1,  le=50),
+    persist:          bool  = Query(True),
+):
+    return get_asset_signals(
+        ticker=ticker, dates=dates, _cfg=_cfg,
+        rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+        bollinger_std=bollinger_std,
+        stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+        persist=persist,
+    )
+
+
+# ─── Historial de señales persistidas ───────────────────────────────────────
+
+@app.get(
+    "/api/v1/signals/{ticker}/history",
+    tags=["M7 señales"],
+    summary="Historial de señales persistidas en signals_log para un ticker",
+)
+def get_signals_history(
+    ticker: str,
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """Devuelve las señales persistidas en `signals_log` ordenadas desc."""
+    from api.db.base import SessionLocal
+    from api.db.models import SignalLog
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(SignalLog)
+            .filter(SignalLog.ticker == ticker)
+            .order_by(SignalLog.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        history = [
+            {
+                "id":          r.id,
+                "timestamp":   r.timestamp.isoformat(timespec="seconds") if r.timestamp else None,
+                "ticker":      r.ticker,
+                "rule":        r.rule,
+                "signal_type": r.signal_type,
+                "value":       r.value,
+                "message":     r.message,
+            }
+            for r in rows
+        ]
+        return {"ticker": ticker, "count": len(history), "history": history}
+    finally:
+        db.close()
+
+
+@app.get(
+    "/alertas/{ticker}/history",
+    tags=["alias-corto Plan III"],
+    summary="Historial de señales — alias de /api/v1/signals/{ticker}/history",
+)
+def alias_alertas_history(ticker: str, limit: int = Query(100, ge=1, le=1000)):
+    return get_signals_history(ticker=ticker, limit=limit)
