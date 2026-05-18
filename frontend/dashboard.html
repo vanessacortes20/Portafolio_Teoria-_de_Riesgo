@@ -2317,9 +2317,9 @@ function renderM3() {
 
   const modelNames = ['ARCH(1)','GARCH(1,1)','EGARCH(1,1)'];
   const tableHead = `<tr><th>Ticker</th>${modelNames.map(m=>`<th>${m} AIC</th><th>${m} BIC</th>`).join('')}</tr>`;
-  
+
   let egarchBestCount = 0;
-  
+
   const tableBody = datasets.map(({t,d}) => {
     const cells = modelNames.map(m => {
       const md = d[m] || {};
@@ -2330,6 +2330,41 @@ function renderM3() {
     }).join('');
     return `<tr><td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>${cells}</tr>`;
   }).join('');
+
+  // ── Tabla unificada de métodos de volatilidad (incluye EWMA sin falsear AIC/BIC) ──
+  const methodsHead = `<tr>
+      <th>Ticker</th>
+      <th>EWMA σ diaria</th>
+      <th>EWMA σ anual</th>
+      <th>ARCH(1) AIC</th>
+      <th>GARCH(1,1) AIC</th>
+      <th>EGARCH(1,1) AIC</th>
+      <th>Mejor modelo GARCH</th>
+    </tr>`;
+  const methodsBody = datasets.map(({t,d}) => {
+    // EWMA: usamos σ disponible en data.js (GARCH también la trae) o estimación equivalente
+    // Si EWMA_lambda_default existe en el snapshot, lo usamos; si no, lo dejamos en n/d
+    const ewmaDaily  = d.EWMA?.current_volatility_daily ?? null;
+    const ewmaAnnual = d.EWMA?.current_volatility_annual ?? null;
+    const aics = modelNames.map(m => (d[m] || {}).AIC);
+    const minAic = Math.min(...aics.filter(x => x != null && isFinite(x)));
+    const bestModel = modelNames[aics.indexOf(minAic)] || '—';
+    const fmtPct = v => v != null ? (v * 100).toFixed(2) + '%' : 'n/d';
+    return `<tr>
+      <td style="color:${TICKER_COLOR[t]};font-weight:700">${t}</td>
+      <td>${fmtPct(ewmaDaily)}</td>
+      <td>${fmtPct(ewmaAnnual)}</td>
+      <td>${fmt(aics[0],2)}</td>
+      <td>${fmt(aics[1],2)}</td>
+      <td>${fmt(aics[2],2)}</td>
+      <td style="font-weight:600;color:#059669">${bestModel}</td>
+    </tr>`;
+  }).join('');
+  const methodsFootnote = `<tfoot><tr><td colspan="7" style="font-size:.75rem;color:#64748b;padding:8px 12px;background:#F8FAFC;font-style:italic">
+    Nota: EWMA se compara por <b>volatilidad estimada</b> (σ diaria y anualizada con λ=0.94) y por sensibilidad al shock.
+    No se reporta AIC/BIC para EWMA porque <b>no se estima por máxima verosimilitud</b> en esta implementación (λ es un hiperparámetro fijo).
+    Los modelos ARCH/GARCH/EGARCH sí se ajustan por MLE y por tanto admiten AIC/BIC.
+  </td></tr></tfoot>`;
 
 
   let volEndState = datasets.map(({d}) => d['GARCH(1,1)']?.Volatility?.[d['GARCH(1,1)'].Volatility.length-1]).filter(x=>x);
@@ -2356,7 +2391,7 @@ function renderM3() {
       <button class="tab-btn"        onclick="switchTab('m3','ewma',this);_initEWMATab()">🌊 EWMA</button>
       <button class="tab-btn"        onclick="switchTab('m3','resid',this)">🔬 Diagnóstico de Residuos</button>
       <button class="tab-btn"        onclick="switchTab('m3','forecast',this)">🔮 Pronóstico a 10 Días</button>
-      <button class="tab-btn"        onclick="switchTab('m3','table',this);_initM3CompTab()">📋 Comparación EWMA vs GARCH</button>
+      <button class="tab-btn"        onclick="switchTab('m3','table',this)">📋 Selección por AIC/BIC</button>
     </div>
     
     <div id="m3-tab-vol" class="tab-content card active" style="padding:12px">
@@ -2367,32 +2402,32 @@ function renderM3() {
         El modelo <b>EWMA (Exponentially Weighted Moving Average)</b> calcula la volatilidad
         con un decay exponencial <code>λ</code> sobre los retornos cuadrados. Es el estándar
         del marco <b>RiskMetrics</b> de J.P. Morgan. <b>λ alto</b> (cerca de 1) → memoria larga;
-        <b>λ bajo</b> → respuesta rápida a shocks recientes.
+        <b>λ bajo</b> → respuesta rápida a shocks recientes. Esto es un <b>método de
+        estimación de volatilidad</b>, no una señal de compra/venta.
       </p>
-      <div class="card" style="padding:14px;background:#F8FAFC;margin-bottom:14px">
-        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
-          <div>
-            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">Ticker</label>
-            <select id="ewma-ticker" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-weight:600">
-              ${(D?.tickers || state.activeTickers || []).map(t => `<option value="${t}">${t}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ (decay)</label>
-            <input id="ewma-lambda" type="number" value="0.94" min="0.50" max="0.999" step="0.01"
-              style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600">
-          </div>
-          <div>
-            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ extra (CSV)</label>
-            <input id="ewma-extras" type="text" value="0.90,0.97" placeholder="0.90,0.97"
-              style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:140px">
-          </div>
-          <button id="ewma-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular</button>
+
+      <!-- Card con la gráfica y los botones de selección de activo arriba a la derecha -->
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+        <!-- Header del card con label "Comparación:" + botones de ticker -->
+        <div id="ewma-toggles"
+             style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-bottom:1px solid #e2e8f0;background:#f8fafc;border-radius:6px 6px 0 0">
+          <span style="font-size:0.78rem;font-weight:700;color:#64748b;margin-right:auto">Comparación:</span>
+          <!-- Los botones se inyectan por JS para preservar el mismo estilo del resto del dashboard -->
         </div>
+        <!-- Título dinámico -->
+        <div style="padding:10px 14px 0">
+          <h3 id="ewma-title" style="margin:0;font-size:1rem;color:#0F172A">Resumen EWMA por activo</h3>
+          <div id="ewma-subtitle" style="font-size:.78rem;color:#64748b;margin-top:2px">Vista resumen de todos los activos</div>
+        </div>
+        <!-- Chart -->
+        <div id="ewma-chart" style="height:380px;min-height:300px;padding:10px"></div>
       </div>
-      <div id="ewma-output" style="font-size:.85rem;color:#94a3b8;padding:24px;text-align:center">
-        Selecciona ticker y λ, luego presiona <b>Calcular</b>.
-      </div>
+
+      <!-- KPIs cuando hay ticker individual seleccionado -->
+      <div id="ewma-kpis" style="display:none;margin-bottom:14px"></div>
+
+      <!-- Interpretación dinámica -->
+      <div id="ewma-interp"></div>
     </div>
     <div id="m3-tab-resid" class="tab-content card" style="padding:12px">
         <div id="ch-resid"></div><div id="in-resid"></div>
@@ -2424,45 +2459,38 @@ function renderM3() {
         })()}
     </div>
     <div id="m3-tab-table" class="tab-content card" style="padding:16px;">
-      <style>
-        .m3cmp-tickbtn { padding:7px 14px; border-radius:8px; border:1px solid #E2E8F0; background:#F8FAFC; color:#475569; font-family:inherit; font-size:.84rem; font-weight:600; cursor:pointer; transition:all .15s; }
-        .m3cmp-tickbtn:hover { background:#EFF6FF; color:#1f2937; }
-        .m3cmp-tickbtn.active { background:#fff; color:#1f2937; font-weight:700; border-color:#2563EB; box-shadow:0 1px 4px rgba(37,99,235,.15); }
-      </style>
-
       <p style="font-size:.88rem;color:#475569;margin-bottom:12px">
-        EWMA y GARCH son <b>dos métodos de estimación de volatilidad</b>, no acciones de inversión.
-        Selecciona un activo para superponer las series EWMA(λ=0.90, 0.94, 0.97) y GARCH(1,1), o
-        elige <b>Todos</b> para ver una comparativa de la volatilidad estimada actual entre activos.
+        <b>Selección ARCH/GARCH/EGARCH por AIC/BIC.</b> El AIC penaliza la complejidad de cada modelo
+        de volatilidad y permite escoger el que mejor describe los datos. Esta tabla aplica
+        únicamente a los modelos que se ajustan por máxima verosimilitud (MLE). El método
+        <b>EWMA</b> se compara aparte por su volatilidad estimada (σ diaria y anualizada) —
+        ver tabla unificada abajo. <b>EWMA y GARCH son métodos de estimación</b>, no señales
+        de compra/venta.
       </p>
 
-      <!-- Fila de botones de filtro por activo -->
-      <div id="m3cmp-buttons" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-        <button class="m3cmp-tickbtn active" data-ticker="all" onclick="_filterEwmaGarchM3('all')">Todos</button>
-        ${(D?.tickers || []).map(t => `<button class="m3cmp-tickbtn" data-ticker="${t}" onclick="_filterEwmaGarchM3('${t}')" style="border-left:4px solid ${TICKER_COLOR[t]||'#94a3b8'}">${t}</button>`).join('')}
+      <!-- Tabla unificada que incluye EWMA junto con ARCH/GARCH/EGARCH (sin falsear AIC/BIC) -->
+      <h3 style="margin:14px 0 8px;font-size:.95rem;color:#0F172A">📊 Comparación de métodos de volatilidad</h3>
+      <div style="overflow-x:auto">
+        <table class="compare-table" style="font-size:.84rem">
+          <thead>${methodsHead}</thead>
+          <tbody>${methodsBody}</tbody>
+          ${methodsFootnote}
+        </table>
       </div>
 
-      <div id="m3cmp-subtitle" style="font-size:.82rem;color:#475569;margin-bottom:6px">Vista resumen de todos los activos</div>
-      <h3 id="m3cmp-title" style="margin:0 0 10px;font-size:1rem;color:#0F172A">Comparación EWMA vs GARCH — Todos los activos</h3>
-
-      <div class="card" style="padding:8px;margin-bottom:14px"><div id="m3cmp-chart" style="height:380px;min-height:300px"></div></div>
-
-      <div id="m3cmp-interp"></div>
-
-      <!-- Tabla AIC/BIC preservada como collapsible -->
-      <details class="collapsible" style="margin-top:14px">
-        <summary>📋 Tabla AIC/BIC por modelo y activo <span style="font-size:.75rem;color:#9ca3af;font-weight:400;margin-left:8px">(clic para expandir/contraer)</span></summary>
+      <!-- Tabla AIC/BIC original conservada como collapsible -->
+      <details class="collapsible" style="margin-top:18px">
+        <summary>📋 Selección ARCH/GARCH/EGARCH por AIC/BIC (tabla detallada) <span style="font-size:.75rem;color:#9ca3af;font-weight:400;margin-left:8px">(clic para expandir/contraer)</span></summary>
         <div class="details-body" style="overflow-x:auto"><table class="compare-table">${tableHead}<tbody>${tableBody}</tbody></table></div>
       </details>
+
       ${(()=>{
         const aicWinners = datasets.map(({t,d}) => {
           const best = ['ARCH(1)','GARCH(1,1)','EGARCH(1,1)'].reduce((b,m) => (d[m]?.AIC||Infinity) < (d[b]?.AIC||Infinity) ? m : b, 'ARCH(1)');
           return {t, best};
         });
         const egarchWins  = aicWinners.filter(x => x.best === 'EGARCH(1,1)').map(x => x.t);
-        const garchWins   = aicWinners.filter(x => x.best === 'GARCH(1,1)').map(x => x.t);
-        const archWins    = aicWinners.filter(x => x.best === 'ARCH(1)').map(x => x.t);
-        return getInsight("Selección de Modelo de Riesgo (AIC)", `El AIC penaliza la complejidad del modelo: un AIC más bajo equivale a mejor ajuste real sin sobreajustar los datos. Los tres modelos compiten en capacidad descriptiva: ARCH(1) modela solo el efecto del último shock, GARCH(1,1) añade persistencia de la volatilidad histórica, y EGARCH(1,1) incorpora la asimetría del mercado, ya que los shocks negativos tienden a generar más volatilidad que positivos de igual magnitud. El modelo ganador por AIC es el que mejor describe la dinámica real de cada activo.`, egarchWins.length > 0 ? 'warning' : 'neutral');
+        return getInsight("Lectura conceptual: EWMA vs ARCH/GARCH/EGARCH", `<b>EWMA</b> es un suavizador exponencial cerrado (un solo hiperparámetro λ, sin parámetros estimados por MLE), por eso no se reporta AIC/BIC para esta familia. <b>ARCH(1)</b> modela solo el efecto del último shock; <b>GARCH(1,1)</b> añade persistencia de la varianza histórica; <b>EGARCH(1,1)</b> incorpora asimetría (los shocks negativos generan más volatilidad que positivos del mismo tamaño). El ganador por AIC es el que mejor describe la dinámica condicional real de cada activo. Para visualizar EWMA por activo y compararla con GARCH(1,1), usa la pestaña anterior <b>"🌊 EWMA"</b>.`, egarchWins.length > 0 ? 'warning' : 'neutral');
       })()}
     </div>
     <div class="footer">RiskLab USTA · M3 Volatilidad Condicional</div>`);
@@ -3627,17 +3655,204 @@ async function renderEWMA() {
 }
 
 /**
- * Bindea el botón "Calcular" del tab EWMA dentro de M3 y ejecuta una corrida
- * inicial. Idempotente: al cambiar de tab varias veces no rebindea ni
- * recalcula si ya está listo.
+ * Inicializa el tab EWMA: construye los botones de selección de activos
+ * (mismo estilo visual que la gráfica de Volatilidad GARCH) y dispara la
+ * vista "Todos" como vista por defecto. Idempotente.
  */
 function _initEWMATab() {
-  const btn = document.getElementById('ewma-run');
-  if (!btn || btn.dataset.bound === '1') return;
-  btn.dataset.bound = '1';
-  btn.addEventListener('click', _runEWMA);
-  // Primera corrida automática con los defaults
-  _runEWMA();
+  const toggles = document.getElementById('ewma-toggles');
+  if (!toggles || toggles.dataset.bound === '1') return;
+  toggles.dataset.bound = '1';
+
+  // ── Construir los botones con el mismo estilo del addChartToggles ──
+  const tickers = D?.tickers || [];
+
+  const _styleNeutral = (btn) => {
+    btn.style.cssText = 'font-size:0.72rem; padding:3px 9px; border-radius:4px; cursor:pointer; border:1.5px solid #64748b; background:transparent; color:#64748b; font-weight:700; transition:all 0.2s;';
+  };
+  const _styleColor = (btn, color, active) => {
+    btn.style.cssText = `font-size:0.72rem; padding:3px 9px; border-radius:4px; cursor:pointer; border:1.5px solid ${color}; background:${active?color:'transparent'}; color:${active?'#fff':color}; font-weight:700; transition:all 0.2s;`;
+  };
+
+  // Botón "Todos" (activo por defecto)
+  const allBtn = document.createElement('button');
+  allBtn.dataset.ticker = 'all';
+  _styleNeutral(allBtn);
+  allBtn.style.background = '#64748b';
+  allBtn.style.color = '#fff';
+  allBtn.innerText = 'Todos';
+  allBtn.title = 'Vista resumen de todos los activos';
+  allBtn.addEventListener('click', () => _selectEwmaTicker('all'));
+  toggles.appendChild(allBtn);
+
+  // Botón por ticker
+  tickers.forEach(t => {
+    const btn = document.createElement('button');
+    btn.dataset.ticker = t;
+    const color = TICKER_COLOR[t] || '#64748b';
+    _styleColor(btn, color, false);
+    btn.innerText = t;
+    btn.addEventListener('click', () => _selectEwmaTicker(t));
+    toggles.appendChild(btn);
+  });
+
+  // Helpers expuestos para que _selectEwmaTicker pueda repintar el estilo activo
+  toggles._setActive = (selected) => {
+    toggles.querySelectorAll('button').forEach(btn => {
+      const t = btn.dataset.ticker;
+      const active = (t === selected);
+      if (t === 'all') {
+        _styleNeutral(btn);
+        if (active) { btn.style.background = '#64748b'; btn.style.color = '#fff'; }
+      } else {
+        _styleColor(btn, TICKER_COLOR[t] || '#64748b', active);
+      }
+    });
+  };
+
+  // Vista inicial: resumen "Todos"
+  _selectEwmaTicker('all');
+}
+
+/**
+ * Maneja el click en uno de los botones de ticker dentro del tab EWMA.
+ * Actualiza el estilo activo, fetcha la(s) serie(s) necesarias y repinta
+ * el chart + título + interpretación.
+ */
+async function _selectEwmaTicker(ticker) {
+  const toggles    = document.getElementById('ewma-toggles');
+  const titleEl    = document.getElementById('ewma-title');
+  const subtitleEl = document.getElementById('ewma-subtitle');
+  const chartDiv   = document.getElementById('ewma-chart');
+  const kpisEl     = document.getElementById('ewma-kpis');
+  const interpEl   = document.getElementById('ewma-interp');
+  if (!chartDiv) return;
+
+  if (toggles && toggles._setActive) toggles._setActive(ticker);
+
+  // Spinner
+  chartDiv.innerHTML = '';
+  if (kpisEl)   kpisEl.style.display = 'none';
+  if (interpEl) interpEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:14px;font-size:.85rem">⌛ Calculando…</div>';
+
+  if (ticker === 'all') {
+    // ── Vista resumen: barras de última σ anualizada EWMA λ=0.94 por activo ──
+    subtitleEl.textContent = 'Vista resumen de todos los activos';
+    titleEl.textContent    = 'Resumen EWMA por activo';
+    const tickers = D?.tickers || [];
+    const sigmaAnnual = [];
+    try {
+      for (const t of tickers) {
+        const dat = await _fetchEwmaSeriesM3(t);
+        const ew  = (dat.EWMA || {}).current_volatility_annual;
+        sigmaAnnual.push(ew != null ? +(ew * 100).toFixed(3) : null);
+      }
+    } catch (e) {
+      chartDiv.innerHTML = _errorHTML(`No se pudieron cargar los datos: ${e.message}`);
+      interpEl.innerHTML = '';
+      return;
+    }
+    Plotly.newPlot(chartDiv, [{
+      x: tickers,
+      y: sigmaAnnual,
+      type:'bar',
+      marker:{color: tickers.map(t => TICKER_COLOR[t] || '#64748b')},
+      text: sigmaAnnual.map(v => v!=null ? v.toFixed(2)+'%' : 'n/d'),
+      textposition: 'outside',
+      hovertemplate: '%{x}: %{y:.2f}%<extra></extra>',
+    }], {
+      ...PB, height:340,
+      xaxis:{...PB.xaxis, title:'Activo'},
+      yaxis:{...PB.yaxis, title:'σ anualizada (%)', ticksuffix:'%'},
+      title:{ text:'Última volatilidad EWMA (λ=0.94) por activo', font:{size:13} },
+    }, PCFG);
+
+    const validRows = tickers.map((t,i) => ({t, v: sigmaAnnual[i]})).filter(r => r.v != null);
+    if (validRows.length) {
+      const maxR = validRows.reduce((a,b) => b.v > a.v ? b : a);
+      const minR = validRows.reduce((a,b) => b.v < a.v ? b : a);
+      const txt = `Bajo el método <b>EWMA con λ=0.94</b> (estándar RiskMetrics), <b>${maxR.t}</b> registra la mayor volatilidad anualizada estimada (${maxR.v.toFixed(2)}%) y <b>${minR.t}</b> la menor (${minR.v.toFixed(2)}%). <b>EWMA es un método de estimación de volatilidad</b>, no una señal de compra ni venta: cuantifica la incertidumbre histórica reciente. Selecciona un activo individual arriba para ver la serie completa de EWMA con tres niveles de λ (0.90, 0.94 y 0.97) y comparar la reactividad ante shocks recientes.`;
+      interpEl.innerHTML = getInsight('Comparativa de volatilidad EWMA entre activos', txt, 'neutral');
+    } else {
+      interpEl.innerHTML = '';
+    }
+    return;
+  }
+
+  // ── Vista por ticker individual: EWMA(0.94, 0.90, 0.97) + GARCH(1,1) como referencia ──
+  subtitleEl.textContent = `Activo seleccionado: ${ticker}`;
+  titleEl.textContent    = `Evolución EWMA — ${ticker}`;
+
+  let data;
+  try {
+    data = await _fetchEwmaSeriesM3(ticker);
+  } catch (e) {
+    chartDiv.innerHTML = _errorHTML(`No se pudo cargar ${ticker}: ${e.message}`);
+    interpEl.innerHTML = '';
+    return;
+  }
+  const ewma     = data.EWMA || {};
+  const comp     = data.EWMA_Comparison || {};
+  const garchVol = (data['GARCH(1,1)'] || {}).Volatility || [];
+
+  const traces = [];
+  if (Array.isArray(ewma.volatility) && ewma.volatility.length) {
+    traces.push({y: ewma.volatility, mode:'lines', name:'EWMA (λ=0.94)', line:{color:'#2563EB', width:2.4}});
+  }
+  Object.entries(comp).forEach(([k, arr]) => {
+    const palette = {'0.90':'#16A34A', '0.97':'#9333EA'};
+    const color = palette[k] || '#EA580C';
+    traces.push({y: arr, mode:'lines', name:`EWMA (λ=${k})`, line:{color, width:1.5, dash:'dash'}, opacity:0.85});
+  });
+  if (garchVol.length) {
+    traces.push({y: garchVol, mode:'lines', name:'GARCH(1,1) (referencia)', line:{color:'#9CA3AF', width:1.4, dash:'dot'}, opacity:0.7});
+  }
+  Plotly.newPlot(chartDiv, traces, {
+    ...PB, height:380,
+    xaxis:{...PB.xaxis, title:'Observaciones (orden temporal)'},
+    yaxis:{...PB.yaxis, title:'σ diaria', tickformat:'.2%'},
+    legend:{...PB.legend, orientation:'h', y:-0.18},
+    title:{ text:`Evolución EWMA — ${ticker}`, font:{size:13} },
+  }, PCFG);
+
+  // KPIs de σ actual
+  const ewDaily  = ewma.current_volatility_daily;
+  const ewAnnual = ewma.current_volatility_annual;
+  if (kpisEl && ewDaily != null && ewAnnual != null) {
+    kpisEl.style.display = 'block';
+    kpisEl.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+          <div><div style="font-size:.72rem;color:#64748b">σ diario (EWMA λ=0.94)</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#1e3a8a">${(ewDaily*100).toFixed(3)}%</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">σ anualizado</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#9333EA">${(ewAnnual*100).toFixed(2)}%</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">λ usado</div>
+            <div style="font-size:1.4rem;font-weight:700">${ewma.lambda || '0.94'}</div></div>
+          <div><div style="font-size:.72rem;color:#64748b">Régimen actual</div>
+            <div style="font-size:1.05rem;font-weight:700;color:${ewAnnual*100<20?'#16A34A':(ewAnnual*100<35?'#D97706':'#DC2626')}">
+              ${ewAnnual*100<20?'Bajo':(ewAnnual*100<35?'Moderado':'Alto')}
+            </div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Interpretación dinámica
+  const ann = ewAnnual != null ? ewAnnual * 100 : null;
+  const regime = ann == null ? 'desconocido' : (ann < 20 ? 'bajo' : (ann < 35 ? 'moderado' : 'alto'));
+  const regimeType = ann == null ? 'neutral' : (ann < 20 ? 'positive' : (ann < 35 ? 'neutral' : 'warning'));
+  const txt = `Para <b>${ticker}</b>, la última volatilidad EWMA estimada es
+    <b>${ewDaily!=null?(ewDaily*100).toFixed(3)+'%':'n/d'}</b> diaria y
+    <b>${ann!=null?ann.toFixed(2)+'%':'n/d'}</b> anualizada. Esto se interpreta como un régimen de <b>volatilidad ${regime}</b>
+    (bajo si σ anual &lt; 20%; moderado entre 20% y 35%; alto si &gt; 35%).
+    Las tres curvas EWMA muestran el efecto del parámetro de decay <code>λ</code>:
+    <b>λ=0.94</b> es el estándar RiskMetrics (memoria intermedia, ~74 días de vida media);
+    <b>λ=0.90</b> reacciona más rápido a los shocks recientes (mayor variabilidad);
+    <b>λ=0.97</b> suaviza más la serie y da memoria larga. La curva gris punteada es
+    GARCH(1,1) como referencia. <b>EWMA es un método de estimación de volatilidad</b>,
+    no una señal accionable: cuantifica incertidumbre, no recomienda comprar ni vender.`;
+  interpEl.innerHTML = getInsight(`Lectura EWMA — ${ticker}`, txt, regimeType);
 }
 
 // ─────────────────────────────────────────
@@ -3656,190 +3871,13 @@ async function _fetchEwmaSeriesM3(ticker) {
   return data;
 }
 
-function _initM3CompTab() {
-  const buttons = document.getElementById('m3cmp-buttons');
-  if (!buttons || buttons.dataset.bound === '1') return;
-  buttons.dataset.bound = '1';
-  // Primera carga: vista resumen "Todos"
-  _filterEwmaGarchM3('all');
-}
+// _initM3CompTab + _filterEwmaGarchM3 fueron eliminados: ahora el tab
+// "Selección por AIC/BIC" es estático (tablas) y el filtro interactivo
+// por ticker vive dentro del tab "EWMA" via _selectEwmaTicker.
 
-async function _filterEwmaGarchM3(ticker) {
-  // Estado activo del botón
-  document.querySelectorAll('#m3cmp-buttons .m3cmp-tickbtn').forEach(b => b.classList.remove('active'));
-  const active = document.querySelector(`#m3cmp-buttons .m3cmp-tickbtn[data-ticker="${ticker}"]`);
-  if (active) active.classList.add('active');
-
-  const titleEl    = document.getElementById('m3cmp-title');
-  const subtitleEl = document.getElementById('m3cmp-subtitle');
-  const interpEl   = document.getElementById('m3cmp-interp');
-  const chartDiv   = document.getElementById('m3cmp-chart');
-  if (!chartDiv) return;
-
-  // Spinner
-  chartDiv.innerHTML = '';
-  interpEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:.85rem">⌛ Calculando…</div>';
-
-  if (ticker === 'all') {
-    // ── Vista resumen: barras agrupadas con última σ EWMA y GARCH por activo ──
-    subtitleEl.textContent = 'Vista resumen de todos los activos';
-    titleEl.textContent    = 'Comparación EWMA vs GARCH — Todos los activos';
-    const tickers = D?.tickers || [];
-    const ewmaVals = [];
-    const garchVals = [];
-    try {
-      for (const t of tickers) {
-        const dat = await _fetchEwmaSeriesM3(t);
-        const ew  = (dat.EWMA || {}).current_volatility_annual ?? null;
-        const garr = (dat['GARCH(1,1)'] || {}).Volatility || [];
-        const gd = garr.length ? garr[garr.length - 1] * Math.sqrt(252) : null;
-        ewmaVals.push(ew  != null ? +(ew * 100).toFixed(3)  : null);
-        garchVals.push(gd != null ? +(gd * 100).toFixed(3) : null);
-      }
-    } catch (e) {
-      chartDiv.innerHTML = _errorHTML(`No se pudieron cargar los datos: ${e.message}`);
-      interpEl.innerHTML = '';
-      return;
-    }
-    Plotly.newPlot(chartDiv, [
-      { x: tickers, y: ewmaVals,  type:'bar', name:'EWMA (λ=0.94) σ anual %', marker:{color:'#2563EB'} },
-      { x: tickers, y: garchVals, type:'bar', name:'GARCH(1,1) σ anual %',     marker:{color:'#DC2626'} },
-    ], {
-      ...PB, height:360, barmode:'group',
-      xaxis:{...PB.xaxis, title:'Activo'},
-      yaxis:{...PB.yaxis, title:'σ anualizada (%)', ticksuffix:'%'},
-      legend:{...PB.legend, orientation:'h', y:-0.18},
-      title:{ text:'Última volatilidad estimada por método y activo', font:{size:13} },
-    }, PCFG);
-
-    // Interpretación comparativa
-    const rows = tickers.map((t,i) => ({t, ew: ewmaVals[i], gd: garchVals[i]}));
-    const validEw = rows.filter(r => r.ew != null);
-    if (validEw.length) {
-      const maxEw = validEw.reduce((a,b) => b.ew > a.ew ? b : a);
-      const minEw = validEw.reduce((a,b) => b.ew < a.ew ? b : a);
-      const txt = `<b>${maxEw.t}</b> presenta la mayor volatilidad estimada (EWMA λ=0.94 anualizada: ${maxEw.ew.toFixed(2)}%; GARCH(1,1): ${maxEw.gd!=null?maxEw.gd.toFixed(2)+'%':'n/d'}), mientras que <b>${minEw.t}</b> registra la menor (${minEw.ew.toFixed(2)}% EWMA, ${minEw.gd!=null?minEw.gd.toFixed(2)+'%':'n/d'} GARCH). Recuerda que <b>EWMA y GARCH son métodos de estimación</b> de la volatilidad pasada/condicional, no señales accionables: leen los retornos para cuantificar incertidumbre, no recomiendan comprar ni vender.`;
-      interpEl.innerHTML = getInsight('Lectura comparativa entre activos', txt, 'neutral');
-    } else {
-      interpEl.innerHTML = '';
-    }
-    return;
-  }
-
-  // ── Vista por ticker individual: EWMA(0.94/0.90/0.97) + GARCH(1,1) ──
-  subtitleEl.textContent = `Activo seleccionado: ${ticker}`;
-  titleEl.textContent    = `Comparación EWMA vs GARCH — ${ticker}`;
-
-  let data;
-  try {
-    data = await _fetchEwmaSeriesM3(ticker);
-  } catch (e) {
-    chartDiv.innerHTML = _errorHTML(`No se pudo cargar ${ticker}: ${e.message}`);
-    interpEl.innerHTML = '';
-    return;
-  }
-  const ewma = data.EWMA || {};
-  const comp = data.EWMA_Comparison || {};
-  const garchVol = (data['GARCH(1,1)'] || {}).Volatility || [];
-
-  const traces = [];
-  if (Array.isArray(ewma.volatility) && ewma.volatility.length) {
-    traces.push({y: ewma.volatility, mode:'lines', name:`EWMA (λ=0.94)`, line:{color:'#2563EB', width:2.4}});
-  }
-  Object.entries(comp).forEach(([k, arr]) => {
-    const palette = {'0.90':'#16A34A', '0.97':'#9333EA'};
-    const color = palette[k] || '#EA580C';
-    traces.push({y: arr, mode:'lines', name:`EWMA (λ=${k})`, line:{color, width:1.4, dash:'dash'}, opacity:0.75});
-  });
-  if (garchVol.length) {
-    traces.push({y: garchVol, mode:'lines', name:'GARCH(1,1)', line:{color:'#DC2626', width:2, dash:'dot'}});
-  }
-  Plotly.newPlot(chartDiv, traces, {
-    ...PB, height:380,
-    xaxis:{...PB.xaxis, title:'Observaciones (orden temporal)'},
-    yaxis:{...PB.yaxis, title:'σ diaria', tickformat:'.2%'},
-    legend:{...PB.legend, orientation:'h', y:-0.18},
-    title:{ text:`Evolución condicional de la volatilidad — ${ticker}`, font:{size:13} },
-  }, PCFG);
-
-  // Interpretación dinámica del ticker seleccionado
-  const ewLast = ewma.current_volatility_annual;
-  const gdLast = garchVol.length ? garchVol[garchVol.length-1] * Math.sqrt(252) : null;
-  let txt;
-  if (ewLast != null && gdLast != null) {
-    const diff = Math.abs(ewLast - gdLast) * 100;
-    const lectura = diff < 2
-      ? 'EWMA y GARCH coinciden en la magnitud actual de la volatilidad'
-      : (ewLast > gdLast
-          ? 'EWMA estima volatilidad mayor que GARCH(1,1) — sugiere que los shocks recientes pesan más bajo el decay λ=0.94'
-          : 'GARCH(1,1) estima volatilidad mayor que EWMA — sugiere persistencia condicional adicional capturada por GARCH');
-    txt = `Para <b>${ticker}</b>, la última σ anualizada estimada es ${(ewLast*100).toFixed(2)}% bajo EWMA (λ=0.94) y ${(gdLast*100).toFixed(2)}% bajo GARCH(1,1). ${lectura}. Las curvas con líneas punteadas exploran qué pasa al modificar λ: λ=0.90 reacciona más rápido a shocks recientes, λ=0.97 suaviza más la serie. <b>EWMA y GARCH son métodos de estimación de volatilidad</b>, no señales de compra/venta.`;
-  } else {
-    txt = `Para <b>${ticker}</b> se grafican las series EWMA y GARCH(1,1). Ambos son métodos de estimación de la volatilidad condicional — no constituyen recomendaciones de inversión.`;
-  }
-  interpEl.innerHTML = getInsight(`Lectura de volatilidad — ${ticker}`, txt, 'neutral');
-}
-
-async function _runEWMA() {
-  const t = document.getElementById('ewma-ticker').value;
-  const lam = document.getElementById('ewma-lambda').value;
-  const extras = document.getElementById('ewma-extras').value.trim();
-  const out = document.getElementById('ewma-output');
-  out.innerHTML = _spinnerHTML(`Consultando volatilidad de ${t}…`);
-
-  const qs = new URLSearchParams({ewma_lambda: lam});
-  if (extras) qs.set('ewma_extra_lambdas', extras);
-
-  try {
-    const data = await _apiFetch(`/api/v1/volatility/${t}?${qs}`);
-    const ewma = data.EWMA || {};
-    const comp = data.EWMA_Comparison || {};
-    const garchVol = (data['GARCH(1,1)'] || {}).Volatility || [];
-
-    const traces = [];
-    if (Array.isArray(ewma.volatility) && ewma.volatility.length) {
-      traces.push({y: ewma.volatility, mode:'lines', name:`EWMA(λ=${lam})`, line:{color:'#2563EB',width:2.2}});
-    }
-    if (garchVol.length) {
-      traces.push({y: garchVol, mode:'lines', name:'GARCH(1,1)', line:{color:'#DC2626',width:1.6,dash:'dot'}});
-    }
-    Object.entries(comp).forEach(([k, arr], i) => {
-      const palette = ['#16A34A','#9333EA','#EA580C','#0891B2'];
-      traces.push({y: arr, mode:'lines', name:`EWMA(λ=${k})`, line:{color:palette[i%palette.length],width:1.2,dash:'dash'}, opacity:0.6});
-    });
-
-    out.innerHTML = `
-      <div class="card" style="padding:18px;margin-bottom:14px">
-        <h3 style="margin:0 0 12px;font-size:1rem">σ actual estimada (último día)</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
-          <div><div style="font-size:.72rem;color:#64748b">σ diario</div>
-            <div style="font-size:1.4rem;font-weight:700;color:#1e3a8a">${(ewma.current_volatility_daily*100||0).toFixed(3)}%</div></div>
-          <div><div style="font-size:.72rem;color:#64748b">σ anualizado</div>
-            <div style="font-size:1.4rem;font-weight:700;color:#9333EA">${(ewma.current_volatility_annual*100||0).toFixed(2)}%</div></div>
-          <div><div style="font-size:.72rem;color:#64748b">λ usado</div>
-            <div style="font-size:1.4rem;font-weight:700">${ewma.lambda||lam}</div></div>
-        </div>
-      </div>
-      <div class="card" style="padding:8px"><div id="ewma-chart" style="height:380px"></div></div>
-      ${(data.EWMA_vs_GARCH_Table||[]).length ? `
-        <div class="card" style="padding:18px;margin-top:14px">
-          <h3 style="margin:0 0 10px;font-size:1rem">EWMA vs GARCH(1,1) — tabla comparativa</h3>
-          <table style="width:100%;border-collapse:collapse;font-size:.85rem">
-            <thead><tr style="background:#F1F5F9"><th style="text-align:left;padding:8px">Aspecto</th><th style="text-align:left;padding:8px">EWMA</th><th style="text-align:left;padding:8px">GARCH(1,1)</th></tr></thead>
-            <tbody>${data.EWMA_vs_GARCH_Table.map(r => `<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;font-weight:600">${r.aspect}</td><td style="padding:8px">${r.ewma}</td><td style="padding:8px">${r.garch}</td></tr>`).join('')}</tbody>
-          </table>
-        </div>` : ''}
-    `;
-    Plotly.newPlot('ewma-chart', traces, {
-      margin:{l:50,r:20,t:10,b:40},
-      yaxis:{title:'σ diaria', tickformat:'.2%'},
-      xaxis:{title:'Observaciones (orden temporal)'},
-      legend:{orientation:'h', y:-0.18},
-    }, {responsive:true, displaylogo:false});
-  } catch (e) {
-    out.innerHTML = _errorHTML(e.message);
-  }
-}
+// _runEWMA fue eliminado al refactorizar el tab EWMA con botones de ticker
+// integrados al estilo de la gráfica GARCH. La lógica vive ahora en
+// _initEWMATab + _selectEwmaTicker, que reusan _fetchEwmaSeriesM3.
 
 // ─────────────────────────────────────────
 //  M9 — Renta Fija (curva NS + bono sintético)
