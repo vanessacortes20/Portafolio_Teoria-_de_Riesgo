@@ -2064,3 +2064,174 @@ def get_capm_table(dates: DateRangeDep, config: ConfigDep):
         "rf_rate":   rf,
         "table":     rows,
     })
+
+
+# ─── Aliases puros — solo cambian el path ────────────────────────────────────
+# Llaman al handler original. No duplican lógica. Permiten que rutas viejas
+# `/api/v1/...` y rutas cortas en español coexistan sin romper el dashboard.
+
+@app.get(
+    "/rendimientos/{ticker}",
+    tags=["alias-corto Plan III"],
+    summary="Rendimientos simples y log — alias de /api/v1/returns",
+)
+def alias_rendimientos(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
+    return get_returns_analysis(ticker=ticker, dates=dates, _cfg=_cfg)
+
+
+@app.get(
+    "/indicadores/{ticker}",
+    tags=["alias-corto Plan III"],
+    summary="Indicadores técnicos (SMA/EMA/RSI/MACD/Bollinger/Estocástico)",
+)
+def alias_indicadores(ticker: str, dates: DateRangeDep, _cfg: ConfigDep):
+    return get_technical_analysis(ticker=ticker, dates=dates, _cfg=_cfg)
+
+
+@app.get(
+    "/volatilidad/{ticker}",
+    tags=["alias-corto Plan III"],
+    summary="EWMA + ARCH/GARCH/EGARCH — alias de /api/v1/volatility",
+)
+def alias_volatilidad(
+    ticker: str,
+    dates: DateRangeDep,
+    _cfg: ConfigDep,
+    ewma_lambda: float = Query(0.94, ge=0.50, le=0.999),
+    ewma_extra_lambdas: Optional[str] = Query(None),
+):
+    return get_volatility_analysis(
+        ticker=ticker,
+        dates=dates,
+        _cfg=_cfg,
+        ewma_lambda=ewma_lambda,
+        ewma_extra_lambdas=ewma_extra_lambdas,
+    )
+
+
+@app.post(
+    "/frontera-eficiente",
+    tags=["alias-corto Plan III"],
+    summary="QP de Markowitz — alias de /api/v1/frontier",
+)
+def alias_frontera(body: FrontierRequest, dates: DateRangeDep, config: ConfigDep):
+    return post_efficient_frontier(body=body, dates=dates, config=config)
+
+
+@app.get(
+    "/macro",
+    tags=["alias-corto Plan III"],
+    summary="Indicadores macro — alias de /api/v1/macro",
+)
+def alias_macro():
+    return get_macro_indicators()
+
+
+@app.get(
+    "/curva-rendimiento",
+    tags=["alias-corto Plan III"],
+    summary="Curva FRED + Nelson-Siegel — alias de /api/v1/yield-curve",
+)
+def alias_curva(
+    fit_ns: bool = Query(True),
+    fred: FredClient = Depends(get_fred_client),
+):
+    return get_yield_curve(fit_ns=fit_ns, fred=fred)
+
+
+@app.post(
+    "/bono/duracion",
+    tags=["alias-corto Plan III"],
+    summary="Duración + convexidad — alias de /api/v1/bond/duration",
+)
+def alias_bono(body: BondRequest, fred: FredClient = Depends(get_fred_client)):
+    return post_bond_duration(body=body, fred=fred)
+
+
+@app.post(
+    "/opcion/precio",
+    tags=["alias-corto Plan III"],
+    summary="Black-Scholes + Greeks — alias de /api/v1/option/price",
+)
+def alias_opcion(body: OptionRequest):
+    return post_option_price(body=body)
+
+
+@app.post(
+    "/stress",
+    tags=["alias-corto Plan III"],
+    summary="Stress testing — alias de /api/v1/stress",
+)
+def alias_stress(body: StressRequest, dates: DateRangeDep, config: ConfigDep):
+    return post_stress(body=body, dates=dates, config=config)
+
+
+@app.post(
+    "/predict",
+    tags=["alias-corto Plan III"],
+    summary="Predicción ML — alias de /api/v1/predict",
+)
+def alias_predict(
+    body: PredictRequest,
+    predictor: ModelPredictor = Depends(get_predictor),
+    db: Session = Depends(get_db),
+):
+    return post_predict(body=body, predictor=predictor, db=db)
+
+
+# ─── /portafolios (CRUD reusa los handlers /api/v1/portfolios) ──────────────
+
+@app.post(
+    "/portafolios",
+    tags=["alias-corto Plan III"],
+    response_model=PortfolioResponse,
+    status_code=201,
+    summary="Crear portafolio — alias de /api/v1/portfolios",
+)
+def alias_portafolios_create(
+    body: PortfolioCreate,
+    current: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    return create_portfolio_route(body=body, current=current, db=db)
+
+
+@app.get(
+    "/portafolios",
+    tags=["alias-corto Plan III"],
+    response_model=list[PortfolioResponse],
+    summary="Listar portafolios — alias de /api/v1/portfolios",
+)
+def alias_portafolios_list(current: CurrentUser, db: Session = Depends(get_db)):
+    return list_portfolios_route(current=current, db=db)
+
+
+# ─── /alertas (placeholder hasta Fase 2 M7) ─────────────────────────────────
+# La versión definitiva con SignalGenerator y persistencia en signals_log
+# se implementa en la Fase 2. Por ahora itera el portafolio configurado y
+# reusa el endpoint /api/v1/signals/{ticker} existente.
+
+@app.get(
+    "/alertas",
+    tags=["alias-corto Plan III"],
+    summary="Señales activas del portafolio (placeholder M7 — se refuerza en Fase 2)",
+)
+def alias_alertas_portfolio(dates: DateRangeDep, config: ConfigDep):
+    """Evalúa señales para cada activo configurado en PORTFOLIO_TICKERS.
+
+    Implementación mínima por ahora: itera tickers y llama al endpoint
+    individual /api/v1/signals/{ticker}. La Fase 2 de Plan III reemplaza
+    este handler con SignalGenerator + persistencia en signals_log.
+    """
+    reports = []
+    for t in config.tickers:
+        try:
+            rpt = get_asset_signals(ticker=t, dates=dates, _cfg=config)
+            reports.append(rpt)
+        except HTTPException as exc:
+            reports.append({"ticker": t, "error": str(exc.detail)})
+    return json_response({
+        "tickers":  config.tickers,
+        "count":    len(reports),
+        "reports":  reports,
+    })
