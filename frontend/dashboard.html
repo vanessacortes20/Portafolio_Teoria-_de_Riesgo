@@ -516,22 +516,17 @@
   <div class="nav-label">Módulos</div>
   <button class="nav-btn" data-page="m1" onclick="navigate('m1')">📈 M1 — Análisis Técnico</button>
   <button class="nav-btn" data-page="m2" onclick="navigate('m2')">📉 M2 — Rendimientos</button>
-  <button class="nav-btn" data-page="m3" onclick="navigate('m3')">🌊 M3 — Volatilidad GARCH</button>
+  <button class="nav-btn" data-page="m3" onclick="navigate('m3')">🌊 M3 — Volatilidad</button>
   <button class="nav-btn" data-page="m4" onclick="navigate('m4')">🔭 M4 — CAPM &amp; Beta</button>
   <button class="nav-btn" data-page="m5" onclick="navigate('m5')">🛡️ M5 — VaR / CVaR</button>
   <button class="nav-btn" data-page="m6" onclick="navigate('m6')">💎 M6 — Optimización</button>
   <button class="nav-btn" data-page="m7" onclick="navigate('m7')">🔔 M7 — Señales y Alertas</button>
   <button class="nav-btn" data-page="m8" onclick="navigate('m8')">🌍 M8 — Benchmark</button>
-  <button class="nav-btn" data-page="m9" onclick="navigate('m9')">🚀 Roadmap & Mejoras</button>
-
-  <hr>
-
-  <!-- ── Módulos extendidos: EWMA, renta fija, opciones, stress, ML ── -->
-  <button class="nav-btn" data-page="ewma"     onclick="navigate('ewma')">🌊 M3⁺ — EWMA</button>
   <button class="nav-btn" data-page="rentafija" onclick="navigate('rentafija')">🏦 M9 — Renta Fija</button>
-  <button class="nav-btn" data-page="opciones" onclick="navigate('opciones')">📜 M10 — Opciones</button>
-  <button class="nav-btn" data-page="stress"   onclick="navigate('stress')">⚡ M11 — Stress Test</button>
-  <button class="nav-btn" data-page="ml"       onclick="navigate('ml')">🤖 ML — Predicción</button>
+  <button class="nav-btn" data-page="opciones"  onclick="navigate('opciones')">📜 M10 — Opciones</button>
+  <button class="nav-btn" data-page="stress"    onclick="navigate('stress')">⚡ M11 — Stress Test</button>
+  <button class="nav-btn" data-page="ml"        onclick="navigate('ml')">🤖 M12 — ML / Predicción</button>
+  <button class="nav-btn" data-page="m9"        onclick="navigate('m9')">🚀 Roadmap &amp; Mejoras</button>
 
   <hr />
   <div class="nav-label">⚙️ Parámetros de Análisis</div>
@@ -2342,8 +2337,8 @@ function renderM3() {
   let maxVTk = datasets.find(x => x.d['GARCH(1,1)']?.Volatility?.[x.d['GARCH(1,1)'].Volatility.length-1] === maxV)?.t;
 
   setContent(`
-    <h1 class="header-gradient">M3 — Modelos de Volatilidad GARCH</h1>
-    <p class="page-subtitle">Los modelos ARCH/GARCH capturan que la volatilidad no es constante: los mercados tienen períodos de calma y períodos de turbulencia que se agrupan en el tiempo.</p>
+    <h1 class="header-gradient">M3 — Modelos de Volatilidad (EWMA + ARCH/GARCH)</h1>
+    <p class="page-subtitle">EWMA suaviza la volatilidad reciente con un decay configurable; ARCH/GARCH modelan la dinámica condicional capturando los racimos de turbulencia. Aquí conviven ambas familias para comparar enfoques sobre el mismo activo.</p>
     
     ${(()=>{
       const annualV = avgV * Math.sqrt(252) * 100;
@@ -2358,13 +2353,46 @@ function renderM3() {
 
     <div class="tabs" id="m3-tabs">
       <button class="tab-btn active" onclick="switchTab('m3','vol',this)">📈 Volatilidad GARCH</button>
+      <button class="tab-btn"        onclick="switchTab('m3','ewma',this);_initEWMATab()">🌊 EWMA</button>
       <button class="tab-btn"        onclick="switchTab('m3','resid',this)">🔬 Diagnóstico de Residuos</button>
       <button class="tab-btn"        onclick="switchTab('m3','forecast',this)">🔮 Pronóstico a 10 Días</button>
-      <button class="tab-btn"        onclick="switchTab('m3','table',this)">📋 Comparación de Modelos</button>
+      <button class="tab-btn"        onclick="switchTab('m3','table',this)">📋 Comparación EWMA vs GARCH</button>
     </div>
     
     <div id="m3-tab-vol" class="tab-content card active" style="padding:12px">
         <div id="ch-garch"></div><div id="in-garch"></div>
+    </div>
+    <div id="m3-tab-ewma" class="tab-content card" style="padding:14px">
+      <p style="font-size:.88rem;color:#475569;margin-bottom:12px">
+        El modelo <b>EWMA (Exponentially Weighted Moving Average)</b> calcula la volatilidad
+        con un decay exponencial <code>λ</code> sobre los retornos cuadrados. Es el estándar
+        del marco <b>RiskMetrics</b> de J.P. Morgan. <b>λ alto</b> (cerca de 1) → memoria larga;
+        <b>λ bajo</b> → respuesta rápida a shocks recientes.
+      </p>
+      <div class="card" style="padding:14px;background:#F8FAFC;margin-bottom:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
+          <div>
+            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">Ticker</label>
+            <select id="ewma-ticker" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-weight:600">
+              ${(D?.tickers || state.activeTickers || []).map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ (decay)</label>
+            <input id="ewma-lambda" type="number" value="0.94" min="0.50" max="0.999" step="0.01"
+              style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600">
+          </div>
+          <div>
+            <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ extra (CSV)</label>
+            <input id="ewma-extras" type="text" value="0.90,0.97" placeholder="0.90,0.97"
+              style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:140px">
+          </div>
+          <button id="ewma-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular</button>
+        </div>
+      </div>
+      <div id="ewma-output" style="font-size:.85rem;color:#94a3b8;padding:24px;text-align:center">
+        Selecciona ticker y λ, luego presiona <b>Calcular</b>.
+      </div>
     </div>
     <div id="m3-tab-resid" class="tab-content card" style="padding:12px">
         <div id="ch-resid"></div><div id="in-resid"></div>
@@ -3562,41 +3590,32 @@ function _errorHTML(msg) {
 }
 
 // ─────────────────────────────────────────
-//  M3⁺ — EWMA (RiskMetrics)
+//  EWMA — vive integrado dentro de la tab "EWMA" del módulo M3
 // ─────────────────────────────────────────
+// Compatibilidad: enlaces antiguos a la página "ewma" redirigen a M3 con la tab EWMA activa
 async function renderEWMA() {
-  const ticker = (state.activeTickers && state.activeTickers[0]) || (D && D.tickers && D.tickers[0]) || 'AAPL';
-  setContent(`
-    <h1 class="header-gradient">M3⁺ — Volatilidad EWMA (RiskMetrics)</h1>
-    <p class="page-subtitle">Suavizamiento exponencial con λ configurable, comparado con la volatilidad condicional GARCH.</p>
+  state.page = 'm3';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const m3btn = document.querySelector('.nav-btn[data-page="m3"]');
+  if (m3btn) m3btn.classList.add('active');
+  renderM3();
+  setTimeout(() => {
+    const tab = document.querySelector('#m3-tabs button[onclick*="ewma"]');
+    if (tab) tab.click();
+  }, 60);
+}
 
-    <div class="card" style="padding:16px;margin-bottom:18px">
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
-        <div>
-          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">Ticker</label>
-          <select id="ewma-ticker" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-weight:600">
-            ${(D?.tickers || [ticker]).map(t => `<option value="${t}" ${t===ticker?'selected':''}>${t}</option>`).join('')}
-          </select>
-        </div>
-        <div>
-          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ (decay)</label>
-          <input id="ewma-lambda" type="number" value="0.94" min="0.50" max="0.999" step="0.01"
-            style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:90px;font-weight:600">
-        </div>
-        <div>
-          <label style="font-size:.78rem;color:#475569;display:block;margin-bottom:4px">λ extra (CSV)</label>
-          <input id="ewma-extras" type="text" value="0.90,0.97" placeholder="0.90,0.97"
-            style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;width:140px">
-        </div>
-        <button id="ewma-run" class="nav-btn" style="background:#2563EB;color:#fff;padding:8px 16px;font-weight:600">Calcular</button>
-      </div>
-    </div>
-
-    <div id="ewma-output">${_spinnerHTML('Esperando primera consulta…')}</div>
-    <div class="footer">RiskLab USTA · M3⁺ — Endpoint <code>/api/v1/volatility/{ticker}</code></div>
-  `);
-
-  document.getElementById('ewma-run').addEventListener('click', _runEWMA);
+/**
+ * Bindea el botón "Calcular" del tab EWMA dentro de M3 y ejecuta una corrida
+ * inicial. Idempotente: al cambiar de tab varias veces no rebindea ni
+ * recalcula si ya está listo.
+ */
+function _initEWMATab() {
+  const btn = document.getElementById('ewma-run');
+  if (!btn || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', _runEWMA);
+  // Primera corrida automática con los defaults
   _runEWMA();
 }
 
