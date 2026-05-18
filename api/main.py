@@ -85,7 +85,6 @@ from api.logic import (
     compute_ewma_volatility,
     ewma_vs_garch_table,
     fit_garch_models,
-    generate_signals,
     get_descriptive_stats,
     kupiec_test,
     optimize_portfolio,
@@ -633,7 +632,12 @@ def json_response(data) -> Response:
 
 # ─── Helper: datos técnicos completos (M1 / M7) ───────────────────────────────
 
-def _build_technical_records(ticker: str, start_date=None, end_date=None):
+def _build_technical_records(
+    ticker: str,
+    start_date=None,
+    end_date=None,
+    bb_std: float = 2.0,
+):
     data = get_historical_data(ticker, start_date=start_date, end_date=end_date)
     if data is None:
         return None
@@ -650,7 +654,7 @@ def _build_technical_records(ticker: str, start_date=None, end_date=None):
     df["MACD_Signal"] = sl
     df["MACD_Hist"]   = hist
 
-    bb_up, bb_low     = calculate_bollinger_bands(data)
+    bb_up, bb_low     = calculate_bollinger_bands(data, num_std=bb_std)
     df["BB_Upper"]    = bb_up
     df["BB_Lower"]    = bb_low
 
@@ -1773,27 +1777,134 @@ def get_macro_indicators():
     return json_response(result)
 
 
-@app.get("/api/v1/signals/{ticker}", summary="Señales técnicas automáticas — M7")
+# ── Modelos Pydantic del Módulo 7 ────────────────────────────────────────────
+
+class SignalItem(BaseModel):
+    """Una señal técnica individual generada por SignalGenerator."""
+    id:             str
+    rule:           Optional[str] = None
+    type:           str            # "buy" | "sell"
+    value:          Optional[float] = None
+    msg:            str
+    interpretation: Optional[str] = None
+
+
+class SignalThresholds(BaseModel):
+    rsi_overbought:   int
+    rsi_oversold:     int
+    bollinger_std:    float
+    stoch_overbought: int
+    stoch_oversold:   int
+
+
+class SignalReport(BaseModel):
+    """Response model del endpoint /api/v1/signals/{ticker} y /alertas/{ticker}."""
+    ticker:          str
+    timestamp:       str
+    signals:         list[SignalItem]
+    thresholds:      SignalThresholds
+    persisted_count: int
+
+
+@app.get(
+    "/api/v1/signals/{ticker}",
+    response_model=SignalReport,
+    summary="Señales técnicas automáticas — M7 (5 reglas + persistencia)",
+)
 def get_asset_signals(
     ticker: str,
     dates: DateRangeDep,
     _cfg: ConfigDep,
+    rsi_overbought:   int   = Query(70, ge=50, le=99,
+        description="Umbral de sobrecompra RSI (default 70)."),
+    rsi_oversold:     int   = Query(30, ge=1,  le=50,
+        description="Umbral de sobreventa RSI (default 30)."),
+    bollinger_std:    float = Query(2.0, gt=0.0, le=5.0,
+        description="Desviaciones estándar para Bandas de Bollinger (default 2.0)."),
+    stoch_overbought: int   = Query(80, ge=50, le=99,
+        description="Umbral de sobrecompra del oscilador estocástico (default 80)."),
+    stoch_oversold:   int   = Query(20, ge=1,  le=50,
+        description="Umbral de sobreventa del oscilador estocástico (default 20)."),
+    persist:          bool  = Query(True,
+        description="Guardar las señales disparadas en signals_log."),
 ):
+    """Evalúa las 5 reglas del M7 sobre el último registro técnico disponible.
+
+    Reglas (encapsuladas en `SignalGenerator`):
+      1. Cruce de MACD (línea vs señal).
+      2. RSI en zonas extremas (umbrales configurables).
+      3. Bandas de Bollinger (precio tocando banda superior/inferior).
+      4. Cruce de medias móviles (Golden cross / Death cross).
+      5. Oscilador Estocástico (%K cruzando %D en zonas extremas).
+
+    Persistencia: cada señal disparada se guarda en `signals_log` con
+    `timestamp`, `ticker`, `rule`, `signal_type`, `value`, `message`.
+    Dedup por (ticker, rule, día) — no se duplican señales del mismo día.
+    """
     try:
-        records = _build_technical_records(ticker, **dates)
+        from datetime import datetime as _dt
+        from sqlalchemy import and_
+        from api.db.base import SessionLocal
+        from api.db.models import SignalLog
+        from api.services.signals import SignalGenerator
+
+        records = _build_technical_records(ticker, bb_std=bollinger_std, **dates)
         if not records or len(records) < 2:
             raise HTTPException(404, f"Datos insuficientes para '{ticker}'.")
 
         last, prev = records[-1], records[-2]
-        signals = generate_signals({
-            "RSI":            last.get("RSI") or 50,
-            "MACD_Hist":      last.get("MACD_Hist") or 0,
-            "MACD_Hist_Prev": prev.get("MACD_Hist") or 0,
-            "Close":          last.get("Close") or 0,
-            "BB_Upper":       last.get("BB_Upper") or 0,
-            "BB_Lower":       last.get("BB_Lower") or 0,
-        })
-        return {"ticker": ticker, "signals": signals}
+
+        gen = SignalGenerator(
+            last=last, prev=prev,
+            rsi_overbought=rsi_overbought, rsi_oversold=rsi_oversold,
+            stoch_overbought=stoch_overbought, stoch_oversold=stoch_oversold,
+        )
+        all_signals = gen.evaluate_all()
+
+        # Persistencia en signals_log con dedup por día
+        persisted = 0
+        if persist and all_signals:
+            db = SessionLocal()
+            try:
+                today = _dt.utcnow().date()
+                day_start = _dt(today.year, today.month, today.day)
+                for s in all_signals:
+                    rule = s.get("id") or s.get("type") or "unknown"
+                    exists = db.query(SignalLog).filter(
+                        and_(
+                            SignalLog.ticker    == ticker,
+                            SignalLog.rule      == rule,
+                            SignalLog.timestamp >= day_start,
+                        )
+                    ).first()
+                    if exists:
+                        continue
+                    db.add(SignalLog(
+                        ticker      = ticker,
+                        rule        = rule,
+                        signal_type = (s.get("type") or "info")[:20],
+                        value       = float(s.get("value")) if s.get("value") is not None else None,
+                        message     = (s.get("msg") or "")[:500],
+                    ))
+                    persisted += 1
+                if persisted:
+                    db.commit()
+            finally:
+                db.close()
+
+        return {
+            "ticker":     ticker,
+            "timestamp":  datetime.utcnow().isoformat(timespec="seconds"),
+            "signals":    all_signals,
+            "thresholds": {
+                "rsi_overbought":   rsi_overbought,
+                "rsi_oversold":     rsi_oversold,
+                "bollinger_std":    bollinger_std,
+                "stoch_overbought": stoch_overbought,
+                "stoch_oversold":   stoch_oversold,
+            },
+            "persisted_count": persisted,
+        }
     except HTTPException:
         raise
     except Exception as exc:
