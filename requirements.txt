@@ -5,6 +5,7 @@ python-dotenv==1.0.1
 pydantic[email]==2.12.5
 pydantic-settings==2.14.1
 email-validator==2.2.0
+python-multipart==0.0.18
 
 # ─── Autenticación ────────────────────────────────────────────
 bcrypt==5.0.0
