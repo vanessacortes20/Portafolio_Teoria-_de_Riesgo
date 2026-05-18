@@ -1882,3 +1882,185 @@ async def get_all_dashboard_data(
         output["benchmark"] = {}
 
     return json_response(output)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ALIASES CORTOS EN ESPAÑOL — Plan III (Instructivo III, sección Arquitectura)
+# Cada path corto coexiste con el endpoint /api/v1/... existente. Las funciones
+# nuevas que no tienen handler previo (/activos, /precios, /var, /capm) se
+# definen primero; el resto reusan handlers ya declarados arriba.
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+# ─── /activos ────────────────────────────────────────────────────────────────
+
+@app.get(
+    "/activos",
+    tags=["alias-corto Plan III"],
+    summary="Lista de activos disponibles en la BD (Capa 1)",
+)
+def list_assets(db: Session = Depends(get_db)):
+    """Lee del catálogo `assets`. Si está vacío, devuelve la lista del .env."""
+    from api.db.models import Asset
+    rows = db.query(Asset).order_by(Asset.ticker.asc()).all()
+    if rows:
+        return {
+            "count": len(rows),
+            "source": "db",
+            "assets": [
+                {
+                    "id":     a.id,
+                    "ticker": a.ticker,
+                    "name":   a.name,
+                    "sector": a.sector,
+                }
+                for a in rows
+            ],
+        }
+    # Fallback: los tickers configurados en .env
+    settings = get_settings()
+    return {
+        "count":  len(settings.tickers),
+        "source": "env",
+        "assets": [{"ticker": t, "name": None, "sector": None} for t in settings.tickers],
+    }
+
+
+# ─── /precios/{ticker} ───────────────────────────────────────────────────────
+
+@app.get(
+    "/precios/{ticker}",
+    tags=["alias-corto Plan III"],
+    summary="Precios históricos OHLCV con cache transparente (Capa 1)",
+)
+def get_prices_short(
+    ticker: str,
+    dates: DateRangeDep,
+    svc: DataService = Depends(get_data_service),
+):
+    """Lee del cache SQLite (`prices`) y si no hay, descarga de yfinance."""
+    sd = dates.get("start_date")
+    ed = dates.get("end_date")
+    df = svc.get_prices_df(
+        ticker,
+        start_date=sd.isoformat() if hasattr(sd, "isoformat") else sd,
+        end_date=ed.isoformat()   if hasattr(ed, "isoformat") else ed,
+    )
+    if df is None or len(df) == 0:
+        raise HTTPException(404, f"Sin datos para '{ticker}'.")
+    return json_response({
+        "ticker":  ticker,
+        "n_rows":  len(df),
+        "data":    df.assign(Date=lambda d: d["Date"].astype(str)).to_dict(orient="records"),
+    })
+
+
+# ─── /var ────────────────────────────────────────────────────────────────────
+
+class VarRequest(BaseModel):
+    """Body para VaR/CVaR de un portafolio multi-activo."""
+    tickers:        list[str]   = Field(..., min_length=2, max_length=20)
+    weights:        list[float] = Field(..., min_length=2, max_length=20)
+    alpha:          float       = Field(0.95, ge=0.80, le=0.99)
+    n_simulations:  int         = Field(10_000, ge=1_000, le=100_000)
+    start_date:     Optional[str] = None
+    end_date:       Optional[str] = None
+
+    @model_validator(mode="after")
+    def _weights_match_tickers(self):
+        if len(self.tickers) != len(self.weights):
+            raise ValueError("tickers y weights deben tener la misma longitud.")
+        if abs(sum(self.weights) - 1.0) > 1e-3:
+            raise ValueError(f"weights deben sumar 1; suman {sum(self.weights):.4f}")
+        return self
+
+
+@app.post(
+    "/var",
+    tags=["alias-corto Plan III"],
+    summary="VaR y CVaR de un portafolio (Capa 2)",
+)
+def post_var(body: VarRequest):
+    """Calcula VaR paramétrico/histórico/Montecarlo + CVaR + Kupiec POF.
+
+    Reusa `calculate_var_cvar` (3 métodos) y `kupiec_test` ya existentes.
+    """
+    rets_by_ticker = {}
+    for t in body.tickers:
+        data = get_historical_data(t, start_date=body.start_date, end_date=body.end_date)
+        if data is None:
+            raise HTTPException(404, f"Sin datos para '{t}'.")
+        simple, _ = calculate_returns(data)
+        rets_by_ticker[t] = simple
+
+    df = pd.DataFrame(rets_by_ticker).dropna()
+    weights = np.array(body.weights)
+    port_ret = df.dot(weights)
+
+    var_block = calculate_var_cvar(
+        port_ret,
+        confidence=body.alpha,
+        n_simulations=body.n_simulations,
+    )
+
+    # Kupiec POF sobre el VaR histórico
+    kupiec = {}
+    try:
+        var_hist = var_block.get("Historical", {}).get("VaR")
+        if var_hist is not None:
+            kupiec = kupiec_test(port_ret.values, var_hist, body.alpha)
+    except Exception as exc:
+        kupiec = {"error": str(exc)}
+
+    return json_response({
+        "tickers":      body.tickers,
+        "weights":      body.weights,
+        "alpha":        body.alpha,
+        "n_simulations": body.n_simulations,
+        "n_obs":        len(port_ret),
+        "var_cvar":     var_block,
+        "kupiec_pof":   kupiec,
+    })
+
+
+# ─── /capm ───────────────────────────────────────────────────────────────────
+
+@app.get(
+    "/capm",
+    tags=["alias-corto Plan III"],
+    summary="Tabla CAPM (Beta, Alpha, E[R]) para todos los activos del portafolio (Capa 2)",
+)
+def get_capm_table(dates: DateRangeDep, config: ConfigDep):
+    """Calcula CAPM para cada ticker del portafolio contra el benchmark."""
+    date_kwargs = {k: v for k, v in dates.items() if v is not None}
+    bench = get_historical_data(config.benchmark, **date_kwargs)
+    if bench is None:
+        raise HTTPException(404, f"Sin datos para benchmark '{config.benchmark}'.")
+    _, bench_log = calculate_returns(bench)
+
+    rf = config.default_rf
+    rows = []
+    for t in config.tickers:
+        data = get_historical_data(t, **date_kwargs)
+        if data is None:
+            rows.append({"ticker": t, "error": "sin datos"})
+            continue
+        _, log_ret = calculate_returns(data)
+        common = log_ret.index.intersection(bench_log.index)
+        if len(common) < 10:
+            rows.append({"ticker": t, "error": "muestra insuficiente"})
+            continue
+        cap = calculate_capm(log_ret.loc[common], bench_log.loc[common], rf)
+        rows.append({
+            "ticker":            t,
+            "beta":              _sv(cap["Beta"]),
+            "alpha":             _sv(cap["Alpha"]),
+            "r_squared":         _sv(cap["R_Squared"]),
+            "expected_return":   _sv(cap["Expected_Return_Annual"]),
+            "classification":    cap.get("Classification"),
+        })
+    return json_response({
+        "benchmark": config.benchmark,
+        "rf_rate":   rf,
+        "table":     rows,
+    })
