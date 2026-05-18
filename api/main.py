@@ -1401,10 +1401,14 @@ def get_option_scenarios(
         ewma_series = compute_ewma_volatility(log_ret, lambda_=0.94)
         if ewma_series.empty:
             raise HTTPException(422, "No se pudo estimar σ via EWMA.")
-        sigma_daily = float(ewma_series.iloc[-1])
-        sigma_annual = sigma_daily * math.sqrt(252)
+        sigma_daily      = float(ewma_series.iloc[-1])
+        sigma_ewma_ann   = sigma_daily * math.sqrt(252)
+        # σ histórica clásica (std de log-rets × √252)
+        sigma_hist_ann   = float(log_ret.std() * math.sqrt(252))
+        sigma_diff       = sigma_ewma_ann - sigma_hist_ann
+
         spot = float(data["Close"].iloc[-1])
-        r = float(config.default_rf)
+        r    = float(config.default_rf)
 
         strikes = [
             spot * (1 - moneyness_pct),
@@ -1413,11 +1417,20 @@ def get_option_scenarios(
         ]
         maturities_days = [30, 60, 90, 180]
 
+        # Verificación numérica de IV por Newton-Raphson en el ATM 90d:
+        # recalculamos la IV del precio BS evaluado con σ_ewma — el método
+        # debe recuperar σ_ewma con error numérico mínimo.
+        pricer_atm = OptionPricer(
+            S=spot, K=spot, T=90/365.0, r=r, sigma=sigma_ewma_ann,
+        )
+        call_atm_price = pricer_atm.price("call")
+        iv_check = pricer_atm.implied_volatility(call_atm_price, "call")
+
         grid: list[dict] = []
         for tdays in maturities_days:
             T_years = tdays / 365.0
             for K in strikes:
-                pricer = OptionPricer(S=spot, K=K, T=T_years, r=r, sigma=sigma_annual)
+                pricer = OptionPricer(S=spot, K=K, T=T_years, r=r, sigma=sigma_ewma_ann)
                 grid.append({
                     "T_days":          tdays,
                     "K":               float(K),
@@ -1432,7 +1445,12 @@ def get_option_scenarios(
         return json_response({
             "ticker":       ticker,
             "spot":         spot,
-            "sigma_annual": sigma_annual,
+            "sigma_ewma_annual":       sigma_ewma_ann,
+            "sigma_historical_annual": sigma_hist_ann,
+            "sigma_spread":            sigma_diff,
+            "sigma_used":              sigma_ewma_ann,   # alias compat
+            "sigma_annual":            sigma_ewma_ann,   # alias compat dashboard
+            "iv_consistency_check":    iv_check,
             "r":            r,
             "grid":         grid,
         })
