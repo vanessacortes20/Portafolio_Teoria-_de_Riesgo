@@ -217,7 +217,7 @@ La sesión se inyecta en cada endpoint vía `Depends(get_db)` (patrón estándar
 | Tests | pytest, pytest-asyncio, httpx |
 | Contenedor | Docker multi-stage sobre `python:3.11.9-slim-bookworm` |
 | CI | GitHub Actions |
-| Deploy | Render free-tier |
+| Deploy | Render free-tier — <https://portafolio-teoria-de-riesgo.onrender.com> ([docs](https://portafolio-teoria-de-riesgo.onrender.com/docs)) |
 
 ---
 
@@ -367,13 +367,27 @@ Concurrency configurado para cancelar ejecuciones previas de la misma rama cuand
 
 **Limitación del free-tier**: el servicio se duerme tras 15 min sin tráfico (cold start ~30 s al despertar). Antes de la sustentación, hacer una llamada de calentamiento: `curl <url>/docs`.
 
-### URL pública
+### URL pública del backend (Render free-tier)
 
-> **TODO**: actualizar después del primer deploy con la URL real de Render.
->
-> - API: `https://risklab-usta.onrender.com` *(placeholder)*
-> - Swagger UI: `https://risklab-usta.onrender.com/docs`
-> - Redoc: `https://risklab-usta.onrender.com/redoc`
+El backend está desplegado y accesible desde cualquier navegador:
+
+- **API base:** <https://portafolio-teoria-de-riesgo.onrender.com>
+- **Swagger UI (interactivo):** <https://portafolio-teoria-de-riesgo.onrender.com/docs>
+- **ReDoc:** <https://portafolio-teoria-de-riesgo.onrender.com/redoc>
+- **OpenAPI JSON:** <https://portafolio-teoria-de-riesgo.onrender.com/openapi.json>
+
+Para verificar rápidamente que el servicio está vivo:
+
+```bash
+curl https://portafolio-teoria-de-riesgo.onrender.com/
+# → {"status":"ok", "data_range":{...}}
+```
+
+> ⚠️ **Free-tier cold start**: si el servicio lleva más de 15 min sin tráfico,
+> la primera request puede tardar hasta 50 segundos en responder (Render
+> "duerme" el contenedor). Las siguientes requests responden en <500 ms.
+> Antes de la sustentación: hacer una llamada de calentamiento (`curl <url>/docs`)
+> 1 minuto antes de la demo.
 
 ---
 
