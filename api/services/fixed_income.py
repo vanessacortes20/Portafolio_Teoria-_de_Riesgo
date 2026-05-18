@@ -366,14 +366,46 @@ class NelsonSiegelParams:
     rmse: float
     success: bool
 
+    def param_interpretation(self) -> dict:
+        """Interpretación cualitativa per-parámetro (Plan III, M9)."""
+        b0, b1, b2, lam = self.beta0, self.beta1, self.beta2, self.lambda_
+        return {
+            "beta0": (
+                f"Nivel de largo plazo de la curva ({b0*100:.2f}% si está en decimal, "
+                f"{b0:.2f}% si está en %). Es el yield al que tiende cuando τ→∞."
+            ),
+            "beta1": (
+                f"Pendiente corto−largo ({b1:.3f}). "
+                + (
+                    "Negativa → corto plazo por encima del largo (señal clásica de inversión)."
+                    if b1 < 0 else
+                    "Positiva → corto plazo por debajo del largo (curva normal con expectativa de crecimiento)."
+                )
+            ),
+            "beta2": (
+                f"Curvatura intermedia ({b2:.3f}). "
+                + (
+                    "Joroba (concavidad) en plazos medios — primas adicionales en el medio."
+                    if b2 > 0 else
+                    ("Valle (convexidad) en plazos medios — depresión en el medio." if b2 < 0
+                     else "Sin curvatura relevante.")
+                )
+            ),
+            "lambda": (
+                f"Velocidad de decay (λ = {lam:.4f}). "
+                f"Define dónde la curvatura intermedia alcanza su máximo: τ* ≈ {lam:.2f} años."
+            ),
+        }
+
     def to_dict(self) -> dict:
         return {
-            "beta0":   self.beta0,
-            "beta1":   self.beta1,
-            "beta2":   self.beta2,
-            "lambda":  self.lambda_,
-            "rmse":    self.rmse,
-            "success": self.success,
+            "beta0":                self.beta0,
+            "beta1":                self.beta1,
+            "beta2":                self.beta2,
+            "lambda":               self.lambda_,
+            "rmse":                 self.rmse,
+            "success":              self.success,
+            "param_interpretation": self.param_interpretation(),
         }
 
 
