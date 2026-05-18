@@ -1745,36 +1745,221 @@ def get_predict_log(
     return _repo_list_predictions(db, ticker=ticker, limit=limit)
 
 
-@app.get("/api/v1/macro", summary="Indicadores macroeconómicos de contexto — M8")
-def get_macro_indicators():
-    """Devuelve tasa libre de riesgo, rendimiento del Tesoro a 10 años y retorno YTD del S&P 500."""
+# ── Modelos Pydantic del Módulo 8 ────────────────────────────────────────────
+
+class MacroIndicators(BaseModel):
+    """Response model del panel macroeconómico (Plan III, M8)."""
+    as_of:               str
+    rf_rate:             Optional[float] = None
+    rf_source:           Optional[str]   = None
+    treasury_10y:        Optional[float] = None
+    treasury_10y_source: Optional[str]   = None
+    spx_ytd:             Optional[float] = None
+    inflation_yoy:       Optional[float] = None
+    inflation_source:    Optional[str]   = None
+    usdcop:              Optional[float] = None
+    usdcop_source:       Optional[str]   = None
+    fred_enabled:        bool            = False
+    cache_status:        Optional[dict]  = None
+
+
+@app.get(
+    "/api/v1/macro",
+    response_model=MacroIndicators,
+    summary="Panel macroeconómico (Rf, T10Y, S&P YTD, inflación, USDCOP) — M8",
+)
+def get_macro_indicators(fred: FredClient = Depends(get_fred_client)):
+    """Indicadores macro actualizados vía API con cache transparente.
+
+    Fuentes:
+      - `rf_rate`        → FRED.DGS3MO con cache 24h (fallback yfinance ^IRX).
+      - `treasury_10y`   → FRED.DGS10 con cache 24h (fallback yfinance ^TNX).
+      - `spx_ytd`        → yfinance ^GSPC (FRED no expone esta serie).
+      - `inflation_yoy`  → FRED.CPIAUCSL (cache 24h, calcula YoY de últimos 13 meses).
+      - `usdcop`         → yfinance COP=X (FRED no expone USD/COP estable).
+
+    `cache_status` reporta hit/miss por serie cuando FRED está habilitado.
+    Si FRED_API_KEY no está configurada, cada métrica reporta su source real
+    (no se finge que el dato viene de FRED).
+    """
     import yfinance as yf
     result: dict = {"as_of": date.today().isoformat()}
+    cache_status: dict = {}
+    fred_enabled = fred._client() is not None
+    result["fred_enabled"] = fred_enabled
 
-    try:
-        irx_hist = yf.Ticker("^IRX").history(period="5d")
-        result["rf_rate"] = float(irx_hist["Close"].iloc[-1]) / 100 if not irx_hist.empty else 0.04
-        result["rf_source"] = "^IRX T-Bill 13 sem."
-    except Exception:
-        result["rf_rate"] = 0.04
-        result["rf_source"] = "default"
+    # ── Rf (DGS3MO con cache, fallback ^IRX) ────────────────────────────────
+    rf = None
+    rf_src = None
+    if fred_enabled:
+        try:
+            r = fred.get_series_latest("DGS3MO")
+            if r is not None:
+                d, v = r
+                rf = v / 100.0
+                rf_src = f"FRED.DGS3MO ({d.isoformat()})"
+                cache_status["rf_rate"] = "ok"
+        except Exception:
+            pass
+    if rf is None:
+        try:
+            irx = yf.Ticker("^IRX").history(period="5d")
+            if not irx.empty:
+                rf = float(irx["Close"].iloc[-1]) / 100
+                rf_src = "yfinance.^IRX (fallback)"
+            else:
+                rf = 0.04
+                rf_src = "default 4%"
+        except Exception:
+            rf = 0.04
+            rf_src = "default 4%"
+    result["rf_rate"]   = rf
+    result["rf_source"] = rf_src
 
-    try:
-        tnx_hist = yf.Ticker("^TNX").history(period="5d")
-        result["treasury_10y"] = float(tnx_hist["Close"].iloc[-1]) / 100 if not tnx_hist.empty else None
-    except Exception:
-        result["treasury_10y"] = None
+    # ── Treasury 10Y (DGS10 con cache, fallback ^TNX) ───────────────────────
+    t10 = None
+    t10_src = None
+    if fred_enabled:
+        try:
+            r = fred.get_series_latest("DGS10")
+            if r is not None:
+                d, v = r
+                t10 = v / 100.0
+                t10_src = f"FRED.DGS10 ({d.isoformat()})"
+                cache_status["treasury_10y"] = "ok"
+        except Exception:
+            pass
+    if t10 is None:
+        try:
+            tnx = yf.Ticker("^TNX").history(period="5d")
+            if not tnx.empty:
+                t10 = float(tnx["Close"].iloc[-1]) / 100
+                t10_src = "yfinance.^TNX (fallback)"
+        except Exception:
+            pass
+    result["treasury_10y"]        = t10
+    result["treasury_10y_source"] = t10_src
 
+    # ── S&P 500 YTD (yfinance) ──────────────────────────────────────────────
     try:
-        spy_hist = yf.Ticker("^GSPC").history(period="ytd")
-        if not spy_hist.empty and len(spy_hist) > 1:
-            result["spx_ytd"] = float(spy_hist["Close"].iloc[-1] / spy_hist["Close"].iloc[0] - 1)
+        spy = yf.Ticker("^GSPC").history(period="ytd")
+        if not spy.empty and len(spy) > 1:
+            result["spx_ytd"] = float(spy["Close"].iloc[-1] / spy["Close"].iloc[0] - 1)
         else:
             result["spx_ytd"] = None
     except Exception:
         result["spx_ytd"] = None
 
-    return json_response(result)
+    # ── Inflación YoY (FRED.CPIAUCSL con cache 24h) ─────────────────────────
+    try:
+        infl = fred.get_inflation_yoy()
+        if infl and infl.get("yoy") is not None:
+            result["inflation_yoy"]    = infl["yoy"]
+            result["inflation_source"] = infl.get("source")
+            cache_status["inflation_yoy"] = infl.get("cache_status")
+        else:
+            result["inflation_yoy"]    = None
+            result["inflation_source"] = None
+    except Exception:
+        result["inflation_yoy"]    = None
+        result["inflation_source"] = None
+
+    # ── USDCOP (yfinance COP=X) ─────────────────────────────────────────────
+    try:
+        copx = yf.Ticker("COP=X").history(period="5d")
+        if not copx.empty:
+            result["usdcop"]        = float(copx["Close"].iloc[-1])
+            result["usdcop_source"] = "yfinance.COP=X"
+        else:
+            result["usdcop"]        = None
+            result["usdcop_source"] = None
+    except Exception:
+        result["usdcop"]        = None
+        result["usdcop_source"] = None
+
+    if cache_status:
+        result["cache_status"] = cache_status
+
+    return result
+
+
+# ─── Endpoint dedicado del benchmark (Plan III, M8) ─────────────────────────
+
+@app.get(
+    "/api/v1/benchmark",
+    summary="Comparación Portafolio óptimo vs Benchmark (Alpha, TE, IR) — M8",
+)
+def get_benchmark_comparison(dates: DateRangeDep, config: ConfigDep):
+    """Compara el portafolio Max Sharpe contra el benchmark configurado.
+
+    Reusa `compute_benchmark` (mismo cálculo que `/api/v1/all` y `data.js`).
+    Devuelve curvas base 100, drawdown, métricas por activo, Alpha de Jensen,
+    Beta, Tracking Error, Information Ratio, R² y una `interpretation` textual
+    sin recomendaciones absolutas.
+    """
+    date_kwargs = {k: v for k, v in dates.items() if v is not None}
+    bench_data = get_historical_data(config.benchmark, **date_kwargs)
+    if bench_data is None:
+        raise HTTPException(404, f"No hay datos para benchmark '{config.benchmark}'.")
+
+    # Recolectar retornos por activo
+    rets: dict = {}
+    for t in config.tickers:
+        data = get_historical_data(t, **date_kwargs)
+        if data is None:
+            continue
+        try:
+            simple, _ = calculate_returns(data)
+            rets[t] = simple
+        except Exception:
+            continue
+    if len(rets) < 2:
+        raise HTTPException(500, "Datos insuficientes para construir el portafolio.")
+
+    rf_annual = config.default_rf
+    bench = compute_benchmark(rets, bench_data, rf_annual)
+    if not bench:
+        raise HTTPException(500, "compute_benchmark no produjo resultado.")
+
+    # Interpretación textual prudente (sin recomendaciones absolutas)
+    alpha = bench.get("Jensen_Alpha")
+    ir    = bench.get("Information_Ratio")
+    te    = bench.get("Tracking_Error")
+    p_sh  = (bench.get("Port",  {}) or {}).get("Sharpe")
+    b_sh  = (bench.get("Bench", {}) or {}).get("Sharpe")
+
+    parts: list[str] = []
+    if alpha is not None:
+        if alpha > 0:
+            parts.append(
+                f"Alpha de Jensen positivo ({alpha*100:.2f}%/año): el portafolio "
+                "generó retorno por encima del exigido por su beta. "
+                "Significancia estadística (t-stat) no calculada en este endpoint."
+            )
+        else:
+            parts.append(
+                f"Alpha de Jensen negativo ({alpha*100:.2f}%/año): el portafolio "
+                "no compensó adecuadamente el riesgo sistemático asumido."
+            )
+    if ir is not None:
+        if ir > 0.5:
+            parts.append(f"Information Ratio {ir:.2f}: gestión activa favorable (IR>0.5).")
+        elif ir > 0:
+            parts.append(f"Information Ratio {ir:.2f}: gestión activa marginal (IR positivo bajo).")
+        else:
+            parts.append(f"Information Ratio {ir:.2f}: gestión activa desfavorable (IR<=0).")
+    if te is not None:
+        parts.append(f"Tracking Error anual {te*100:.2f}%: alejamiento diario del portafolio respecto al benchmark.")
+    if p_sh is not None and b_sh is not None:
+        if p_sh > b_sh:
+            parts.append(f"Sharpe portafolio {p_sh:.2f} > benchmark {b_sh:.2f}: mejor retorno por unidad de riesgo.")
+        else:
+            parts.append(f"Sharpe portafolio {p_sh:.2f} <= benchmark {b_sh:.2f}: peor retorno por unidad de riesgo.")
+
+    bench["benchmark_ticker"] = config.benchmark
+    bench["rf_rate"]          = rf_annual
+    bench["interpretation"]   = " ".join(parts) if parts else None
+    return json_response(bench)
 
 
 # ── Modelos Pydantic del Módulo 7 ────────────────────────────────────────────
@@ -2231,11 +2416,21 @@ def alias_frontera(body: FrontierRequest, dates: DateRangeDep, config: ConfigDep
 
 @app.get(
     "/macro",
+    response_model=MacroIndicators,
     tags=["alias-corto Plan III"],
-    summary="Indicadores macro — alias de /api/v1/macro",
+    summary="Indicadores macro tipados (Rf+T10Y+SPX+Inflación+USDCOP) — alias",
 )
-def alias_macro():
-    return get_macro_indicators()
+def alias_macro(fred: FredClient = Depends(get_fred_client)):
+    return get_macro_indicators(fred=fred)
+
+
+@app.get(
+    "/benchmark",
+    tags=["alias-corto Plan III"],
+    summary="Comparación Portafolio vs Benchmark — alias de /api/v1/benchmark",
+)
+def alias_benchmark(dates: DateRangeDep, config: ConfigDep):
+    return get_benchmark_comparison(dates=dates, config=config)
 
 
 @app.get(
