@@ -2356,7 +2356,7 @@ function renderM3() {
       <button class="tab-btn"        onclick="switchTab('m3','ewma',this);_initEWMATab()">🌊 EWMA</button>
       <button class="tab-btn"        onclick="switchTab('m3','resid',this)">🔬 Diagnóstico de Residuos</button>
       <button class="tab-btn"        onclick="switchTab('m3','forecast',this)">🔮 Pronóstico a 10 Días</button>
-      <button class="tab-btn"        onclick="switchTab('m3','table',this)">📋 Comparación EWMA vs GARCH</button>
+      <button class="tab-btn"        onclick="switchTab('m3','table',this);_initM3CompTab()">📋 Comparación EWMA vs GARCH</button>
     </div>
     
     <div id="m3-tab-vol" class="tab-content card active" style="padding:12px">
@@ -2424,9 +2424,34 @@ function renderM3() {
         })()}
     </div>
     <div id="m3-tab-table" class="tab-content card" style="padding:16px;">
-      <p style="font-size:.88rem;color:#475569;margin-bottom:12px">El <b>AIC</b> (Criterio de Información de Akaike) mide qué tan bien ajusta cada modelo penalizando la complejidad. <b>Menor AIC = mejor modelo</b>. El símbolo ★ indica el ganador para cada activo.</p>
-      <details class="collapsible" open>
-        <summary>📋 Tabla AIC/BIC por modelo y activo <span style="font-size:.75rem;color:#9ca3af;font-weight:400;margin-left:8px">clic para expandir/contraer</span></summary>
+      <style>
+        .m3cmp-tickbtn { padding:7px 14px; border-radius:8px; border:1px solid #E2E8F0; background:#F8FAFC; color:#475569; font-family:inherit; font-size:.84rem; font-weight:600; cursor:pointer; transition:all .15s; }
+        .m3cmp-tickbtn:hover { background:#EFF6FF; color:#1f2937; }
+        .m3cmp-tickbtn.active { background:#fff; color:#1f2937; font-weight:700; border-color:#2563EB; box-shadow:0 1px 4px rgba(37,99,235,.15); }
+      </style>
+
+      <p style="font-size:.88rem;color:#475569;margin-bottom:12px">
+        EWMA y GARCH son <b>dos métodos de estimación de volatilidad</b>, no acciones de inversión.
+        Selecciona un activo para superponer las series EWMA(λ=0.90, 0.94, 0.97) y GARCH(1,1), o
+        elige <b>Todos</b> para ver una comparativa de la volatilidad estimada actual entre activos.
+      </p>
+
+      <!-- Fila de botones de filtro por activo -->
+      <div id="m3cmp-buttons" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <button class="m3cmp-tickbtn active" data-ticker="all" onclick="_filterEwmaGarchM3('all')">Todos</button>
+        ${(D?.tickers || []).map(t => `<button class="m3cmp-tickbtn" data-ticker="${t}" onclick="_filterEwmaGarchM3('${t}')" style="border-left:4px solid ${TICKER_COLOR[t]||'#94a3b8'}">${t}</button>`).join('')}
+      </div>
+
+      <div id="m3cmp-subtitle" style="font-size:.82rem;color:#475569;margin-bottom:6px">Vista resumen de todos los activos</div>
+      <h3 id="m3cmp-title" style="margin:0 0 10px;font-size:1rem;color:#0F172A">Comparación EWMA vs GARCH — Todos los activos</h3>
+
+      <div class="card" style="padding:8px;margin-bottom:14px"><div id="m3cmp-chart" style="height:380px;min-height:300px"></div></div>
+
+      <div id="m3cmp-interp"></div>
+
+      <!-- Tabla AIC/BIC preservada como collapsible -->
+      <details class="collapsible" style="margin-top:14px">
+        <summary>📋 Tabla AIC/BIC por modelo y activo <span style="font-size:.75rem;color:#9ca3af;font-weight:400;margin-left:8px">(clic para expandir/contraer)</span></summary>
         <div class="details-body" style="overflow-x:auto"><table class="compare-table">${tableHead}<tbody>${tableBody}</tbody></table></div>
       </details>
       ${(()=>{
@@ -2437,10 +2462,6 @@ function renderM3() {
         const egarchWins  = aicWinners.filter(x => x.best === 'EGARCH(1,1)').map(x => x.t);
         const garchWins   = aicWinners.filter(x => x.best === 'GARCH(1,1)').map(x => x.t);
         const archWins    = aicWinners.filter(x => x.best === 'ARCH(1)').map(x => x.t);
-        let tableText = `Selección por AIC (menor = mejor ajuste penalizado por complejidad): `;
-        if (egarchWins.length) tableText += `EGARCH(1,1) gana en ${egarchWins.join(', ')}, confirmando efecto de apalancamiento (shocks negativos generan mayor volatilidad que positivos de igual magnitud). `;
-        if (garchWins.length) tableText += `GARCH(1,1) es óptimo en ${garchWins.join(', ')}: volatilidad simétrica suficiente para el ajuste. `;
-        if (archWins.length) tableText += `ARCH(1) es suficiente en ${archWins.join(', ')}: poca persistencia de volatilidad. `;
         return getInsight("Selección de Modelo de Riesgo (AIC)", `El AIC penaliza la complejidad del modelo: un AIC más bajo equivale a mejor ajuste real sin sobreajustar los datos. Los tres modelos compiten en capacidad descriptiva: ARCH(1) modela solo el efecto del último shock, GARCH(1,1) añade persistencia de la volatilidad histórica, y EGARCH(1,1) incorpora la asimetría del mercado, ya que los shocks negativos tienden a generar más volatilidad que positivos de igual magnitud. El modelo ganador por AIC es el que mejor describe la dinámica real de cada activo.`, egarchWins.length > 0 ? 'warning' : 'neutral');
       })()}
     </div>
@@ -3617,6 +3638,146 @@ function _initEWMATab() {
   btn.addEventListener('click', _runEWMA);
   // Primera corrida automática con los defaults
   _runEWMA();
+}
+
+// ─────────────────────────────────────────
+//  M3 — Tab "Comparación EWMA vs GARCH"
+//  Filtros por ticker + chart dinámico
+// ─────────────────────────────────────────
+
+// Cache de respuestas /api/v1/volatility para evitar refetch en el mismo render
+const _m3CmpCache = new Map();
+
+async function _fetchEwmaSeriesM3(ticker) {
+  if (_m3CmpCache.has(ticker)) return _m3CmpCache.get(ticker);
+  const qs = new URLSearchParams({ewma_lambda: '0.94', ewma_extra_lambdas: '0.90,0.97'});
+  const data = await _apiFetch(`/api/v1/volatility/${ticker}?${qs}`);
+  _m3CmpCache.set(ticker, data);
+  return data;
+}
+
+function _initM3CompTab() {
+  const buttons = document.getElementById('m3cmp-buttons');
+  if (!buttons || buttons.dataset.bound === '1') return;
+  buttons.dataset.bound = '1';
+  // Primera carga: vista resumen "Todos"
+  _filterEwmaGarchM3('all');
+}
+
+async function _filterEwmaGarchM3(ticker) {
+  // Estado activo del botón
+  document.querySelectorAll('#m3cmp-buttons .m3cmp-tickbtn').forEach(b => b.classList.remove('active'));
+  const active = document.querySelector(`#m3cmp-buttons .m3cmp-tickbtn[data-ticker="${ticker}"]`);
+  if (active) active.classList.add('active');
+
+  const titleEl    = document.getElementById('m3cmp-title');
+  const subtitleEl = document.getElementById('m3cmp-subtitle');
+  const interpEl   = document.getElementById('m3cmp-interp');
+  const chartDiv   = document.getElementById('m3cmp-chart');
+  if (!chartDiv) return;
+
+  // Spinner
+  chartDiv.innerHTML = '';
+  interpEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;font-size:.85rem">⌛ Calculando…</div>';
+
+  if (ticker === 'all') {
+    // ── Vista resumen: barras agrupadas con última σ EWMA y GARCH por activo ──
+    subtitleEl.textContent = 'Vista resumen de todos los activos';
+    titleEl.textContent    = 'Comparación EWMA vs GARCH — Todos los activos';
+    const tickers = D?.tickers || [];
+    const ewmaVals = [];
+    const garchVals = [];
+    try {
+      for (const t of tickers) {
+        const dat = await _fetchEwmaSeriesM3(t);
+        const ew  = (dat.EWMA || {}).current_volatility_annual ?? null;
+        const garr = (dat['GARCH(1,1)'] || {}).Volatility || [];
+        const gd = garr.length ? garr[garr.length - 1] * Math.sqrt(252) : null;
+        ewmaVals.push(ew  != null ? +(ew * 100).toFixed(3)  : null);
+        garchVals.push(gd != null ? +(gd * 100).toFixed(3) : null);
+      }
+    } catch (e) {
+      chartDiv.innerHTML = _errorHTML(`No se pudieron cargar los datos: ${e.message}`);
+      interpEl.innerHTML = '';
+      return;
+    }
+    Plotly.newPlot(chartDiv, [
+      { x: tickers, y: ewmaVals,  type:'bar', name:'EWMA (λ=0.94) σ anual %', marker:{color:'#2563EB'} },
+      { x: tickers, y: garchVals, type:'bar', name:'GARCH(1,1) σ anual %',     marker:{color:'#DC2626'} },
+    ], {
+      ...PB, height:360, barmode:'group',
+      xaxis:{...PB.xaxis, title:'Activo'},
+      yaxis:{...PB.yaxis, title:'σ anualizada (%)', ticksuffix:'%'},
+      legend:{...PB.legend, orientation:'h', y:-0.18},
+      title:{ text:'Última volatilidad estimada por método y activo', font:{size:13} },
+    }, PCFG);
+
+    // Interpretación comparativa
+    const rows = tickers.map((t,i) => ({t, ew: ewmaVals[i], gd: garchVals[i]}));
+    const validEw = rows.filter(r => r.ew != null);
+    if (validEw.length) {
+      const maxEw = validEw.reduce((a,b) => b.ew > a.ew ? b : a);
+      const minEw = validEw.reduce((a,b) => b.ew < a.ew ? b : a);
+      const txt = `<b>${maxEw.t}</b> presenta la mayor volatilidad estimada (EWMA λ=0.94 anualizada: ${maxEw.ew.toFixed(2)}%; GARCH(1,1): ${maxEw.gd!=null?maxEw.gd.toFixed(2)+'%':'n/d'}), mientras que <b>${minEw.t}</b> registra la menor (${minEw.ew.toFixed(2)}% EWMA, ${minEw.gd!=null?minEw.gd.toFixed(2)+'%':'n/d'} GARCH). Recuerda que <b>EWMA y GARCH son métodos de estimación</b> de la volatilidad pasada/condicional, no señales accionables: leen los retornos para cuantificar incertidumbre, no recomiendan comprar ni vender.`;
+      interpEl.innerHTML = getInsight('Lectura comparativa entre activos', txt, 'neutral');
+    } else {
+      interpEl.innerHTML = '';
+    }
+    return;
+  }
+
+  // ── Vista por ticker individual: EWMA(0.94/0.90/0.97) + GARCH(1,1) ──
+  subtitleEl.textContent = `Activo seleccionado: ${ticker}`;
+  titleEl.textContent    = `Comparación EWMA vs GARCH — ${ticker}`;
+
+  let data;
+  try {
+    data = await _fetchEwmaSeriesM3(ticker);
+  } catch (e) {
+    chartDiv.innerHTML = _errorHTML(`No se pudo cargar ${ticker}: ${e.message}`);
+    interpEl.innerHTML = '';
+    return;
+  }
+  const ewma = data.EWMA || {};
+  const comp = data.EWMA_Comparison || {};
+  const garchVol = (data['GARCH(1,1)'] || {}).Volatility || [];
+
+  const traces = [];
+  if (Array.isArray(ewma.volatility) && ewma.volatility.length) {
+    traces.push({y: ewma.volatility, mode:'lines', name:`EWMA (λ=0.94)`, line:{color:'#2563EB', width:2.4}});
+  }
+  Object.entries(comp).forEach(([k, arr]) => {
+    const palette = {'0.90':'#16A34A', '0.97':'#9333EA'};
+    const color = palette[k] || '#EA580C';
+    traces.push({y: arr, mode:'lines', name:`EWMA (λ=${k})`, line:{color, width:1.4, dash:'dash'}, opacity:0.75});
+  });
+  if (garchVol.length) {
+    traces.push({y: garchVol, mode:'lines', name:'GARCH(1,1)', line:{color:'#DC2626', width:2, dash:'dot'}});
+  }
+  Plotly.newPlot(chartDiv, traces, {
+    ...PB, height:380,
+    xaxis:{...PB.xaxis, title:'Observaciones (orden temporal)'},
+    yaxis:{...PB.yaxis, title:'σ diaria', tickformat:'.2%'},
+    legend:{...PB.legend, orientation:'h', y:-0.18},
+    title:{ text:`Evolución condicional de la volatilidad — ${ticker}`, font:{size:13} },
+  }, PCFG);
+
+  // Interpretación dinámica del ticker seleccionado
+  const ewLast = ewma.current_volatility_annual;
+  const gdLast = garchVol.length ? garchVol[garchVol.length-1] * Math.sqrt(252) : null;
+  let txt;
+  if (ewLast != null && gdLast != null) {
+    const diff = Math.abs(ewLast - gdLast) * 100;
+    const lectura = diff < 2
+      ? 'EWMA y GARCH coinciden en la magnitud actual de la volatilidad'
+      : (ewLast > gdLast
+          ? 'EWMA estima volatilidad mayor que GARCH(1,1) — sugiere que los shocks recientes pesan más bajo el decay λ=0.94'
+          : 'GARCH(1,1) estima volatilidad mayor que EWMA — sugiere persistencia condicional adicional capturada por GARCH');
+    txt = `Para <b>${ticker}</b>, la última σ anualizada estimada es ${(ewLast*100).toFixed(2)}% bajo EWMA (λ=0.94) y ${(gdLast*100).toFixed(2)}% bajo GARCH(1,1). ${lectura}. Las curvas con líneas punteadas exploran qué pasa al modificar λ: λ=0.90 reacciona más rápido a shocks recientes, λ=0.97 suaviza más la serie. <b>EWMA y GARCH son métodos de estimación de volatilidad</b>, no señales de compra/venta.`;
+  } else {
+    txt = `Para <b>${ticker}</b> se grafican las series EWMA y GARCH(1,1). Ambos son métodos de estimación de la volatilidad condicional — no constituyen recomendaciones de inversión.`;
+  }
+  interpEl.innerHTML = getInsight(`Lectura de volatilidad — ${ticker}`, txt, 'neutral');
 }
 
 async function _runEWMA() {
