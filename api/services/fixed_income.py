@@ -215,6 +215,69 @@ class FredClient:
             logger.warning("FRED fetch %s fallo: %s", series_id, exc)
             return None
 
+    def get_inflation_yoy(self, ttl_hours: int = 24) -> Optional[dict]:
+        """Inflación interanual (YoY) aproximada desde CPIAUCSL.
+
+        Usa el cache `MacroSeries` con TTL configurable. Si el cache local
+        tiene al menos 13 observaciones mensuales recientes, calcula
+        `last / prev_12 - 1`. Si no, hace un fetch a FRED y persiste el
+        histórico. Retorna None si FRED no está disponible y no hay cache.
+        """
+        series_id = "CPIAUCSL"
+        db = self._session()
+        threshold = datetime.utcnow() - timedelta(hours=ttl_hours)
+
+        # ¿hay cache fresco con al menos 13 puntos?
+        cached = db.execute(
+            select(MacroSeries.date, MacroSeries.value, MacroSeries.fetched_at)
+            .where(MacroSeries.series_id == series_id)
+            .order_by(MacroSeries.date.desc())
+            .limit(20)
+        ).all()
+
+        cache_status = "miss"
+        rows = cached
+        if rows and rows[0].fetched_at is not None and rows[0].fetched_at >= threshold:
+            cache_status = "hit"
+        else:
+            # Fetch fresco a FRED
+            client = self._client()
+            if client is not None:
+                try:
+                    series = client.get_series(series_id)
+                    if series is not None and not series.dropna().empty:
+                        self._upsert_series(series_id, series.dropna().tail(60))
+                        rows = db.execute(
+                            select(MacroSeries.date, MacroSeries.value, MacroSeries.fetched_at)
+                            .where(MacroSeries.series_id == series_id)
+                            .order_by(MacroSeries.date.desc())
+                            .limit(20)
+                        ).all()
+                        cache_status = "miss"
+                except Exception as exc:
+                    logger.warning("FRED inflation fetch fallo: %s", exc)
+                    if cached:
+                        cache_status = "stale_used"
+                    else:
+                        return None
+            elif cached:
+                cache_status = "stale_used"
+            else:
+                return None
+
+        if len(rows) < 13:
+            return {"yoy": None, "cache_status": cache_status, "last_date": None}
+
+        last_val  = float(rows[0].value)
+        prev_val  = float(rows[12].value)
+        yoy = round((last_val / prev_val) - 1.0, 5) if prev_val > 0 else None
+        return {
+            "yoy":          yoy,
+            "last_date":    rows[0].date.isoformat() if hasattr(rows[0].date, "isoformat") else str(rows[0].date),
+            "cache_status": cache_status,
+            "source":       f"FRED.{series_id}",
+        }
+
     # ── Internos ─────────────────────────────────────────────────────────────
 
     def _upsert_series(self, series_id: str, series: pd.Series) -> None:
