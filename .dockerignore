@@ -47,7 +47,7 @@ Procfile
 render.yaml
 
 # Frontend pesado del snapshot estatico (la imagen usa la API en vivo)
-dashboard/data.js
+frontend/data.js
 
 # Generador local (no se ejecuta dentro del contenedor)
 generate_data.py

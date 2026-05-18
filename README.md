@@ -95,7 +95,7 @@ Portafolio_Teoria-_de_Riesgo/
 │       ├── train.py         # `python -m api.ml.train`
 │       ├── model.joblib     # artefacto serializado
 │       └── model.meta.json  # metadata (versión, accuracy, F1)
-├── dashboard/
+├── frontend/                # Carpeta del tablero (Plan III)
 │   ├── dashboard.html       # SPA con Plotly.js — 14 módulos
 │   └── data.js              # snapshot estático (fallback offline)
 ├── tests/
@@ -256,7 +256,7 @@ python -m api.ml.train
 uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
 
 # 5. Abrir el dashboard
-# Opción A: abrir directamente dashboard/dashboard.html en el navegador
+# Opción A: abrir directamente frontend/dashboard.html en el navegador
 # Opción B: servirlo con un servidor estático cualquiera
 ```
 
@@ -326,7 +326,7 @@ docker run -p 8001:8001 -e JWT_SECRET=$(openssl rand -hex 32) risklab-usta
 
 ```bash
 docker compose up --build
-# Monta api/ y dashboard/ desde el host; cambios en código → reload automático
+# Monta api/ y frontend/ desde el host; cambios en código → reload automático
 ```
 
 ### Características de la imagen

@@ -51,7 +51,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copia codigo de la aplicacion con ownership correcto
 COPY --chown=app:app api/         ./api/
-COPY --chown=app:app dashboard/   ./dashboard/
+COPY --chown=app:app frontend/    ./frontend/
 
 # Directorio de datos (SQLite). En produccion (Render) se monta un disco
 # persistente sobre este path para que la BD sobreviva redeploys.
